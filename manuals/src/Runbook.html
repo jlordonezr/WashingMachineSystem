@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reuse Water System – Runbook</title>
+<link rel="stylesheet" href="manual.css">
+<style>
+@page { @top-left { content: "Reuse Water System – Runbook"; font: 6pt -apple-system, "Helvetica Neue", sans-serif; color: #6b6b6b; } }
+</style>
+</head>
+<body>
+
+<h1>Reuse Water System – Runbook</h1>
+<p class="byline">Oct 30, 2026 · @Jose</p>
+
+<h2>Document control</h2>
+<table>
+<thead><tr><th>Item</th><th>Detail</th></tr></thead>
+<tr><td>Document</td><td>Reuse Water System – Runbook</td></tr>
+<tr><td>Version</td><td>3.2</td></tr>
+<tr><td>Applies to firmware</td><td><code>FSM_WashingMachineSystem.ino</code> and the <code>GreyWater*</code> files, firmware 3.2.0 (3.2: new name Reuse Water System, start-up animation, Helvetica Bold screen font, larger tank icon, buzzer on D1; 3.1: Spanish and English, chosen in Settings; 3.0: safety task, float-switch rules, code split into modules)</td></tr>
+<tr><td>Intended audience</td><td>Installers, operators and maintenance personnel</td></tr>
+<tr><td>Related documents</td><td><code>README.md</code> (firmware change summary); Reuse Water System – Quick Card</td></tr>
+</table>
+
+<h2>Purpose and scope</h2>
+<p>This runbook defines how to install, operate, configure, troubleshoot and maintain the Reuse Water System controller. It covers the controller firmware and the hardware connected directly to it. The washing machine, the plumbing design and the mains electrical installation are outside its scope.</p>
+
+<h2>Safety precautions</h2>
+<p><b>Isolation:</b> switch off and lock out the valve and pump supply before working on any wiring. The Stop button is a software control and does not isolate power.</p>
+<p><b>Electrical work:</b> if the valves or pump run on mains voltage, the SSR load wiring must be installed by a qualified electrician to local regulations, with overcurrent protection and an RCD/GFCI.</p>
+<p><b>Environment:</b> mount the controller in an enclosure rated for damp locations, and keep low-voltage wiring separated from mains wiring.</p>
+<p><b>Hygiene:</b> grey water contains detergent residue and bacteria. Wear gloves when servicing the tank, sensors and valves. Stored water is not potable.</p>
+<p><b>Supervision:</b> do not leave the system unattended during commissioning or after a firmware change.</p>
+
+<h2>Quick start</h2>
+<p>For everyday use you only need the two buttons and the screen. After the controller is switched on, the screen shows a dog chasing a butterfly for about 4 seconds, then <code>REUSE WATER</code> / System ready, then <code>READY</code>.</p>
+<ol>
+<li><b>Check the screen</b> shows <code>READY</code> and Press START.</li>
+<li><b>Load the washing machine</b> and start its program as usual.</li>
+<li><b>Press START</b> (the button labelled START). The screen changes to <code>1/4 WASH</code>.</li>
+<li><b>Let it run.</b> The screen shows the current step, <code>1/4</code> to <code>4/4</code>. In the last step a countdown shows the time left.</li>
+<li><b>Done.</b> The screen shows <code>DONE</code> and Cycle complete, then returns to <code>READY</code>.</li>
+</ol>
+<p>To cancel at any time, press <b>STOP</b> (the button labelled STOP). The screen shows <code>STOPPED</code> for 4 seconds.</p>
+<p>On a phone connected to the home Wi-Fi, open <code>http://reusewater.local</code> to see the same status, start or stop the cycle, and check how much water you have saved (section 11).</p>
+<table>
+<thead><tr><th>If the screen shows</th><th>It means</th><th>What to do</th></tr></thead>
+<tr><td>A dog chasing a butterfly</td><td>The controller has just been switched on (about 4 s)</td><td>Nothing; START skips it</td></tr>
+<tr><td>READY / Press START</td><td>Waiting for you</td><td>Press START when the machine is running</td></tr>
+<tr><td>1/4 WASH … 4/4 SAVE</td><td>Cycle in progress</td><td>Nothing; wait</td></tr>
+<tr><td>Reusing water</td><td>The machine is filling with water saved in the tank</td><td>Nothing</td></tr>
+<tr><td>Saving water</td><td>Rinse water is being stored in the tank for the next wash</td><td>Nothing</td></tr>
+<tr><td>DONE / Reused 26 L</td><td>Cycle finished; that much tap water was saved</td><td>Nothing</td></tr>
+<tr><td>STOPPED / Cycle stopped</td><td>You pressed STOP</td><td>Press START to begin again</td></tr>
+<tr><td>No water flow</td><td>A step has waited too long for water</td><td>Press STOP; check the Service tab of the app, see section 8</td></tr>
+<tr><td>Blank screen</td><td>No power, or a display fault</td><td>Check power, then see section 8</td></tr>
+</table>
+<p>Button colors are a recommendation; label your buttons to match.</p>
+
+<h2>1. Overview</h2>
+<p>The controller runs a 4-step wash cycle (Fill, Drain, Rinse, Drain), reuses grey water from a storage tank for the first fill, and saves the rinse water back to the tank. It runs on an Arduino Nano ESP32, drives five solid-state relays (SSRs), reads two flow sensors and two tank level switches, and reports status on a 128x32 OLED.</p>
+<h3>Components</h3>
+<table>
+<thead><tr><th>Group</th><th>Device</th><th>What it does</th><th>Board pin</th><th>Part / type</th></tr></thead>
+<tr><td>Controller</td><td>Arduino Nano ESP32</td><td>Runs the program</td><td>—</td><td>ABX00083 (ESP32-S3, 3.3 V logic)</td></tr>
+<tr><td>Operator</td><td>START button</td><td>Starts a cycle</td><td>D11</td><td>Momentary push button, normally open</td></tr>
+<tr><td>Operator</td><td>STOP button</td><td>Cancels a cycle</td><td>D10</td><td>Momentary push button, normally open</td></tr>
+<tr><td>Operator</td><td>OLED screen</td><td>Shows status and progress</td><td>A4 (SDA), A5 (SCL)</td><td>SSD1306, 128x32, I2C 0x3C</td></tr>
+<tr><td>Operator</td><td>Buzzer (optional)</td><td>Beeps when a cycle ends and on alarms</td><td>D1 / TX0</td><td>Active buzzer module (with its own driver)</td></tr>
+<tr><td>Sensors</td><td>Tap flow sensor</td><td>Detects water entering the machine</td><td>D2</td><td>YF-B1</td></tr>
+<tr><td>Sensors</td><td>Drain flow sensor</td><td>Detects water leaving the machine</td><td>D3</td><td>YF-B10</td></tr>
+<tr><td>Sensors</td><td>Tank low-level switch</td><td>Water at the low mark</td><td>D9</td><td>Float switch</td></tr>
+<tr><td>Sensors</td><td>Tank high-level switch</td><td>Water at the high mark (tank full)</td><td>D8</td><td>Float switch</td></tr>
+<tr><td>Actuators</td><td>Tap valve</td><td>Tap water supply</td><td>D6</td><td>Solenoid valve via SSR</td></tr>
+<tr><td>Actuators</td><td>Drain valve</td><td>Drain path from the machine</td><td>D4</td><td>Solenoid valve via SSR</td></tr>
+<tr><td>Actuators</td><td>Fill valve</td><td>Sends drain water into the tank</td><td>D5</td><td>Solenoid valve via SSR</td></tr>
+<tr><td>Actuators</td><td>Pump</td><td>Moves tank water to the machine</td><td>D7</td><td>Pump via SSR</td></tr>
+<tr><td>Actuators</td><td>Tank-wash valve</td><td>Washes the tank during the tank-water fill</td><td>D0 / RX0</td><td>Solenoid valve via SSR</td></tr>
+</table>
+<h3>Wash cycle summary</h3>
+<ol>
+<li><b>Fill (1/4):</b> the machine fills with tap water, or with tank water when the tank has water and the machine is demanding water. The tank-wash valve pulses every 10 s while tank water is used.</li>
+<li><b>Drain (2/4):</b> soapy water is drained, not saved.</li>
+<li><b>Rinse (3/4):</b> the machine fills with tap water.</li>
+<li><b>Drain (4/4):</b> rinse water is saved to the tank until it is full. This step lasts 20 minutes, then the system returns to Idle.</li>
+</ol>
+<p>Source files (from firmware 3.0): <code>FSM_WashingMachineSystem.ino</code> (setup and loop), <code>GreyWaterSystem</code> (wash cycle), <code>GreyWaterOutputs</code> and <code>GreyWaterTask</code> (outputs, float switches, safety task), <code>GreyWaterSensors</code>, <code>GreyWaterDisplay</code>, <code>GreyWaterDiagnostics</code>, <code>GreyWaterSettings</code>, <code>GreyWaterNet</code>, <code>FlowMeter.h</code>, <code>TankLevel.h</code>, the screen files <code>BootAnimation.h</code>, <code>FontHelvBold12.h</code> and <code>FontHelvBold14.h</code> (from 3.2), and the app page <code>web/dashboard.html</code> with its Spanish texts <code>web/es.json</code>. Libraries: Adafruit GFX, Adafruit SSD1306, AgileStateMachine, WiFiManager.</p>
+
+<h2 class="page-break">2. Pinout configuration</h2>
+<p>All pins are defined in <code>GreyWaterSystem.h</code> and set up in <code>setup()</code>. Outputs are active HIGH (<code>ssrON = HIGH</code>); buttons are active LOW with internal pull-ups.</p>
+<h3>Board pinout</h3>
+<figure>
+<svg viewBox="0 0 1344 1024" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Helvetica Neue, sans-serif" role="img" aria-label="Arduino Nano ESP32 pinout with the pins used by this system">
+  <style>
+    .t { font-size: 22px; fill: #1f1e1d; }
+    .pin { font-size: 20px; fill: #6b6b6b; }
+    .pin.used { fill: #1f1e1d; font-weight: 700; }
+    .sq { stroke-width: 1.5; }
+  </style>
+  <text x="42" y="60" font-size="25" font-weight="700" fill="#1f1e1d">Sensors, buttons, valves and buzzer use the D0–D11 header; the display uses A4 and A5</text>
+  <rect x="622" y="124" width="100" height="34" rx="6" fill="#ececea" stroke="#c9c6bd" stroke-width="2"/>
+  <rect x="496" y="148" width="352" height="756" rx="14" fill="#fff" stroke="#c9c6bd" stroke-width="2"/>
+  <rect x="623" y="125" width="98" height="22" fill="#ececea"/>
+  <text x="672" y="191" text-anchor="middle" class="pin">USB-C</text>
+  <text x="672" y="511" text-anchor="middle" font-size="22" font-weight="700" fill="#1f1e1d">Nano ESP32</text>
+  <text x="672" y="541" text-anchor="middle" class="pin">top view</text>
+  <!-- pins: rows are 46 px apart, first row centre at y = 212; left column -->
+  <g>
+    <rect x="514" y="203" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="219" class="pin">D13</text>
+    <rect x="514" y="249" width="18" height="18" rx="3" fill="#c3c1b8" stroke="#c3c1b8" class="sq"/><text x="548" y="265" class="pin used">3V3</text>
+    <line x1="355" y1="258" x2="514" y2="258" stroke="#c3c1b8" stroke-width="2"/><text x="339" y="265" text-anchor="end" class="t">3.3 V: OLED, floats</text>
+    <rect x="514" y="295" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="311" class="pin">B0</text>
+    <rect x="514" y="341" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="357" class="pin">A0</text>
+    <rect x="514" y="387" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="403" class="pin">A1</text>
+    <rect x="514" y="433" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="449" class="pin">A2</text>
+    <rect x="514" y="479" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="495" class="pin">A3</text>
+    <rect x="514" y="525" width="18" height="18" rx="3" fill="#1aa874" stroke="#1aa874" class="sq"/><text x="548" y="541" class="pin used">A4</text>
+    <line x1="355" y1="534" x2="514" y2="534" stroke="#1aa874" stroke-width="2"/><text x="339" y="541" text-anchor="end" class="t">OLED SDA</text>
+    <rect x="514" y="571" width="18" height="18" rx="3" fill="#1aa874" stroke="#1aa874" class="sq"/><text x="548" y="587" class="pin used">A5</text>
+    <line x1="355" y1="580" x2="514" y2="580" stroke="#1aa874" stroke-width="2"/><text x="339" y="587" text-anchor="end" class="t">OLED SCL</text>
+    <rect x="514" y="617" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="633" class="pin">A6</text>
+    <rect x="514" y="663" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="679" class="pin">A7</text>
+    <rect x="514" y="709" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="725" class="pin">VUSB</text>
+    <rect x="514" y="755" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="548" y="771" class="pin">B1</text>
+    <rect x="514" y="801" width="18" height="18" rx="3" fill="#c3c1b8" stroke="#c3c1b8" class="sq"/><text x="548" y="817" class="pin used">GND</text>
+    <line x1="355" y1="810" x2="514" y2="810" stroke="#c3c1b8" stroke-width="2"/><text x="339" y="817" text-anchor="end" class="t">Common GND</text>
+    <rect x="514" y="847" width="18" height="18" rx="3" fill="#c3c1b8" stroke="#c3c1b8" class="sq"/><text x="548" y="863" class="pin used">VIN</text>
+    <line x1="355" y1="856" x2="514" y2="856" stroke="#c3c1b8" stroke-width="2"/><text x="339" y="863" text-anchor="end" class="t">Power in</text>
+  </g>
+  <g>
+    <rect x="812" y="203" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="796" y="219" text-anchor="end" class="pin">D12</text>
+    <rect x="812" y="249" width="18" height="18" rx="3" fill="#ee6b33" stroke="#ee6b33" class="sq"/><text x="796" y="265" text-anchor="end" class="pin used">D11</text>
+    <line x1="830" y1="258" x2="990" y2="258" stroke="#ee6b33" stroke-width="2"/><text x="1005" y="265" class="t">START button</text>
+    <rect x="812" y="295" width="18" height="18" rx="3" fill="#ee6b33" stroke="#ee6b33" class="sq"/><text x="796" y="311" text-anchor="end" class="pin used">D10</text>
+    <line x1="830" y1="304" x2="990" y2="304" stroke="#ee6b33" stroke-width="2"/><text x="1005" y="311" class="t">STOP button</text>
+    <rect x="812" y="341" width="18" height="18" rx="3" fill="#ee6b33" stroke="#ee6b33" class="sq"/><text x="796" y="357" text-anchor="end" class="pin used">D9</text>
+    <line x1="830" y1="350" x2="990" y2="350" stroke="#ee6b33" stroke-width="2"/><text x="1005" y="357" class="t">Low-level switch</text>
+    <rect x="812" y="387" width="18" height="18" rx="3" fill="#ee6b33" stroke="#ee6b33" class="sq"/><text x="796" y="403" text-anchor="end" class="pin used">D8</text>
+    <line x1="830" y1="396" x2="990" y2="396" stroke="#ee6b33" stroke-width="2"/><text x="1005" y="403" class="t">High-level switch</text>
+    <rect x="812" y="433" width="18" height="18" rx="3" fill="#2a78d6" stroke="#2a78d6" class="sq"/><text x="796" y="449" text-anchor="end" class="pin used">D7</text>
+    <line x1="830" y1="442" x2="990" y2="442" stroke="#2a78d6" stroke-width="2"/><text x="1005" y="449" class="t">Pump SSR</text>
+    <rect x="812" y="479" width="18" height="18" rx="3" fill="#2a78d6" stroke="#2a78d6" class="sq"/><text x="796" y="495" text-anchor="end" class="pin used">D6</text>
+    <line x1="830" y1="488" x2="990" y2="488" stroke="#2a78d6" stroke-width="2"/><text x="1005" y="495" class="t">Tap valve SSR</text>
+    <rect x="812" y="525" width="18" height="18" rx="3" fill="#2a78d6" stroke="#2a78d6" class="sq"/><text x="796" y="541" text-anchor="end" class="pin used">D5</text>
+    <line x1="830" y1="534" x2="990" y2="534" stroke="#2a78d6" stroke-width="2"/><text x="1005" y="541" class="t">Fill valve SSR</text>
+    <rect x="812" y="571" width="18" height="18" rx="3" fill="#2a78d6" stroke="#2a78d6" class="sq"/><text x="796" y="587" text-anchor="end" class="pin used">D4</text>
+    <line x1="830" y1="580" x2="990" y2="580" stroke="#2a78d6" stroke-width="2"/><text x="1005" y="587" class="t">Drain valve SSR</text>
+    <rect x="812" y="617" width="18" height="18" rx="3" fill="#ee6b33" stroke="#ee6b33" class="sq"/><text x="796" y="633" text-anchor="end" class="pin used">D3</text>
+    <line x1="830" y1="626" x2="990" y2="626" stroke="#ee6b33" stroke-width="2"/><text x="1005" y="633" class="t">Drain flow sensor</text>
+    <rect x="812" y="663" width="18" height="18" rx="3" fill="#ee6b33" stroke="#ee6b33" class="sq"/><text x="796" y="679" text-anchor="end" class="pin used">D2</text>
+    <line x1="830" y1="672" x2="990" y2="672" stroke="#ee6b33" stroke-width="2"/><text x="1005" y="679" class="t">Tap flow sensor</text>
+    <rect x="812" y="709" width="18" height="18" rx="3" fill="#c3c1b8" stroke="#c3c1b8" class="sq"/><text x="796" y="725" text-anchor="end" class="pin used">GND</text>
+    <line x1="830" y1="718" x2="990" y2="718" stroke="#c3c1b8" stroke-width="2"/><text x="1005" y="725" class="t">Common GND</text>
+    <rect x="812" y="755" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" class="sq"/><text x="796" y="771" text-anchor="end" class="pin">RESET</text>
+    <rect x="812" y="801" width="18" height="18" rx="3" fill="#2a78d6" stroke="#2a78d6" class="sq"/><text x="796" y="817" text-anchor="end" class="pin used">D0/RX0</text>
+    <line x1="830" y1="810" x2="990" y2="810" stroke="#2a78d6" stroke-width="2"/><text x="1005" y="817" class="t">Tank-wash valve SSR</text>
+    <rect x="812" y="847" width="18" height="18" rx="3" fill="#8a5cd0" stroke="#8a5cd0" class="sq"/><text x="796" y="863" text-anchor="end" class="pin used">D1/TX0</text>
+    <line x1="830" y1="856" x2="990" y2="856" stroke="#8a5cd0" stroke-width="2"/><text x="1005" y="863" class="t">Buzzer (optional)</text>
+  </g>
+  <g font-size="21" fill="#52514e">
+    <rect x="42" y="952" width="18" height="18" rx="3" fill="#2a78d6"/><text x="74" y="968">Output to SSR</text>
+    <rect x="250" y="952" width="18" height="18" rx="3" fill="#8a5cd0"/><text x="282" y="968">Buzzer output</text>
+    <rect x="462" y="952" width="18" height="18" rx="3" fill="#ee6b33"/><text x="494" y="968">Input</text>
+    <rect x="590" y="952" width="18" height="18" rx="3" fill="#1aa874"/><text x="622" y="968">Display (I2C)</text>
+    <rect x="808" y="952" width="18" height="18" rx="3" fill="#c3c1b8"/><text x="840" y="968">Power and ground</text>
+    <rect x="1066" y="952" width="18" height="18" rx="3" fill="#fff" stroke="#b9b6ad" stroke-width="1.5"/><text x="1098" y="968">Not used</text>
+  </g>
+</svg>
+</figure>
+<p class="caption">Arduino Nano ESP32 pinout · pins used by this system</p>
+<p>Filled squares are the pins in use. Match each pin by the label printed on the board, not by its position, because the drawing is not to scale.</p>
+<table>
+<thead><tr><th>Board pin</th><th>ESP32-S3 GPIO</th><th>Connect to</th><th>Type</th><th>Reads / drives</th><th>Firmware name</th></tr></thead>
+<tr><td class="group" colspan="6">Inputs</td></tr>
+<tr><td>D2</td><td>GPIO5</td><td>Tap flow sensor signal</td><td>Pulse input (interrupt)</td><td>Pulses while water flows</td><td><code>TAP_PIN</code></td></tr>
+<tr><td>D3</td><td>GPIO6</td><td>Drain flow sensor signal</td><td>Pulse input (interrupt)</td><td>Pulses while water flows</td><td><code>DRAIN_PIN</code></td></tr>
+<tr><td>D8</td><td>GPIO17</td><td>Tank high-level switch</td><td>Digital input</td><td>HIGH = water at the high mark</td><td><code>IN_HIGHLEVEL</code></td></tr>
+<tr><td>D9</td><td>GPIO18</td><td>Tank low-level switch</td><td>Digital input</td><td>HIGH = water at the low mark</td><td><code>IN_LOWLEVEL</code></td></tr>
+<tr><td>D10</td><td>GPIO21</td><td>STOP button (other side to GND)</td><td>Input, internal pull-up</td><td>LOW = pressed</td><td><code>STOP_BUTTON</code></td></tr>
+<tr><td>D11</td><td>GPIO38</td><td>START button (other side to GND)</td><td>Input, internal pull-up</td><td>LOW = pressed</td><td><code>START_BUTTON</code></td></tr>
+<tr><td class="group" colspan="6">Outputs</td></tr>
+<tr><td>D0 / RX0</td><td>GPIO44</td><td>Tank-wash valve SSR, input +</td><td>Digital output (shared with UART0 RX)</td><td>HIGH = valve on</td><td><code>OUT_WASH_EV</code></td></tr>
+<tr><td>D1 / TX0</td><td>GPIO43</td><td>Buzzer module signal (optional)</td><td>Digital output (shared with UART0 TX)</td><td>HIGH = beep</td><td><code>BUZZER_PIN</code></td></tr>
+<tr><td>D4</td><td>GPIO7</td><td>Drain valve SSR, input +</td><td>Digital output</td><td>HIGH = valve on</td><td><code>OUT_DRAIN_EV</code></td></tr>
+<tr><td>D5</td><td>GPIO8</td><td>Fill valve SSR, input +</td><td>Digital output</td><td>HIGH = valve on</td><td><code>OUT_FILL_EV</code></td></tr>
+<tr><td>D6</td><td>GPIO9</td><td>Tap valve SSR, input +</td><td>Digital output</td><td>HIGH = valve on</td><td><code>OUT_TAP_EV</code></td></tr>
+<tr><td>D7</td><td>GPIO10</td><td>Pump SSR, input +</td><td>Digital output</td><td>HIGH = pump on</td><td><code>OUT_MOTOR</code></td></tr>
+<tr><td class="group" colspan="6">Display</td></tr>
+<tr><td>A4</td><td>GPIO11</td><td>OLED SDA</td><td>I2C data, 400 kHz</td><td>—</td><td><code>Wire</code></td></tr>
+<tr><td>A5</td><td>GPIO12</td><td>OLED SCL</td><td>I2C clock, 400 kHz</td><td>—</td><td><code>Wire</code></td></tr>
+<tr><td class="group" colspan="6">Power</td></tr>
+<tr><td>3V3</td><td>—</td><td>OLED VCC, level-switch common and buzzer module VCC</td><td>3.3 V supply out</td><td>—</td><td>—</td></tr>
+<tr><td>GND</td><td>—</td><td>Common ground: buttons, sensors, OLED, buzzer, every SSR input −, and the 5 V supply −</td><td>Ground</td><td>—</td><td>—</td></tr>
+<tr><td>VIN</td><td>—</td><td>Controller supply (see the board datasheet for the allowed voltage)</td><td>Power in</td><td>—</td><td>—</td></tr>
+</table>
+
+<h3>Wiring requirements</h3>
+<p><b>SSR inputs:</b> connect each output pin to the SSR's DC input (+) and GND to (−). The board must not drive solenoids or the motor directly.</p>
+<p><b>Level switches:</b> D8 and D9 use plain <code>INPUT</code>, so each switch needs an external pull-down (or pull-up, with the logic inverted in <code>getWaterLevelTank()</code>). A floating input gives random tank levels.</p>
+<p><b>Buttons:</b> wire between the pin and GND; no external resistor is needed.</p>
+<p><b>Flow sensors:</b> power them at the voltage the sensor and the board's inputs both accept. The Nano ESP32 inputs are 3.3 V only and not 5 V tolerant. If a sensor is powered from 5 V, use the diode and 10 kΩ pull-up shown in the wiring diagrams on D2 and D3. Do not use a resistor divider: with the sensor’s own pull-up it can leave the signal just above the pin’s switching level, so pulses drop out.</p>
+<p><b>Pin D0 (tank-wash valve):</b> D0 is also the board's RX0 serial pin. The sketch's <code>Serial</code> uses the USB port, so D0 is free, but do not use <code>Serial0</code> in the same sketch. Fit a 10 kΩ resistor from D0 to GND so the SSR stays firmly off while the board starts. Always write <code>D0</code> in the code, not a bare <code>0</code>.</p>
+<p><b>Pin D1 (buzzer, optional, from firmware 3.2):</b> D1 is also the board's TX0 serial pin, so do not use <code>Serial0</code>. Use an active buzzer module (one that beeps when its input is HIGH): signal to D1, VCC to 3V3, GND to GND. The chip sends its own start-up messages on TX0 before the firmware runs, so the buzzer may chirp briefly at power-on or after a reset; this is normal. The first line of <code>setup()</code> drives D1 LOW. Always write <code>D1</code> in the code, not a bare <code>1</code>. Until 3.1 the buzzer was on D12.</p>
+<p><b>Boot state:</b> <code>allSSROff()</code> writes LOW to all five outputs in <code>setup()</code>, so every valve and the motor start off.</p>
+<p>Pin numbers follow the Arduino labels printed on the board (Arduino IDE: <b>Tools &gt; Pin Numbering &gt; By Arduino pin (default)</b>). The GPIO column is for reference only. Source: <a href="https://docs.arduino.cc/hardware/nano-esp32/">Arduino Nano ESP32 full pinout</a>.</p>
+
+<h3>Wiring diagrams</h3>
+<p>Each panel shows one type of device; wire every device of that type the same way, using the pin from the pinout table.</p>
+<figure><img src="img/wiring-diagrams.png" alt="Wiring diagrams: buttons, level switches, flow sensors, valves and pump via SSR, OLED display, power supplies"></figure>
+<figure>
+<svg viewBox="0 0 1344 330" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Helvetica Neue, sans-serif" role="img" aria-label="Optional buzzer wiring: D1 to the buzzer module signal, 3V3 to VCC, GND to GND">
+  <rect x="42" y="10" width="608" height="310" rx="14" fill="#fff" stroke="#e2dfd7" stroke-width="2"/>
+  <text x="70" y="58" font-size="25" font-weight="700" fill="#1f1e1d">Buzzer, optional (D1)</text>
+  <g font-size="22" fill="#1f1e1d" text-anchor="middle">
+    <rect x="70" y="86" width="150" height="48" rx="8" fill="#fff" stroke="#c9c6bd" stroke-width="2"/><text x="145" y="118">D1 / TX0</text>
+    <rect x="70" y="146" width="150" height="48" rx="8" fill="#fff" stroke="#c9c6bd" stroke-width="2"/><text x="145" y="178">3V3</text>
+    <rect x="70" y="206" width="150" height="48" rx="8" fill="#fff" stroke="#c9c6bd" stroke-width="2"/><text x="145" y="238">GND</text>
+    <rect x="420" y="86" width="200" height="168" rx="8" fill="#fff" stroke="#c9c6bd" stroke-width="2"/>
+    <text x="520" y="160" font-weight="700">Active buzzer</text><text x="520" y="190">module</text>
+  </g>
+  <g font-size="20" fill="#52514e">
+    <line x1="220" y1="110" x2="420" y2="110" stroke="#c9c6bd" stroke-width="2"/><text x="400" y="104" text-anchor="end">signal (S / I/O)</text>
+    <line x1="220" y1="170" x2="420" y2="170" stroke="#c9c6bd" stroke-width="2"/><text x="400" y="164" text-anchor="end">VCC</text>
+    <line x1="220" y1="230" x2="420" y2="230" stroke="#c9c6bd" stroke-width="2"/><text x="400" y="224" text-anchor="end">GND</text>
+  </g>
+  <text x="70" y="298" font-size="20" fill="#52514e">HIGH = beep. A short chirp at power-on is normal (TX0).</text>
+  <rect x="694" y="10" width="608" height="310" rx="14" fill="#fff" stroke="#e2dfd7" stroke-width="2"/>
+  <text x="722" y="58" font-size="25" font-weight="700" fill="#1f1e1d">Choosing the buzzer</text>
+  <g font-size="21" fill="#1f1e1d">
+    <text x="722" y="110">Active buzzer module with its own driver</text>
+    <text x="722" y="142">(it beeps by itself when its input is HIGH).</text>
+    <text x="722" y="190">A passive buzzer or a bare piezo will not</text>
+    <text x="722" y="222">work: the firmware only switches the pin.</text>
+    <text x="722" y="270" fill="#52514e">Switch it on in the app: Settings → Buzzer.</text>
+  </g>
+</svg>
+</figure>
+<p class="caption">Wiring diagrams · one circuit per device type</p>
+<table>
+<thead><tr><th>Device</th><th>Wire 1</th><th>Wire 2</th><th>Wire 3</th><th>Extra parts</th></tr></thead>
+<tr><td>START / STOP button</td><td>Pin D11 / D10</td><td>GND</td><td>—</td><td>None</td></tr>
+<tr><td>Level switch (×2)</td><td>3V3</td><td>Pin D8 / D9</td><td>—</td><td>10 kΩ from the pin to GND</td></tr>
+<tr><td>Flow sensor (×2)</td><td>Red: +5 V supply</td><td>Black: GND</td><td>Yellow: pin D2 / D3 through a Schottky diode (cathode to the sensor)</td><td>10 kΩ from the pin to 3V3; optional 1–10 nF from the pin to GND</td></tr>
+<tr><td>SSR (×5)</td><td>Input +: pin D0 or D4–D7</td><td>Input −: GND</td><td>—</td><td>Load side in series with the valve or pump and its supply</td></tr>
+<tr><td>OLED</td><td>VCC: 3V3</td><td>GND: GND</td><td>SDA: A4, SCL: A5</td><td>None</td></tr>
+<tr><td>Buzzer (optional)</td><td>Signal: pin D1 / TX0</td><td>VCC: 3V3</td><td>GND: GND</td><td>None (active buzzer module)</td></tr>
+</table>
+<p>Choose SSRs whose control input switches reliably at 3.3 V (for example, a 3–32 V DC input). Use an AC-output SSR for AC valves and pumps, and a DC-output SSR with a flyback diode across the coil for DC valves.</p>
+
+<h2>3. Outputs and relay states</h2>
+<p>From firmware 3.0, only <code>GreyWaterOutputs</code> switches the outputs. The active step requests one of the modes below every 250 ms (<code>OPERATION_DELAY</code>), and a separate safety task checks the floats and the pump every 20 ms, whatever the rest of the program is doing (for example while a phone loads the app).</p>
+<table>
+<thead><tr><th>What the system is doing</th><th>When</th><th>Tap valve (D6)</th><th>Drain valve (D4)</th><th>Fill valve (D5)</th><th>Pump (D7)</th><th>Tank-wash valve (D0)</th><th>Firmware function</th></tr></thead>
+<tr><td>Starting up</td><td>Power-on</td><td>Off</td><td>Off</td><td>Off</td><td>Off</td><td>Off</td><td><code>allSSROff()</code></td></tr>
+<tr><td>Waiting / not saving</td><td>Idle, Run, step 4 with tank full</td><td>On</td><td>On</td><td>Off</td><td>Off</td><td>Off</td><td><code>noSavingWater()</code></td></tr>
+<tr><td>Washing the tank manually</td><td>Idle, after Wash tank on the dashboard</td><td>On</td><td>On</td><td>Off</td><td>Off</td><td>On until the tank is full</td><td><code>idleStateLogic()</code></td></tr>
+<tr><td>Filling with tap water</td><td>Step 1 (tap), step 3</td><td>On</td><td>On</td><td>Off</td><td>Off</td><td>Off</td><td><code>fillWashingMachineWithTapWater()</code></td></tr>
+<tr><td>Filling with tank water</td><td>Step 1 (tank), while the machine draws water</td><td>Off</td><td>On</td><td>Off</td><td>On; off within 0.3 s of the machine closing its inlet</td><td>Pulsed: 2 s every 10 s</td><td><code>fillWashingMachineWithTankWater()</code></td></tr>
+<tr><td>Draining soapy water</td><td>Step 2</td><td>On</td><td>On</td><td>Off</td><td>Off</td><td>Off</td><td><code>drainSoapyWater()</code></td></tr>
+<tr><td>Saving water to the tank</td><td>Step 4, tank not full</td><td>On</td><td>Off</td><td>On</td><td>Off</td><td>Off</td><td><code>checkAndFillWaterTank()</code></td></tr>
+</table>
+<p><b>Pump protection (from firmware 2.5):</b> the pump runs only while water is actually flowing.</p>
+<ul>
+<li><b>Fast cut-off:</b> if no tap-sensor pulse arrives for 0.3 s, the pump stops and the tap valve opens at once. That happens when the machine closes its inlet, or when the pump delivers nothing (air lock, blocked intake, empty pipe). The pump gets 1 s after starting for water to flow.</li>
+<li><b>No restart into a closed inlet:</b> after a cut-off, the pump waits for the machine’s next draw.</li>
+<li><b>Alert:</b> after 3 starts with no water in one cycle, the controller sends a <i>tank pump not pumping</i> alert.</li>
+<li><b>Hardware limit:</b> firmware cannot remove the last 0.3 s. A pump with a built-in pressure switch, or a bypass back to the tank, protects it fully.</li>
+</ul>
+<p><b>Interlocks (from firmware 3.0):</b> applied every 20 ms in every state.</p>
+<ul>
+<li>The fill valve (D5) and the tank-wash valve (D0) never open while the high float is wet. In step 4 the rinse water then goes to the drain, and saving stays off for the rest of that step.</li>
+<li>The pump (D7) never runs while the low float is dry; the tap supplies the machine instead.</li>
+<li>The pump cut-off above keeps working even if the main program is busy.</li>
+</ul>
+<h3>Tank level decoding</h3>
+<p>From firmware 3.0, the safety task reads both switches every 20 ms. Each switch reports its safe reading after 0.2 s (high float wet, low float dry) and the other reading only after 2 s, so a float bobbing at the mark does not switch valves on and off:</p>
+<table>
+<thead><tr><th>Low switch D9</th><th>High switch D8</th><th>Level</th><th>OLED tank icon</th></tr></thead>
+<tr><td>LOW</td><td>LOW</td><td>low</td><td>Empty (outline with half-way marks)</td></tr>
+<tr><td>HIGH</td><td>LOW</td><td>medium</td><td>Half full</td></tr>
+<tr><td>HIGH</td><td>HIGH</td><td>high</td><td>Full</td></tr>
+<tr><td>LOW</td><td>HIGH</td><td>high: the tank is treated as full and the pump is not used. After 3 s it is reported as a switch fault (alert <i>check level switches</i>, app <i>Check float switches</i>); see section 8</td><td>Full</td></tr>
+</table>
+<h3>Tank-wash timing</h3>
+<p>While <code>fillWashingMachineWithTankWater()</code> runs, the wash valve opens immediately, stays open for <code>TANK_WASH_OPEN_TIME</code> (2 s), and reopens every <code>TANK_WASH_PERIOD</code> (10 s). The timer restarts on every state entry. Switching to tap water closes the valve; switching back to tank water in the same state continues the same 10 s cycle.</p>
+
+<h2>4. Buttons and operator controls</h2>
+<p>The system has two momentary buttons: Start begins a cycle from Idle, and Stop ends a cycle from any other state. Both are read every <code>loop()</code> pass by <code>updateInputs()</code> with a 20 ms debounce (<code>DEBOUNCE_DELAY</code>).</p>
+<table>
+<thead><tr><th>Button</th><th>Pin</th><th>Press it when</th><th>What happens</th><th>Screen shows</th><th>Ignored when</th></tr></thead>
+<tr><td>START</td><td>D11</td><td>The screen shows <code>READY</code> and the washing machine program is running</td><td>The cycle begins; step 1 starts after 250 ms. During the start-up animation it also ends the animation</td><td><code>STARTING</code>, then <code>1/4 WASH</code></td><td>A cycle is already running</td></tr>
+<tr><td>STOP</td><td>D10</td><td>You want to cancel the cycle</td><td>The system returns to Idle and resets all timers</td><td><code>STOPPED</code> for 4 s, then <code>READY</code></td><td>The system is already in Idle</td></tr>
+</table>
+<h3>Operational notes</h3>
+<ul>
+<li><b>Start in any other state:</b> ignored. A running cycle cannot be restarted without pressing Stop first.</li>
+<li><b>Stop in Idle:</b> ignored.</li>
+<li><b>Stop paths:</b> from Run and Fill 1/4 the state machine's own transition goes to Idle. From Drain 2/4, Rinse 3/4 and Drain 4/4, <code>loop()</code> also forces a reset with <code>resetFSMToIdle()</code>. Both end in the same Idle entry.</li>
+<li><b>Buttons act while held:</b> the debounce reports the button as pressed for as long as it is held, not once per press. Holding Start when a cycle ends starts the next cycle straight away.</li>
+<li><b>Both buttons at once:</b> do not press both buttons simultaneously. The resulting state depends on the order in which transitions are evaluated.</li>
+<li><b>Stop is not an emergency stop.</b> In Idle the tap and drain SSRs stay on (<code>noSavingWater()</code>). To make the installation safe, isolate the SSR and valve supply (see Safety precautions).</li>
+</ul>
+<h3>Standard operating procedure</h3>
+<ol>
+<li>Check that the OLED shows <code>READY</code> / Press START.</li>
+<li>Load the washing machine and start its program.</li>
+<li>Press Start. The header changes to <code>1/4 WASH</code>.</li>
+<li>No operator action is required while the cycle runs. Progress shows in the header (<code>1/4</code> to <code>4/4</code>); in step 4 a countdown shows the time left.</li>
+<li>When the OLED shows <code>DONE</code> / Cycle complete, the system is back in Idle.</li>
+<li>To abort, press Stop at any time.</li>
+</ol>
+
+<h2>5. Operating procedure</h2>
+<p>Pressing Start runs the four steps in order; each of steps 1–3 ends only when the flow sensors confirm what the washing machine is doing, and step 4 ends after 20 minutes.</p>
+<figure><img src="img/state-machine.png" alt="State machine: Idle, Run, Fill 1/4, Drain 2/4, Rinse 3/4, Drain 4/4; Stop returns to Idle from every step"></figure>
+<p class="caption">State machine · 6 states, Stop returns to Idle from every step</p>
+<p>The diagram reads clockwise from Run. "Flow, 4 s" means the flow rate stayed above the Flow threshold (default 1 L/min) for the flow detection time, <code>EDGE_DETECTION_DELAY</code> (4 s).</p>
+<table>
+<thead><tr><th>State</th><th>On entry</th><th>Every 250 ms</th><th>Next state</th><th>Exit condition</th></tr></thead>
+<tr><td>Idle</td><td>Clears buttons, cycle flags, edge flags, flow counters, tank-wash timer; shows the result notice</td><td><code>noSavingWater()</code></td><td>Run</td><td>Start pressed</td></tr>
+<tr><td>Run</td><td>Clears any notice</td><td><code>noSavingWater()</code></td><td>Fill 1/4</td><td>250 ms elapsed</td></tr>
+<tr><td>Fill 1/4</td><td>Resets flow counters and tank-wash timer</td><td><code>checkAndFillWashingMachine()</code>: tap water if the tank is low or no demand yet, else tank water with wash pulses</td><td>Drain 2/4</td><td>The machine is filled (took at least the Minimum fill, default 3 L, and its inlet closed), then a drain starts (<code>filled1</code>). A drain before or during the fill does not count.</td></tr>
+<tr><td>Drain 2/4</td><td>Resets flow counters</td><td><code>drainSoapyWater()</code></td><td>Rinse 3/4</td><td>Tap flow seen for 4 s: the machine starts its rinse fill (<code>drained1</code>)</td></tr>
+<tr><td>Rinse 3/4</td><td>Resets flow counters</td><td><code>fillWashingMachineWithTapWater()</code></td><td>Drain 4/4</td><td>The rinse fill is complete (Minimum fill taken, inlet closed), then a new drain starts: the rinse drain (<code>filled2</code>)</td></tr>
+<tr><td>Drain 4/4</td><td>Resets flow counters; starts the countdown</td><td><code>checkAndFillWaterTank()</code>: save to tank while low or medium, else not saving</td><td>Idle</td><td><code>TRANSITION_DELAY</code> (20 min) elapsed</td></tr>
+</table>
+<p>Steps 1–3 have no timeout. If the expected flow never arrives, the step waits until Stop is pressed (section 8).</p>
+<p>The controller follows the washing machine; it does not command it. Start the machine's own program, then press Start, and keep the machine's program length in line with <code>TRANSITION_DELAY</code>.</p>
+
+<h2>6. OLED display guide</h2>
+<p>The screen shows the step in the header, two live indicators on the right, and a one-line message below.</p>
+<pre>+--------------------------------+
+|1/4 WASH              [###] [W] |   header: step + tank level + wash valve
+|--------------------------------|
+|          Reusing water         |   message: Helvetica Bold, 14 or 12 px
++--------------------------------+</pre>
+<table>
+<thead><tr><th>Element</th><th>Reads</th><th>Meaning</th></tr></thead>
+<tr><td>Header text</td><td><code>1/4 WASH</code> etc.</td><td>Current step; in step 4 also the time left (<code>4/4 SAVE 18:42</code>). Built-in 6 px font, at most 16 characters</td></tr>
+<tr><td>Tank icon</td><td>17 × 10 px box: empty with half-way marks / half / full</td><td>Tank level from the level switches (low / medium / high)</td></tr>
+<tr><td><code>W</code> icon</td><td>Outlined / white box</td><td>Tank-wash valve closed / open</td></tr>
+<tr><td>Message</td><td>Helvetica Bold pixel font (from 3.2): 14 px when the message fits the width, otherwise 12 px</td><td>What the system is doing now</td></tr>
+</table>
+<h3>Start-up animation (from firmware 3.2)</h3>
+<p>After power-on or a restart, a Border Collie chases a butterfly across the whole screen for about 4 seconds: it gallops in, crouches and stalks the butterfly, then sprints after it. Then <code>REUSE WATER</code> / System ready shows for 2 seconds, then <code>READY</code> / Press START.</p>
+<ul>
+<li>The rest of the controller starts at the same time: Wi-Fi connects and the safety task runs; the animation does not delay anything.</li>
+<li>Notices that arrive during the animation (the IP address, the Wi-Fi setup key, <code>INTERRUPTED</code>) are kept and shown after System ready.</li>
+<li>START, or Wash tank in the app, ends the animation at once. Without a working screen it is skipped.</li>
+<li>The drawings are in <code>BootAnimation.h</code> (about 1.6 KB).</li>
+</ul>
+<h3>Messages</h3>
+<table>
+<thead><tr><th>Top line</th><th>Message</th><th>What it means</th><th>Action needed</th></tr></thead>
+<tr><td colspan="2">Full screen: a dog chasing a butterfly</td><td>The controller has just switched on (about 4 s)</td><td>None; START skips it</td></tr>
+<tr><td><code>REUSE WATER</code></td><td>System ready</td><td>Start-up finished (2 s)</td><td>None</td></tr>
+<tr><td><code>READY</code></td><td>Press START</td><td>Waiting for a new cycle</td><td>Press START when the machine runs</td></tr>
+<tr><td><code>STARTING</code></td><td>Starting...</td><td>START was pressed</td><td>None</td></tr>
+<tr><td><code>1/4 WASH</code></td><td>Waiting to fill</td><td>The machine has not started taking water yet</td><td>Start the machine’s program if it is not running</td></tr>
+<tr><td><code>1/4 WASH</code></td><td>Reusing water</td><td>The machine is filling with water saved in the tank; the tank is being cleaned (<code>W</code> lights every 10 s)</td><td>None</td></tr>
+<tr><td><code>1/4 WASH</code></td><td>Using tap water</td><td>The machine is filling from the tap</td><td>None</td></tr>
+<tr><td><code>1/4 WASH</code></td><td>Tank low: tap</td><td>The tank has too little water, so tap water is used</td><td>None</td></tr>
+<tr><td><code>1/4 WASH</code></td><td>Washing...</td><td>The machine has filled and is washing</td><td>None</td></tr>
+<tr><td><code>2/4 SOAPY DRAIN</code></td><td>Not saving</td><td>Soapy wash water goes to the drain, not the tank</td><td>None</td></tr>
+<tr><td><code>3/4 RINSE</code></td><td>Using tap water</td><td>Rinse fill from the tap</td><td>None</td></tr>
+<tr><td><code>3/4 RINSE</code></td><td>Rinsing...</td><td>The machine has filled and is rinsing</td><td>None</td></tr>
+<tr><td><code>1/4</code>, <code>2/4</code> or <code>3/4</code></td><td>No water flow</td><td>The step has waited longer than the step time limit for water flow</td><td>Check the Service tab of the app</td></tr>
+<tr><td><code>4/4 SAVE 18:42</code></td><td>Saving water</td><td>Rinse water is stored; the clock shows the time left</td><td>None</td></tr>
+<tr><td><code>4/4 SAVE 18:42</code></td><td>Tank full: drain</td><td>The tank is full; the rest goes to the drain</td><td>Use or empty the tank if this happens often</td></tr>
+<tr><td><code>TANK WASH 9:42</code></td><td>Cleaning tank</td><td>Manual tank wash; the clock shows the time left before the safety limit</td><td>None</td></tr>
+<tr><td><code>TANK CLEANED</code></td><td>Tank full</td><td>The manual wash filled the tank (4 s)</td><td>None</td></tr>
+<tr><td><code>WASH STOPPED</code></td><td>Stopped early</td><td>Stopped from the app, the STOP button, or by a cycle starting (4 s)</td><td>None</td></tr>
+<tr><td><code>WASH STOPPED</code></td><td>Check tank</td><td>The time limit was reached, or the level switches disagree</td><td>Check both float switches and the wash water supply</td></tr>
+<tr><td><code>INTERRUPTED</code></td><td>Check machine</td><td>The controller restarted during a cycle (15 s)</td><td>Check the washing machine; start again if needed</td></tr>
+<tr><td><code>ReuseWater-Setup</code></td><td>Key gw-a1b2c3</td><td>The Wi-Fi setup page is open; the top line is the network to join and the key is its password (in Spanish only the key is shown)</td><td>Join it on a phone with that key</td></tr>
+<tr><td>IP address</td><td>Connected</td><td>Connected to the home Wi-Fi; the top line is the app’s address (6 s)</td><td>Note it, or use <code>reusewater.local</code></td></tr>
+<tr><td><code>UPDATING</code></td><td>Keep power on</td><td>A wireless firmware update is running</td><td>Wait; do not switch off</td></tr>
+<tr><td><code>STOPPED</code></td><td>Cycle stopped</td><td>STOP was pressed (4 s)</td><td>Press START to run again</td></tr>
+<tr><td><code>DONE</code></td><td>Reused 26 L</td><td>The cycle finished; tank water replaced that much tap water (4 s). Shows Cycle complete if none was reused</td><td>None</td></tr>
+</table>
+<p>Every message fits the screen without scrolling: each one is measured in the 12 px font by <code>tools/check_screen_text.py</code>, and short messages use the larger 14 px size. The dashboard shows the same status as full sentences.</p>
+<p>Short messages are centred and still. A message wider than 128 px would pause for 1.5 s, then scroll at 50 px/s and repeat. The display only sends a new frame when something changes, while text scrolls, or during the start-up animation.</p>
+
+<h2>7. Configuration parameters</h2>
+<p>All timing and behavior settings are <code>#define</code>s in <code>GreyWaterSystem.h</code>; change them there and re-flash.</p>
+<table>
+<thead><tr><th>Constant</th><th>Default</th><th>Unit</th><th>Controls</th><th>Guidance</th></tr></thead>
+<tr><td><code>OPERATION_DELAY</code></td><td>250</td><td>ms</td><td>How often each state updates relays and sensors</td><td>Keep 100–1000; other timings are rounded to this step</td></tr>
+<tr><td><code>TRANSITION_DELAY</code></td><td>1200000</td><td>ms</td><td>Length of step 4 (20 min) before returning to Idle</td><td>Set to how long the machine's rinse drain lasts</td></tr>
+<tr><td><code>EDGE_DETECTION_DELAY</code></td><td>4000</td><td>ms</td><td>Flow must last this long to count as "flow detected"</td><td>Raise if short spurts end steps early</td></tr>
+<tr><td><code>TANK_WASH_PERIOD</code></td><td>10000</td><td>ms</td><td>Interval between tank-wash openings</td><td>Multiple of <code>OPERATION_DELAY</code></td></tr>
+<tr><td><code>TANK_WASH_OPEN_TIME</code></td><td>2000</td><td>ms</td><td>Wash valve open time per interval</td><td>Less than <code>TANK_WASH_PERIOD</code>, else always open</td></tr>
+<tr><td><code>DEBOUNCE_DELAY</code></td><td>20</td><td>ms</td><td>Button debounce</td><td>20–50</td></tr>
+<tr><td><code>CONTRL_SSR_DELAY</code></td><td>0</td><td>ms</td><td>Blocking delay after each SSR write</td><td>Keep 0; any value blocks <code>loop()</code> 5× per update</td></tr>
+<tr><td><code>DISPLAY_FRAME_MS</code></td><td>40</td><td>ms</td><td>Frame interval while scrolling and during the start-up animation (25 fps)</td><td>Not below about 20</td></tr>
+<tr><td><code>SCROLL_SPEED_PX</code></td><td>2</td><td>px/frame</td><td>Scroll speed (50 px/s)</td><td>1–3</td></tr>
+<tr><td><code>SCROLL_PAUSE_MS</code></td><td>1500</td><td>ms</td><td>Rest before a long message scrolls</td><td>—</td></tr>
+<tr><td><code>SCROLL_GAP_PX</code></td><td>40</td><td>px</td><td>Gap before a scrolled message repeats</td><td>—</td></tr>
+<tr><td><code>NOTICE_DURATION</code></td><td>4000</td><td>ms</td><td>How long "Cycle stopped" / "Cycle complete" stays</td><td>—</td></tr>
+<tr><td><code>BUZZER_PIN</code></td><td><code>D1</code></td><td>—</td><td>Pin of the optional buzzer (D12 until 3.1)</td><td>Keep D1 unless the wiring changes; do not use <code>Serial0</code></td></tr>
+<tr><td><code>DEBUG_MODE</code></td><td>false</td><td>—</td><td>Serial debug output at 9600 baud</td><td>Set true for troubleshooting</td></tr>
+<tr><td><code>SENSOR_TAP_TYPE</code></td><td>YFB1</td><td>—</td><td>Tap flow sensor model</td><td>Must match the fitted sensor</td></tr>
+<tr><td><code>SENSOR_DRAIN_TYPE</code></td><td>YFB10</td><td>—</td><td>Drain flow sensor model</td><td>Must match the fitted sensor</td></tr>
+</table>
+<p>The start-up animation speed and stalk length are <code>INTRO_SPEED_PX</code> and <code>INTRO_STALK_FRAMES</code> in <code>GreyWaterDisplay.cpp</code>.</p>
+<p>The SSR logic level is set in the <code>.ino</code> (<code>ssrON = HIGH</code>, <code>ssrOFF = LOW</code>). For active-LOW relay boards, swap the two values.</p>
+<p>From firmware 2.0, the wash timing, final drain length, flow detection time and alert limits are changed on the dashboard (section 11) and saved in the controller. The <code>#define</code> values are only the factory defaults used on first boot.</p>
+
+<h2>8. Exceptions and troubleshooting</h2>
+<p>The firmware handles a low or full tank automatically, but it has no timeouts on steps 1–3, so a missing flow signal leaves the cycle waiting until Stop is pressed; from firmware 2.9 it alerts when a step takes longer than the alert time.</p>
+<h3>Conditions handled by the firmware</h3>
+<table>
+<thead><tr><th>Condition</th><th>Detected by</th><th>Automatic response</th><th>OLED</th></tr></thead>
+<tr><td>Tank low during Fill 1/4</td><td>Level switches</td><td>Fills from the tap instead of the tank</td><td>Tank low: tap</td></tr>
+<tr><td>No tap demand yet in Fill 1/4</td><td>Tap flow sensor</td><td>Stays on tap water until flow is confirmed</td><td>Using tap water</td></tr>
+<tr><td>Tank full during Drain 4/4</td><td>High-level switch</td><td>Stops saving; water goes to the normal drain path</td><td>Tank full: drain</td></tr>
+<tr><td>High float wet, low float dry for 3 s (from 3.0)</td><td>Both level switches</td><td>Tank treated as full: no saving, no tank wash, no pump; tap water used. High-priority alert, alarm beeps, event logged</td><td>App: Check float switches</td></tr>
+<tr><td>Stop pressed</td><td>Stop button</td><td>Returns to Idle, clears all flags and timers</td><td>Cycle stopped</td></tr>
+<tr><td>Power loss or reset</td><td>—</td><td>Restarts in Idle with all outputs off; the cycle is not resumed</td><td>Start-up animation, System ready, then Press START (<code>INTERRUPTED</code> if a cycle was running)</td></tr>
+<tr><td><code>millis()</code> rollover after 49.7 days</td><td>—</td><td>Timers use unsigned subtraction, so they keep working</td><td>—</td></tr>
+</table>
+<h3>Faults not detected by the firmware</h3>
+<table>
+<thead><tr><th>Problem</th><th>Most likely cause</th><th>What to check</th><th>How to fix</th><th>Who</th></tr></thead>
+<tr><td>Screen blank, nothing responds</td><td>No power, or the display is not detected (from 3.0 the controller keeps running without it and sends an alert)</td><td>Power to the board; OLED wires on 3V3, GND, A4, A5</td><td>Reseat the OLED wiring; confirm address 0x3C</td><td>Technician</td></tr>
+<tr><td>Stuck on <code>1/4 WASH</code></td><td>One flow sensor reports no water</td><td>Washing machine program is running; both flow sensors (D2, D3)</td><td>Press STOP; clean or reconnect the sensor</td><td>User, then technician</td></tr>
+<tr><td>Stuck on <code>2/4 SOAPY DRAIN</code></td><td>Tap flow sensor reports no water</td><td>Tap valve opens; tap sensor on D2</td><td>Press STOP; check the tap sensor</td><td>Technician</td></tr>
+<tr><td>Stuck on <code>3/4 RINSE</code></td><td>Drain flow sensor reports no water</td><td>Drain hose and drain sensor on D3</td><td>Press STOP; check the drain sensor on the Service tab (pulses counting with no water = noise: fix the wiring); raise the Flow threshold if a steady trickle continues</td><td>Technician</td></tr>
+<tr><td>Steps change too early</td><td>Electrical noise or short spurts of water</td><td>Sensor cable routing near mains wires</td><td>Separate the sensor cables from mains, pump and valve wiring; fit the diode and pull-up interface; raise the Flow threshold in Settings</td><td>Technician</td></tr>
+<tr><td>Tank icon wrong</td><td>Level switch stuck, or a missing pull-down resistor</td><td>Move each float by hand and watch the icon</td><td>Clean the floats; fit the 10 kΩ pull-downs</td><td>Technician</td></tr>
+<tr><td>Fill keeps switching tap ↔ tank</td><td>Float bouncing or water sloshing</td><td>Float mounting</td><td>Mount the float in a calm spot or a still tube</td><td>Technician</td></tr>
+<tr><td><code>W</code> lights but no tank wash</td><td>SSR wired to the wrong pin, or no valve supply</td><td>SSR on D0; SSR LED; valve supply</td><td>Rewire to D0; restore supply</td><td>Technician</td></tr>
+<tr><td>Tank-wash valve open the whole fill</td><td><code>TANK_WASH_OPEN_TIME</code> is not less than <code>TANK_WASH_PERIOD</code></td><td>Settings in the app</td><td>Set the open time below the interval</td><td>Technician</td></tr>
+<tr><td>A valve or the pump never switches</td><td>Failed SSR, or SSR needs a different logic level</td><td>Voltage on the pin (3.3 V when on); SSR LED</td><td>Replace the SSR; swap <code>ssrON</code> / <code>ssrOFF</code> for active-LOW boards</td><td>Technician</td></tr>
+<tr><td>Buzzer silent</td><td>Buzzer off in Settings, still wired to D12, or a passive buzzer</td><td>Settings → Buzzer; signal wire on D1 (from 3.2); module type</td><td>Switch it on; move the wire to D1; use an active buzzer module</td><td>Technician</td></tr>
+<tr><td>Buzzer chirps at power-on</td><td>Normal: the chip's start-up messages go out on D1 (TX0)</td><td>—</td><td>None; it stops as soon as the firmware starts</td><td>—</td></tr>
+<tr><td>Screen stutters, buttons slow</td><td>I2C too slow, or a delay added to SSR switching</td><td><code>Wire.setClock(400000)</code>; <code>CONTRL_SSR_DELAY</code></td><td>Keep 400 kHz and a 0 ms delay</td><td>Technician</td></tr>
+<tr><td>A new cycle starts by itself</td><td>START button held or stuck</td><td>Button and its wiring</td><td>Release or replace the button</td><td>User</td></tr>
+</table>
+<h3>Diagnostic procedure</h3>
+<ol>
+<li>Set <code>DEBUG_MODE</code> to <code>true</code> in <code>GreyWaterSystem.h</code> and flash.</li>
+<li>Open the Serial Monitor at 9600 baud.</li>
+<li>Watch the state entries (<code>Entering state: …</code>), flow rates, tank level and SSR switching while you reproduce the fault.</li>
+<li>Set <code>DEBUG_MODE</code> back to <code>false</code> for normal use; the debug output slows the loop.</li>
+</ol>
+<p>Developer note: <code>DEBUG_PRINT(x)</code> expands to an <code>if</code> without braces. Do not use it as the only statement before an <code>else</code>.</p>
+
+<h2>9. Commissioning and test checklist</h2>
+<p>Run these checks after installation, after any wiring change, and after flashing new firmware.</p>
+<h3>Before power-up</h3>
+<ul class="check">
+<li>Every SSR input is wired to its pin from section 2, with a common GND</li>
+<li>SSR load side and valve/motor supply are fused and switched off</li>
+<li>Level switches have pull resistors; buttons go to GND</li>
+<li>Flow sensor signal levels are safe for the board's inputs</li>
+<li>If a buzzer is fitted: active buzzer module, signal on D1 (not D12)</li>
+</ul>
+<h3>Power-up and idle</h3>
+<ul class="check">
+<li>OLED shows the Border Collie chasing the butterfly (about 4 s), then <code>REUSE WATER</code> / System ready for 2 s, then <code>READY</code> / Press START, with no "Cycle complete"</li>
+<li>Pressing START during the animation ends it at once</li>
+<li>Messages read clearly in the bold font at the normal viewing distance</li>
+<li>All SSRs are off for the first moment, then tap and drain SSRs turn on in Idle</li>
+<li>Tank icon follows the level switches when each float is lifted by hand (empty, half, full)</li>
+<li>If a buzzer is fitted: at most a short chirp at power-on, then silent</li>
+</ul>
+<h3>Buttons</h3>
+<ul class="check">
+<li>Start in Idle changes the header to <code>STARTING</code>, then <code>1/4 WASH</code></li>
+<li>Stop during each step shows <code>STOPPED</code> / Cycle stopped for 4 s, then <code>READY</code></li>
+<li>Start during a running step has no effect</li>
+</ul>
+<h3>Full cycle</h3>
+<ul class="check">
+<li>Fill 1/4 with the tank low uses tap water; the <code>W</code> icon stays outlined</li>
+<li>Fill 1/4 with water in the tank switches to tank water once the machine draws water; the motor runs and <code>W</code> turns white for 2 s every 10 s</li>
+<li>Drain 2/4 shows Not saving; the fill valve stays off</li>
+<li>Rinse 3/4 uses tap water; the wash valve stays closed</li>
+<li>Drain 4/4 saves water (fill valve on, drain off) and the countdown decreases each second</li>
+<li>With the tank full, Drain 4/4 shows Tank full: drain</li>
+<li>After 20 minutes the OLED shows <code>DONE</code> / Cycle complete, then <code>READY</code>; with the buzzer on, two short beeps</li>
+</ul>
+<h3>Faults</h3>
+<ul class="check">
+<li>Disconnect the OLED and reset: the controller keeps running and the app's Service tab shows the screen as not working</li>
+<li>Disconnect a flow sensor in Fill 1/4: the step waits, and Stop still returns to Idle</li>
+</ul>
+
+<h2>10. Maintenance and firmware deployment</h2>
+<h3>Maintenance</h3>
+<table>
+<thead><tr><th>Task</th><th>Interval</th><th>Notes</th></tr></thead>
+<tr><td>Check the OLED tank icon against the real tank level</td><td>Monthly</td><td>Catches stuck or fouled level switches</td></tr>
+<tr><td>Clean flow sensors and their inlet screens</td><td>Every 3 months</td><td>Lint in grey water blocks the YF-B10 drain sensor first</td></tr>
+<tr><td>Inspect the tank and its wash nozzle</td><td>Every 3 months</td><td>Adjust the wash valve open time in Settings if sediment builds up</td></tr>
+<tr><td>Check valves and SSRs switch (run the commissioning "Full cycle" checks)</td><td>Every 6 months</td><td>Listen for each valve click; check SSR LEDs</td></tr>
+<tr><td>Check connectors and cable strain relief</td><td>Every 6 months</td><td>Damp environment</td></tr>
+</table>
+<p>Intervals are suggested starting points; adjust them to the water quality and how often the machine is used.</p>
+<h3>Firmware build and installation</h3>
+<ol>
+<li>Install the Arduino IDE (or arduino-cli) and the board package <b>esp32 by Espressif Systems</b>; select <b>Arduino Nano ESP32</b>.</li>
+<li>Install the libraries: Adafruit GFX, Adafruit SSD1306, AgileStateMachine and WiFiManager (from firmware 2.4 the FlowSensor library is no longer needed; the 3.2 screen fonts are part of the sketch).</li>
+<li>Keep the whole <code>FSM_WashingMachineSystem</code> folder together: the <code>.ino</code> and every <code>.cpp</code> and <code>.h</code> file in it. The folder name must stay <code>FSM_WashingMachineSystem</code>.</li>
+<li>Select the board and port, then Upload (over USB, or wirelessly, see section 11).</li>
+<li>Run the checks in section 9.</li>
+</ol>
+<h3>Software modification reference</h3>
+<ul>
+<li>Pins, timings and display settings: <code>GreyWaterSystem.h</code> (sections 2 and 7).</li>
+<li>Relay combinations and interlocks: <code>GreyWaterOutputs.h</code> / <code>.cpp</code> (section 3).</li>
+<li>OLED text: <code>displaySetStatus()</code> calls in each state's logic function, and the strings returned by <code>checkAndFillWashingMachine()</code> and <code>checkAndFillWaterTank()</code>. Every screen text is a <code>TRS("English", "Español")</code> pair; run <code>tools/check_screen_text.py</code> after changing one.</li>
+<li>Screen layout, fonts and start-up animation: <code>GreyWaterDisplay.cpp</code>, <code>FontHelvBold12.h</code>, <code>FontHelvBold14.h</code>, <code>BootAnimation.h</code>.</li>
+<li>States and transitions: <code>setupStateMachine()</code> in the <code>.ino</code> (section 5).</li>
+</ul>
+
+<h2>11. Wi-Fi features (firmware 2.0)</h2>
+<p>Firmware 2.0 adds a phone dashboard, alerts, water statistics and wireless updates; the wash cycle runs exactly the same when Wi-Fi is missing. From firmware 3.2 the app is called <b>Reuse Water System</b> (Spanish: <i>Sistema de Reúso de Agua</i>).</p>
+<h3>First-time Wi-Fi setup</h3>
+<ol>
+<li>On first boot, after the start-up animation, the screen shows <code>ReuseWater-Setup</code> and the setup key, for example <code>Key gw-a1b2c3</code> (in Spanish, only the key). The key is unique to each board (from firmware 3.0) and is also printed on the USB serial monitor.</li>
+<li>On a phone, join the Wi-Fi network <b>ReuseWater-Setup</b> with that key. Only if the screen is missing or broken is the key the old shared password <code>greywater</code>.</li>
+<li>A setup page opens (otherwise browse to <code>192.168.4.1</code>). Choose the home network and enter its password.</li>
+<li>The screen shows the controller's IP address for 6 seconds.</li>
+<li>Open <code>http://reusewater.local</code> (or that IP address) and sign in as <code>admin</code>, password <code>greywater</code>.</li>
+<li>In <b>Settings</b>, set new passwords and an alert topic (see Phone alerts).</li>
+</ol>
+<p>The setup page closes after 3 minutes and the system then runs offline. To open it again, for example after changing the router, hold <b>STOP for 5 seconds</b> while the screen shows <code>READY</code>.</p>
+<p>From firmware 3.0 the setup page only sets the Wi-Fi network and shows information: it cannot install firmware or erase the controller, because it has no password of its own.</p>
+<p class="note"><b>Name change (3.2):</b> until firmware 3.1 the app was at <code>greywater.local</code>, the setup network was <code>GreyWater-Setup</code> and the update port was <code>greywater</code>. After the 3.2 update they are <code>reusewater.local</code>, <code>ReuseWater-Setup</code> and <code>reusewater</code>. The IP address, passwords, settings and water history do not change; update any bookmark or home-screen shortcut.</p>
+<h3>Dashboard</h3>
+<table>
+<thead><tr><th>Tab</th><th>For</th><th>Shows</th></tr></thead>
+<tr><td>Overview</td><td>Household</td><td>What is happening now, using the same words as the controller’s screen; Start cycle and Stop cycle; the storage tank (level, water age, wash valve) and the Wash tank button</td></tr>
+<tr><td>Water use</td><td>Household</td><td>Last wash (when, how long, litres reused and saved); this month’s share of washing water that came from the tank, compared with last month; washes, reused, saved and tap water this month; totals by period</td></tr>
+<tr><td>Service</td><td>Installers and technicians</td><td>Flow sensors (rate, flowing or not, pulse counts); valves and pump; tank level switches; current step with litres taken and the “machine is filled” guard; Wi-Fi, IP address, uptime, alerts and firmware</td></tr>
+<tr><td>Settings</td><td>Everyone</td><td>All the values in the settings table, a test-alert button and a restart button</td></tr>
+</table>
+<p>On the Service tab, the tank-wash valve state is reported by the controller. The other valve and pump states are the expected states for the current step and fill source.</p>
+<p><b>Refresh (from firmware 2.8.1):</b> the app updates itself every 2 seconds. The badge in the top bar shows the connection:</p>
+<ul>
+<li><i>Online</i> with the controller’s time: updates are arriving.</li>
+<li><i>Updating slowly</i>: no update for 6 seconds, usually weak Wi-Fi.</li>
+<li><i>Offline</i>: the controller cannot be reached.</li>
+</ul>
+<p>Press <b>Refresh</b> next to the badge to fetch fresh data at once. It cancels any update that is still waiting.</p>
+<h3>Keeping the water history</h3>
+<p>The Water use history survives firmware updates. From firmware 2.8 it is protected in three places:</p>
+<table>
+<thead><tr><th>Where</th><th>What it does</th></tr></thead>
+<tr><td>The controller</td><td>Stores the history twice (main record and backup copy), saves it again before every wireless update, and never overwrites a record it cannot read</td></tr>
+<tr><td>Every phone that opens the app</td><td>Keeps its own copy, updated automatically. If the controller ever comes back without history, the Water use tab shows the phone’s copy and a Restore to controller button</td></tr>
+<tr><td>A history file</td><td>Download history file on the Water use tab. Restore from file brings it back, even onto a replaced or fully erased controller</td></tr>
+</table>
+<p><b>If the Water use tab is empty after an update:</b></p>
+<ol>
+<li>Open the app on a phone that was used before the update. Use the same address as usual: <code>reusewater.local</code> and the IP address keep separate copies (before 3.2 the address was <code>greywater.local</code>).</li>
+<li>On the Water use tab, press <b>Restore to controller</b>. If no phone has a copy, use <b>Restore from file</b> with a downloaded history file.</li>
+<li>Check the Service tab: Water history should read Restored from the app.</li>
+</ol>
+<p><b>Avoid erasing the controller’s memory:</b> a normal upload keeps the history. A full flash erase removes it, together with the settings and the Wi-Fi network. That covers Burn Bootloader, recovery mode, uploading with another board or partition scheme selected, and Erase All Flash. Download a history file before any such work.</p>
+<h3>Safety and service features (firmware 2.9)</h3>
+<table>
+<thead><tr><th>Feature</th><th>What happens</th><th>Where to see it</th></tr></thead>
+<tr><td>Interrupted cycle</td><td>If the power goes off, the program crashes or the watchdog restarts the controller during a cycle, the controller comes back in Ready with all outputs safe. It shows <code>INTERRUPTED</code> / Check machine (after the start-up animation), sends a high-priority alert and logs the event. The cycle is not resumed.</td><td>Screen, phone alert, Overview notice (until OK or the next Start), Service → Recent events</td></tr>
+<tr><td>Watchdog</td><td>If the program freezes for 5 s, the controller restarts with every output off</td><td>Service → Last restart: Watchdog (program froze)</td></tr>
+<tr><td>Wireless updates</td><td>Accepted only while the controller is Ready and no tank wash runs. During a cycle, the Arduino IDE’s network upload gets no answer</td><td>Service → Wireless updates</td></tr>
+<tr><td>Valves and pump</td><td>The Service tab shows what each output is actually set to</td><td>Service → Valves and pump</td></tr>
+<tr><td>Event log</td><td>The last 50 events since the controller started: steps, machine filled, pump on and off with the reason, alerts, tank wash, Wi-Fi, updates, restores</td><td>Service → Recent events</td></tr>
+<tr><td>Password protection</td><td>The app asks for new passwords while the defaults are in use. After 5 wrong passwords in a minute from one device, it refuses that device for a minute; other devices keep working (per device from 3.0)</td><td>App</td></tr>
+<tr><td>Buzzer (optional)</td><td>An active buzzer module on D1 / TX0 (D12 until 3.1), switched on in Settings: two short beeps when a cycle ends, three long beeps on alarms</td><td>Settings → Cycle</td></tr>
+<tr><td>Typical step times</td><td>The controller learns how long steps 1–3 usually take; the app shows “Usually about 25 min”</td><td>Overview</td></tr>
+</table>
+<p>A printable <b>Quick Card</b> for the household, with the installer’s commissioning checklist, is a separate document.</p>
+<h3>Firmware 3.0 to 3.2</h3>
+<table>
+<thead><tr><th>Feature</th><th>What happens</th><th>Where to see it</th></tr></thead>
+<tr><td>Safety task (3.0)</td><td>Every 20 ms, independent of the app and Wi-Fi: reads the floats, stops the pump within about 0.3 s when the machine stops drawing, keeps the fill and tank-wash valves closed while the high float is wet</td><td>Service → Valves and pump; Recent events</td></tr>
+<tr><td>Float-switch fault (3.0)</td><td>High float wet with the low float dry for 3 s: the tank is treated as full, the pump is not used, an alert is sent and the alarm beeps</td><td>Alert <i>check level switches</i>; app <i>Check float switches</i>; Service → Tank level switches</td></tr>
+<tr><td>No screen (3.0)</td><td>If the screen does not answer at start-up, the controller runs without it and sends an alert</td><td>Service → Screen</td></tr>
+<tr><td>Confirmed actions (3.0)</td><td>The app shows Cycle started, Cycle stopped or Tank wash started only after the controller confirms; Send a test alert reports whether the alert was delivered</td><td>App messages; Service → Last alert</td></tr>
+<tr><td>Loop time and memory (3.0)</td><td>The slowest program pass and the free memory, to spot problems early</td><td>Service → Slowest loop pass, Memory</td></tr>
+<tr><td>Language (3.1)</td><td>Settings → Language: Español (default) or English, for the app, the screen and the phone alerts. The event log stays in English for service</td><td>Settings</td></tr>
+<tr><td>New name (3.2)</td><td>Reuse Water System (<i>Sistema de Reúso de Agua</i>): app title, screen, alert titles (<i>Reuse Water: …</i> / <i>Reúso de Agua: …</i>), <code>reusewater.local</code>, <code>ReuseWater-Setup</code>, update port <code>reusewater</code>. Settings, history, backups and passwords are kept</td><td>App, screen, alerts</td></tr>
+<tr><td>Start-up animation (3.2)</td><td>A Border Collie chases a butterfly across the screen for about 4 s after power-on, then System ready; START ends it</td><td>Screen</td></tr>
+<tr><td>Clearer screen font (3.2)</td><td>Messages in Helvetica Bold, 14 px when they fit and 12 px otherwise; larger tank icon in the header</td><td>Screen</td></tr>
+<tr><td>Buzzer on D1 (3.2)</td><td>The optional buzzer moved from D12 to D1 (TX0); a short chirp at power-on is normal</td><td>Wiring; Settings → Buzzer</td></tr>
+</table>
+<p><b>Spanish screen texts (3.1):</b> the screen fonts have no accents, so the screen shows short plain words, for example <code>LISTO</code> / Pulse START, <code>1/4 LAVADO</code>, <code>2/4 DESAGUE</code>, <code>3/4 ENJUAGUE</code>, <code>4/4 AHORRO</code>, Reusando agua, Agua de la llave, Guardando, <code>TERMINADO</code>, and at start-up <code>REUSO DE AGUA</code> / Sistema listo. The app shows the full Spanish sentences. The Wi-Fi setup page itself stays in English (it comes from the WiFiManager library).</p>
+<h3>Manual tank wash</h3>
+<p>Use it to rinse the storage tank between washes. The wash valve opens and closes by itself as soon as the high-level switch reports that the tank is full.</p>
+<ol>
+<li>Check that the dashboard shows <b>Ready</b> and the tank is not full.</li>
+<li>In the <b>Storage tank</b> panel, press <b>Wash tank</b>. The screen on the controller shows <code>TANK WASH</code> and the time left before the safety limit.</li>
+<li>Wait. When the high-level switch reports water, the valve closes and the dashboard shows Tank full: wash valve closed.</li>
+<li>To end it early, press <b>Stop washing</b> on the dashboard or <b>STOP</b> on the controller. Starting a cycle also ends it.</li>
+</ol>
+<table>
+<thead><tr><th>The wash ends because</th><th>The valve</th><th>Screen and dashboard</th><th>Phone alert</th></tr></thead>
+<tr><td>High-level switch reports full</td><td>Closes at once</td><td>Tank full: valve closed</td><td>Tank wash complete</td></tr>
+<tr><td>High-level switch wet, low-level switch dry</td><td>Closes at once</td><td>Level switches disagree: check sensors</td><td>Check level switches (high priority)</td></tr>
+<tr><td>Safety time limit reached (default 10 min)</td><td>Closes</td><td>Time limit: check level switch</td><td>Tank wash time limit (high priority)</td></tr>
+<tr><td>Stop washing, STOP button, or a cycle starts</td><td>Closes</td><td>Tank wash stopped</td><td>None</td></tr>
+</table>
+<p>The button is unavailable while a cycle runs or when the tank is already full.</p>
+<h3>Phone alerts</h3>
+<p>Install the free <b>ntfy</b> app, subscribe to a long, hard-to-guess topic name, enter the same topic in Settings and press <b>Send a test alert</b>. From firmware 3.2 every alert title starts with <i>Reuse Water:</i> (Spanish: <i>Reúso de Agua:</i>), for example <i>Reuse Water: tank full</i>.</p>
+<table>
+<thead><tr><th>Alert</th><th>Sent when</th><th>Priority</th></tr></thead>
+<tr><td>Cycle complete</td><td>Step 4 finishes; includes litres reused and saved</td><td>Low (silent on most phones)</td></tr>
+<tr><td>Cycle stopped</td><td>STOP pressed on the controller or the dashboard</td><td>Minimum (silent)</td></tr>
+<tr><td>Tank full</td><td>The tank fills during step 4 and extra water goes to the drain</td><td>Low</td></tr>
+<tr><td>Check sensors</td><td>Step 1, 2 or 3 runs longer than the alert time (default 90 min) without the expected flow</td><td>High</td></tr>
+<tr><td>Tank water is old</td><td>Stored water is older than the limit (default 48 h)</td><td>Normal</td></tr>
+<tr><td>Tank wash complete</td><td>A manual tank wash filled the tank and the valve closed</td><td>Low</td></tr>
+<tr><td>Check level switches</td><td>A manual wash stopped because the high-level switch is wet but the low-level switch is dry</td><td>High</td></tr>
+<tr><td>Tank wash time limit</td><td>A manual wash reached its time limit before the tank reported full</td><td>High</td></tr>
+<tr><td>Tank pump not pumping</td><td>The tank pump started 3 times in one cycle without any water flowing; tap water was used instead</td><td>High</td></tr>
+<tr><td>Cycle interrupted</td><td>The controller restarted during a cycle (power cut, crash or watchdog)</td><td>High</td></tr>
+</table>
+<p>Routine news is low priority so people don’t mute the topic; problems are high priority so they are noticed.</p>
+<p>Alerts raised while Wi-Fi is down are sent if it returns within 60 seconds. Anyone who knows the topic name can read the alerts, so keep it private.</p>
+<h3>Wireless firmware updates</h3>
+<ol>
+<li>Stop any running cycle.</li>
+<li>In the Arduino IDE, choose <b>Tools &gt; Port</b> and the network port named <code>reusewater</code> (a board still running 3.1 or earlier shows <code>greywater</code>).</li>
+<li>Upload and enter the update password.</li>
+<li>The controller switches every valve and the pump off, shows <code>UPDATING</code>, then restarts with the start-up animation.</li>
+</ol>
+<h3>Settings on the dashboard</h3>
+<table>
+<thead><tr><th>Setting</th><th>Default</th><th>Allowed range</th></tr></thead>
+<tr><td>Wash every</td><td>10 s</td><td>1–600 s</td></tr>
+<tr><td>Keep the valve open</td><td>2 s</td><td>0.25 s up to the interval minus 0.25 s</td></tr>
+<tr><td>Manual wash time limit</td><td>10 min</td><td>1–30 min</td></tr>
+<tr><td>Final drain length (step 4)</td><td>20 min</td><td>1–120 min</td></tr>
+<tr><td>Flow detection time</td><td>4 s</td><td>1–30 s</td></tr>
+<tr><td>Flow threshold</td><td>1 L/min</td><td>0.2–10 L/min; water counts as flowing above it and as stopped below it for 2 s</td></tr>
+<tr><td>Minimum fill</td><td>3 L</td><td>0.5–50 L; water the machine must take before a drain can end Fill 1/4 or Rinse 3/4</td></tr>
+<tr><td>Start from the dashboard</td><td>On</td><td>On / off</td></tr>
+<tr><td>Buzzer</td><td>Off</td><td>On / off; needs an active buzzer module on D1 (TX0)</td></tr>
+<tr><td>Warn when a step takes longer than</td><td>90 min</td><td>10–600 min</td></tr>
+<tr><td>Warn when tank water is older than</td><td>48 h</td><td>1–240 h</td></tr>
+<tr><td>Alert server / topic</td><td>https://ntfy.sh / empty (alerts off)</td><td>Create a private topic fills in a random topic and shows the subscribe link</td></tr>
+<tr><td>Time zone</td><td>UTC−5 (<code>&lt;-05&gt;5</code>)</td><td>Chosen from a list of common zones; Other accepts a POSIX code</td></tr>
+<tr><td>Language</td><td>Español</td><td>Español / English, for the app, the screen and the alerts (from 3.1)</td></tr>
+<tr><td>Dashboard and update passwords</td><td><code>greywater</code> (the app asks you to change it)</td><td>8–32 characters; the default cannot be chosen again; both take effect at once (from 3.0)</td></tr>
+</table>
+<h3>Wi-Fi troubleshooting</h3>
+<table>
+<thead><tr><th>Problem</th><th>What to check</th><th>How to fix</th></tr></thead>
+<tr><td><code>reusewater.local</code> does not open</td><td>Phone on the same Wi-Fi; some Android phones do not support .local names; an old bookmark to <code>greywater.local</code></td><td>Use the IP address shown on the screen at start-up, or from the router's device list; update old bookmarks</td></tr>
+<tr><td>Dashboard says it can't reach the controller</td><td>Controller powered; Wi-Fi signal (shown in the page footer)</td><td>Press Refresh in the top bar. If it stays Offline or Updating slowly, move the router or add a repeater; below about −80 dBm the link drops</td></tr>
+<tr><td>No alerts arrive</td><td>Topic in Settings matches the app; footer says alerts are on</td><td>Press Send a test alert; check the phone's notification permission</td></tr>
+<tr><td>Network changed</td><td>—</td><td>Hold STOP for 5 s while <code>READY</code>, join <code>ReuseWater-Setup</code> with the key shown on the screen, and set the new network</td></tr>
+<tr><td>Wireless upload fails</td><td>Network port listed in the IDE (<code>reusewater</code>); update password</td><td>Retry; if it keeps failing, upload once over USB</td></tr>
+<tr><td>Water age shows No water stored with water in the tank</td><td>The tank level must be above the low switch for 30 s</td><td>Check the low-level switch</td></tr>
+</table>
+<h3>Security</h3>
+<ul>
+<li>Change both default passwords on first use.</li>
+<li>Keep the dashboard on the home network; do not forward router ports to it.</li>
+<li>Turn <b>Start from the dashboard</b> off in Settings if a cycle could be started while nobody is at the machine.</li>
+<li>The Wi-Fi setup network uses a key unique to each board, shown on the screen while the setup page is open (from firmware 3.0).</li>
+</ul>
+
+<h2>Appendix A. Abbreviations</h2>
+<table>
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tr><td>EV</td><td>Electrovalve (solenoid valve)</td></tr>
+<tr><td>FSM</td><td>Finite state machine</td></tr>
+<tr><td>GND</td><td>Ground</td></tr>
+<tr><td>I2C</td><td>Two-wire serial bus used by the OLED (SDA data, SCL clock)</td></tr>
+<tr><td>ISR</td><td>Interrupt service routine</td></tr>
+<tr><td>OLED</td><td>Organic LED display</td></tr>
+<tr><td>RCD / GFCI</td><td>Residual-current device / ground-fault circuit interrupter</td></tr>
+<tr><td>SSR</td><td>Solid-state relay</td></tr>
+<tr><td>TX0 / RX0</td><td>The board's serial transmit / receive pins (UART0), shared with D1 / D0</td></tr>
+</table>
+
+<h2>Appendix B. Revision history</h2>
+<table>
+<thead><tr><th>Version</th><th>Date</th><th>Description</th></tr></thead>
+<tr><td>3.2</td><td>2026-10-30</td><td>New name Reuse Water System (<code>reusewater.local</code>, <code>ReuseWater-Setup</code>, update port <code>reusewater</code>, alert titles); Border Collie start-up animation; Helvetica Bold screen font (14 / 12 px); larger tank icon; optional buzzer moved from D12 to D1 (TX0); Runbook and Quick Card rebuilt from editable sources</td></tr>
+<tr><td>3.1</td><td>2026-10-30</td><td>Spanish (Colombia) for the app, the screen and the phone alerts, chosen in Settings → Language (Spanish by default); alerts sent as JSON so accents arrive intact; setup key shown on the screen</td></tr>
+<tr><td>3.0</td><td>2026-10-30</td><td>Safety task and output interlocks; float-switch rules, debouncing and fault alert; runs without a screen; per-board Wi-Fi setup key and no firmware upload on the setup page; update password applied at once; lockout per device; app reports only confirmed actions and alert delivery; compressed app page; code split into modules. Tested on the installed system</td></tr>
+<tr><td>2.9</td><td>2026-10-29</td><td>Interrupted-cycle detection and alert; watchdog; wireless updates blocked during a cycle; real valve and pump states and an event log on the Service tab; password prompt and lockout; settings in the history file; time zone list; private alert topic; quieter routine alerts; typical step times; optional buzzer on D12; full-cycle simulation tests; Quick Card</td></tr>
+<tr><td>2.8.1</td><td>2026-10-29</td><td>Refresh button in the app’s top bar; requests time out so a slow connection no longer freezes the screen; “Updating slowly” badge after 6 s without an update</td></tr>
+<tr><td>2.8</td><td>2026-10-29</td><td>Water history is never lost: stored twice on the controller, unreadable records kept aside, saved before wireless updates; each phone keeps a copy and can restore it; history file download and restore; history source shown on the Service tab</td></tr>
+<tr><td>2.7</td><td>2026-10-21</td><td>Controller screen rewritten for households, all messages fit without scrolling; app reorganised into Overview, Water use, Service and Settings tabs</td></tr>
+<tr><td>2.6</td><td>2026-10-21</td><td>“Machine is filled” guard (fixes the early move to Drain introduced in 2.4); Minimum fill setting; settings migrate without reset</td></tr>
+<tr><td>2.5</td><td>2026-10-21</td><td>Tank pump protection: the pump stops within 0.3 s when the machine closes its inlet; dry-start alert</td></tr>
+<tr><td>2.4</td><td>2026-10-21</td><td>Drain-sensor fault fixed: new flow meter; diode and pull-up sensor wiring; FlowSensor library removed; accessibility fixes</td></tr>
+<tr><td>2.3</td><td>2026-10-21</td><td>Dashboard shows results: This month panel, last wash summary, tank readiness</td></tr>
+<tr><td>2.2</td><td>2026-10-21</td><td>Manual tank wash that stops when the tank is full</td></tr>
+<tr><td>2.1</td><td>2026-10-21</td><td>Redesigned dashboard with Start and Stop buttons; tank-wash valve moved to D0</td></tr>
+<tr><td>2.0</td><td>2026-10-21</td><td>Wi-Fi: dashboard, phone alerts, statistics, wireless updates, settings</td></tr>
+<tr><td>1.2</td><td>2026-10-19</td><td>Tank-wash valve moved from D12 to D1</td></tr>
+<tr><td>1.1</td><td>2026-10-19</td><td>Quick start, pinout drawing, wiring diagrams, clearer tables</td></tr>
+<tr><td>1.0</td><td>2026-10-19</td><td>Initial release</td></tr>
+</table>
+
+</body>
+</html>

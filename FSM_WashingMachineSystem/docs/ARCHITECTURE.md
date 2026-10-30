@@ -1,8 +1,8 @@
-# Architecture – firmware 3.1
+# Architecture – firmware 3.2
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
-## Hardware (unchanged since 2.1)
+## Hardware (buzzer moved to D1 in 3.2; otherwise unchanged since 2.1)
 
 | Pin | GPIO | Function | Code name |
 |---|---|---|---|
@@ -17,7 +17,7 @@ One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensor
 | D9 | 18 | Tank low-level float, HIGH = wet (external pull-down) | `IN_LOWLEVEL` |
 | D10 | 21 | STOP button, active LOW, internal pull-up | `STOP_BUTTON` |
 | D11 | 38 | START button, active LOW, internal pull-up | `START_BUTTON` |
-| D12 | — | Optional active buzzer | `BUZZER_PIN` |
+| D1 / TX0 | 43 | Optional active buzzer (do not use `Serial0`; may chirp briefly at power-on) | `BUZZER_PIN` |
 | I2C 0x3C | — | SSD1306 128×32 OLED, 400 kHz | `oled` |
 
 SSRs are on when their pin is HIGH (`ssrON`). Wiring details are in the Runbook.

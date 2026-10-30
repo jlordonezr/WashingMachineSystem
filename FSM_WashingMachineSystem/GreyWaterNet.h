@@ -21,7 +21,7 @@
 #define CONFIG_PORTAL_TIMEOUT_S 180           // setup page closes after 3 minutes
 #define WIFI_RETRY_MS           60000         // try to reconnect every minute when offline
 #define WEB_USER                "admin"
-#define FIRMWARE_VERSION        "3.1.0"
+#define FIRMWARE_VERSION        "3.2.0"
 #define AUTH_SLOTS              6             // devices tracked for the wrong-password lockout
 
 void netBegin();               // call once in setup(), after settingsBegin()

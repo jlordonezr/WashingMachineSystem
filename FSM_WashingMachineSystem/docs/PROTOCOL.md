@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.1
+# Communication protocol – firmware 3.2
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -55,7 +55,7 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 
 | Field | Type | Meaning |
 |---|---|---|
-| `fw` | string | Firmware version, `3.1.0` |
+| `fw` | string | Firmware version, `3.2.0` |
 | `lang` | `es` / `en` | Language of the screen, alerts and the app (3.1). `title`, `message` and `boot` come in this language |
 | `state`, `stateName` | int, string | 0 Ready, 1 Starting, 2 Fill (wash), 3 Drain (soapy), 4 Rinse, 5 Save |
 | `title`, `message` | string | Screen header and the longer status sentence |

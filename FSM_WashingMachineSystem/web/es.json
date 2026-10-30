@@ -131,7 +131,7 @@
  "Start from the dashboard": "Iniciar desde la app",
  "Shows a confirmation before every start": "Pide confirmación antes de cada inicio",
  "Buzzer": "Zumbador",
- "Beeps when a cycle ends and on alarms; needs a buzzer wired to D12": "Pita al terminar un ciclo y en las alarmas; necesita un zumbador conectado a D12",
+ "Beeps when a cycle ends and on alarms; needs a buzzer wired to D1 (TX0)": "Pita al terminar un ciclo y en las alarmas; necesita un zumbador conectado a D1 (TX0)",
  "Alerts": "Alertas",
  "Step time limit": "Límite de tiempo por paso",
  "Alert when step 1, 2 or 3 waits longer for water flow (in minutes)": "Alertar cuando el paso 1, 2 o 3 espere más tiempo el flujo de agua (en minutos)",

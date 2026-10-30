@@ -1,4 +1,16 @@
-# Reuse Water System – Firmware 3.1 (Wi-Fi)
+# Reuse Water System – Firmware 3.2 (Wi-Fi)
+
+## What's new in 3.2: new name, start-up animation, clearer screen, buzzer on D1
+
+The wash cycle, the safety logic, the settings and the water history are unchanged from 3.1. Settings and history formats are the same (versions 7 and 3): no reset, no migration.
+
+- **New name: Reuse Water System** (*Sistema de Reúso de Agua*): app title, screen, alert titles (*Reuse Water: …* / *Reúso de Agua: …*), sign-in prompt and setup page. The app moves to `http://reusewater.local`, the Wi-Fi setup network is `ReuseWater-Setup` and the wireless-update port is *reusewater*. Internal names stay (`greywater` storage namespace, history file format, default password, source file names), so settings, history and backups are kept.
+- **Start-up animation:** after power-on a Border Collie chases a butterfly across the whole screen (about 4 s), then *System ready* shows for 2 s as before. Notices that arrive meanwhile (Wi-Fi address, setup key, *Interrupted*) are shown after it; START or a tank wash ends it at once (`BootAnimation.h`, about 1.6 KB).
+- **Clearer screen font:** messages use the Helvetica Bold pixel font, 14 px when the message fits and 12 px otherwise (`FontHelvBold14.h`, `FontHelvBold12.h`). Every screen text fits in 12 px; `tools/check_screen_text.py` measures with the new font. The header keeps the built-in font.
+- **Larger tank icon** in the screen header (17 × 10 px, with half-way marks).
+- **Buzzer moved from D12 to D1 (TX0).** Do not use `Serial0`. The chip's start-up messages go out on TX0 before the firmware runs, so the buzzer may chirp briefly at power-on; `setup()` now drives the pin LOW first thing.
+- **Runbook and Quick Card** rebuilt from editable sources in `manuals/src/` (see `manuals/README.md`) and updated for 3.2.
+- Build: 1.37 MB flash (43%), 95 KB RAM (29%) with Espressif core 3.3.12.
 
 ## What's new in 3.1: Spanish
 

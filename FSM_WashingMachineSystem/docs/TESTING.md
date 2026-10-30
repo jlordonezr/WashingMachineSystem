@@ -1,6 +1,6 @@
-# Testing – firmware 3.1
+# Testing – firmware 3.2
 
-**Status on 30 Oct 2026:** every automated suite passes and the firmware builds for the Arduino Nano ESP32 with cores 3.0.7 and 2.0.17. 3.0 has run correctly on the installed system. 3.1 adds languages only; check H10 on the real screen.
+**Status on 30 Oct 2026:** every automated suite passes and the firmware builds for the Arduino Nano ESP32 with cores 3.0.7 and 2.0.17. 3.0 has run correctly on the installed system. 3.1 adds languages only; 3.2 renames the app, adds the start-up animation and the Helvetica Bold screen font, and moves the buzzer to D1. Check H10–H12 on the real board.
 
 ## Automated (PC, no board)
 
@@ -10,12 +10,12 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 |---|---|---|---|
 | Flow meter, step gates, pump guard | `tests/test_flow.cpp` | 52 | Flow detection, noise, trickles, wrap-around, "machine is filled" guard, pump cut-off (since 2.4–2.6) |
 | Float switches | `tests/test_level.cpp` | 19 | Debouncing towards safety, bobbing float, failed low float, fault timing, wrap-around (3.0) |
-| Screen texts | `tools/check_screen_text.py` | 94 texts | Every screen text fits the OLED in both languages, plain ASCII (3.1) |
+| Screen texts | `tools/check_screen_text.py` | 94 texts | Every screen text fits the OLED in both languages in Helvetica Bold 12 px, plain ASCII (3.1; font from 3.2) |
 | Translations | `tools/i18n_keys.py` | 377 texts | Every app text has a Spanish translation (3.1) |
 | Water history and settings storage | `tests/test_history.cpp` | 24 | Backup copy, unreadable records, migration, restore validation (since 2.8) |
 | Full-cycle simulation | `tests/sim/` | 13 scenarios | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |
 | Dashboard | `tests/app/test_dashboard.js` | 38 | The real page in headless Chromium against a mock controller; axe-core accessibility on all tabs (3.0) |
-| Build | `arduino-cli compile --fqbn esp32:esp32:nano_nora` | — | 1,301,277 bytes flash, 72,624 bytes RAM with core 3.0.7 |
+| Build | `arduino-cli compile --fqbn esp32:esp32:nano_nora` | — | 3.2.0: 1,368,305 bytes flash, 95,156 bytes RAM with core 3.3.12 (3.0.0: 1,301,277 / 72,624 with core 3.0.7) |
 
 ### Simulation scenarios
 
@@ -69,6 +69,8 @@ Do these with the washing machine empty and someone at the controller. Note each
 | H8 | Manual tank wash | Ready with the low float wet, **Wash tank**, then lift the high float | Wash valve (D0) closes at once; screen `TANK CLEANED`; event *Manual tank wash ended: full* |
 | H10 | Spanish screen (3.1) | Run one wash in Spanish; read every screen | Every text readable, nothing scrolls or is cut off; alerts arrive with accents |
 | H9 | Setup page | Hold STOP 5 s at `READY`; join with the key shown; browse to `/update` | Key works; `/update` is not offered (setup page only) |
+| H11 | Start-up screen (3.2) | Power on, watch the screen; then power on again and press START during the dog | Border Collie chases the butterfly (about 4 s), then `REUSO DE AGUA` / *Sistema listo* for 2 s, then `LISTO`; START ends the animation at once. Messages are in Helvetica Bold and readable |
+| H12 | Buzzer on D1 (3.2) | Settings → Buzzer on; run a short cycle, or the float fault in H3 | Two short beeps at the end, three long beeps on the alarm. A short chirp at power-on is expected (D1 is the TX0 pin) |
 
 Also: **a full real wash** (all four steps) with the tank half full, then check the *Water use* figures and the event log.
 
@@ -80,6 +82,8 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 
 | Date | Version | Who | Result |
 |---|---|---|---|
+| 2026-10-30 | 3.2.0 | PC tests | All suites pass (browser tests skipped: no Node.js on this Mac) |
+| — | 3.2.0 | Hardware H11, H12 | Not done yet |
 | 2026-10-30 | 3.1.0 | PC tests | All suites pass (see `tests/test_results.txt`) |
 | — | 3.1.0 | Hardware H10 | Not done yet |
 | 2026-10-30 | 3.0.0 | Jose, installed system | Working as expected |

@@ -49,7 +49,10 @@ extern volatile uint32_t drainPulseCount;
 #define LEVEL_SLOW_MS   2000   // float switch: time to accept the other reading (see TankLevel.h)
 #define LEVEL_FAULT_MS  3000   // switches must disagree this long before it is reported
 #define SLOW_LOOP_MS    1000   // a loop() pass longer than this is logged (once a minute at most)
-#define BUZZER_PIN D12          // optional active buzzer (module with its own driver); off unless enabled in Settings
+#define BUZZER_PIN D1           // optional active buzzer (module with its own driver); off unless enabled in Settings.
+                                // D1 is also the board's TX0 (UART0) pin: do not use Serial0 in this sketch.
+                                // The chip's own start-up messages go out on TX0 before setup() runs, so the
+                                // buzzer may chirp briefly at power-on; setup() drives it LOW first thing.
 #define EVENT_LOG_SIZE 50       // events kept for the Service tab (in RAM; cleared at restart)
 #define PUMP_START_GRACE_MS 1000 // after the pump starts, flow has this long to establish
 #define PUMP_NO_FLOW_MS     300  // pump stops when no tap-sensor pulse arrives for this long

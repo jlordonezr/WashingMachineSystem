@@ -1,4 +1,4 @@
-# Installation and configuration – firmware 3.1
+# Installation and configuration – firmware 3.2
 
 ## 1. Tools
 
@@ -12,7 +12,7 @@ Libraries (Library Manager): **WiFiManager** by tzapu, **Adafruit GFX Library**,
 
 ## 2. Open and build
 
-Open `FSM_WashingMachineSystem/FSM_WashingMachineSystem.ino`. The folder name must stay `FSM_WashingMachineSystem`. Verify: the build should report about 1.30 MB (41%) of program storage and 72.6 KB (22%) of dynamic memory.
+Open `FSM_WashingMachineSystem/FSM_WashingMachineSystem.ino`. The folder name must stay `FSM_WashingMachineSystem`. Verify: the build should report about 1.37 MB (43%) of program storage and 95 KB (29%) of dynamic memory (3.2.0 with core 3.3.12).
 
 Command line:
 
@@ -25,6 +25,8 @@ arduino-cli compile --fqbn esp32:esp32:nano_nora FSM_WashingMachineSystem
 - **First time, or from 2.x over USB:** Upload with the board on USB.
 - **Wireless (2.x already installed):** Tools → Port → *reusewater at <IP>*, Upload, enter the update password. The controller must be Ready with no tank wash running.
 - **Name change:** boards running a build from before the rename appear as *greywater at <IP>*; after that upload they appear as *reusewater at <IP>* and the app moves to `http://reusewater.local`. The IP address, passwords, settings and history do not change.
+
+**Buzzer (3.2):** the optional buzzer moved from D12 to **D1 (TX0)**. Move its signal wire before or right after the upload. A short chirp at power-on is normal: the chip sends its start-up messages on TX0 before the firmware takes the pin.
 
 Settings and water history are kept. 3.1 upgrades settings version 6 to 7 by adding the language, which starts as Spanish; change it under Configuración → Idioma.
 
@@ -45,12 +47,12 @@ On the **Service** tab:
 
 | Item | Expected |
 |---|---|
-| Firmware | 3.0.0 |
+| Firmware | 3.2.0 |
 | Screen | Working |
 | Tank level switches | Match the real tank; *Tank level* not "Switches disagree" |
 | Slowest loop pass | Normally tens of ms. Note the value while the page loads on a weak-signal phone (see TESTING.md, H5) |
 | Last alert | Delivered (after the test alert) |
-| Recent events | `Controller started (…), firmware 3.0.0`, no `Slow loop pass` at idle |
+| Recent events | `Controller started (…), firmware 3.2.0`, no `Slow loop pass` at idle |
 
 Then run the hardware checks in `docs/TESTING.md` before the first real wash.
 

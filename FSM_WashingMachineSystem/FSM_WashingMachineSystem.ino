@@ -75,6 +75,7 @@ static void resetFSMToIdle() {
 
 // ── setup() ───────────────────────────────────────────────────────────────
 void setup() {
+  buzzerBegin();     // first: the buzzer is on D1/TX0, which the chip's boot messages toggle
   Serial.begin(9600);
   settingsBegin();   // load settings and water statistics from flash first
 
@@ -108,7 +109,6 @@ void setup() {
   displayUpdate();
   setupStateMachine();
   netBegin();        // Wi-Fi connects in the background; the cycle never waits for it
-  buzzerBegin();
   bootChecks();      // log the restart reason; alert if a cycle was cut short
   safetyBegin();     // safety task: float switches, pump cut-off and interlocks every 20 ms, whatever loop() is doing
   enableLoopWDT();   // restart automatically (all outputs off) if loop() ever freezes for 5 s

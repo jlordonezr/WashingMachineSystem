@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reuse Water System – Quick Card</title>
+<link rel="stylesheet" href="manual.css">
+<style>
+@page { @top-left { content: "Reuse Water System – Quick Card"; font: 6pt -apple-system, "Helvetica Neue", sans-serif; color: #6b6b6b; } }
+</style>
+</head>
+<body>
+
+<h1>Reuse Water System – Quick Card</h1>
+<p>Keep this card next to the washing machine. The Reuse Water System (Spanish: <i>Sistema de Reúso de Agua</i>) reuses rinse water from your last wash to fill the next one.</p>
+<p>The screen, the app and the phone alerts use the language chosen in the app (<b>Settings → Language</b>). Spanish is the default. This card gives the English text, with the Spanish screen text beside it.</p>
+
+<h2>When you switch it on</h2>
+<p>A dog chases a butterfly across the screen for about 4 seconds. Then the screen shows <code>REUSE WATER</code> / System ready (Spanish: <code>REUSO DE AGUA</code> / Sistema listo) for 2 seconds, then <code>READY</code>. Pressing START skips the dog.</p>
+
+<h2>Every wash</h2>
+<ol>
+<li><b>Check the controller’s screen</b> shows <code>READY</code> and Press START (Spanish: <code>LISTO</code>, Pulse START).</li>
+<li><b>Start the washing machine program</b> as usual.</li>
+<li><b>Press the button labelled START</b> on the controller, or Start cycle in the app.</li>
+<li><b>Let it run.</b> The screen shows the step, <code>1/4 WASH</code> to <code>4/4 SAVE</code> (Spanish: <code>1/4 LAVADO</code> to <code>4/4 AHORRO</code>).</li>
+<li><b>Done</b> when the screen shows <code>DONE</code> (Spanish: <code>TERMINADO</code>) and the litres of tank water it reused.</li>
+</ol>
+<p>To cancel at any time, press the button labelled <b>STOP</b>, or Stop cycle in the app.</p>
+
+<h2>What the screen tells you</h2>
+<table>
+<thead><tr><th>Screen</th><th>In Spanish</th><th>Meaning</th></tr></thead>
+<tr><td>A dog chasing a butterfly</td><td>(same)</td><td>The controller has just been switched on</td></tr>
+<tr><td>Reusing water</td><td>Reusando agua</td><td>The machine is filling with water saved in the tank</td></tr>
+<tr><td>Using tap water</td><td>Agua de la llave</td><td>The machine is filling from the tap</td></tr>
+<tr><td>Washing... / Rinsing...</td><td>Lavando... / Enjuagando...</td><td>The machine has filled and is working</td></tr>
+<tr><td>Not saving</td><td>No se guarda</td><td>Soapy water goes down the drain, not into the tank</td></tr>
+<tr><td>Saving water</td><td>Guardando</td><td>Rinse water is stored for your next wash</td></tr>
+<tr><td>Tank full: drain</td><td>Tanque lleno</td><td>The tank is full; the rest goes down the drain</td></tr>
+</table>
+<p>The small box at the top right of the screen shows how full the tank is: empty, half or full.</p>
+
+<h2>When something needs you</h2>
+<table>
+<thead><tr><th>Screen</th><th>In Spanish</th><th>What to do</th></tr></thead>
+<tr><td>No water flow</td><td>Sin flujo</td><td>Check that the washing machine is running. If it is, press STOP and call your technician</td></tr>
+<tr><td>INTERRUPTED / Check machine</td><td>INTERRUMPIDO / Mire la lavadora</td><td>The power went off during a wash. Check the machine, then start again if needed</td></tr>
+<tr><td>Check tank</td><td>Revise tanque</td><td>A tank wash stopped early. Call your technician</td></tr>
+<tr><td>App: Check float switches</td><td>App: Revise los flotadores</td><td>The tank’s float switches disagree, so tap water is used and nothing is saved. Call your technician</td></tr>
+<tr><td>Blank screen</td><td>—</td><td>Check the power. If it stays blank, call your technician; the system keeps working without the screen</td></tr>
+</table>
+
+<h2>The app</h2>
+<p>On a phone connected to the home Wi-Fi, open <b>reusewater.local</b>. (Until firmware 3.1 it was <i>greywater.local</i>: update old bookmarks.)</p>
+<ul>
+<li><b>Overview:</b> what is happening now, Start and Stop, the tank, and Wash tank.</li>
+<li><b>Water use:</b> how much water you have reused this month.</li>
+<li><b>Refresh:</b> use it if the page looks stuck.</li>
+<li><b>Settings → Language:</b> Español or English, for the app, the screen and the alerts.</li>
+</ul>
+<p>Phone alerts start with <i>Reuse Water:</i> (Spanish: <i>Reúso de Agua:</i>).</p>
+<p>Technician: <span class="blank"></span> Phone: <span class="blank"></span></p>
+
+<h2 class="page-break">Installer commissioning checklist (firmware 3.2)</h2>
+<p>Firmware 3.0 has run correctly on the installed system. Firmware 3.1 adds the Spanish texts and the language setting. Firmware 3.2 renames the app to Reuse Water System, adds the start-up animation and a clearer screen font, and moves the optional buzzer from D12 to D1, on the same control logic. Complete these checks when installing or replacing a controller.</p>
+<h3>Hardware</h3>
+<ul class="check">
+<li><b>Tap flow sensor position:</b> fitted on the machine’s inlet, <i>after</i> the tap and tank lines join. The tank-water fill and the pump cut-off depend on it seeing the pump’s water.</li>
+<li><b>Flow sensor wiring:</b> Schottky diode (cathode to the sensor) and 10 kΩ pull-up to 3V3 on D2 and D3; no resistor divider.</li>
+<li><b>Noise check:</b> with no water moving, the Service tab’s pulse counts stay still for 2 minutes.</li>
+<li><b>Signal level:</b> at D3 while turning the impeller, at least 2.8 V high and at most 0.5 V low.</li>
+<li><b>Pump protection:</b> pressure switch or bypass to the tank fitted.</li>
+<li><b>Tank-wash valve:</b> on D0, with a 10 kΩ resistor from D0 to GND.</li>
+<li><b>Buzzer (optional):</b> active buzzer module, signal on <b>D1 (TX0)</b>, VCC on 3V3, GND on GND (it was on D12 until 3.1); switched on in Settings. A short chirp at power-on is normal.</li>
+</ul>
+<h3>First start</h3>
+<ul class="check">
+<li><b>Start-up screen:</b> the dog chases the butterfly (about 4 s), then <code>REUSO DE AGUA</code> / Sistema listo for 2 s, then <code>LISTO</code>. START during the dog skips it.</li>
+<li><b>Readability:</b> the bold messages can be read from where the household stands.</li>
+<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.2.0.</li>
+</ul>
+<h3>First cycle (watch the Service tab)</h3>
+<ul class="check">
+<li>Screen shows <i>Waiting to fill</i>, then <i>Reusing water</i> or <i>Using tap water</i>, then <i>Washing...</i>.</li>
+<li>The pump turns on when the machine draws water and off within about 0.3 s after it stops (<i>Recent events</i>: “Pump stopped: machine closed its inlet”).</li>
+<li>Step 1 ends only when the wash drain starts, not before (<i>Machine filled</i> appears first).</li>
+<li>Step 4 saves water (<i>Saving water</i>); the fill valve is on and the drain valve off in <i>Valves and pump</i>.</li>
+<li><code>DONE</code> shows the litres reused; <i>Water use</i> shows the wash. With the buzzer on: two short beeps.</li>
+</ul>
+<h3>Firmware features (3.0 to 3.2)</h3>
+<ul class="check">
+<li><b>Passwords:</b> the app asked for new passwords on first use, and both were changed.</li>
+<li><b>Power cut:</b> switch the controller off during step 1 and on again. Expect the start-up animation, then <code>INTERRUPTED</code> on the screen, an alert, and the notice on Overview.</li>
+<li><b>Updates:</b> during a cycle, <i>Wireless updates</i> reads Blocked; when Ready, Allowed now. The IDE lists the port as <code>reusewater</code>.</li>
+<li><b>Alerts:</b> a private topic created, the phone subscribed, and the test alert received with the title <i>Reúso de Agua: …</i> (or <i>Reuse Water: …</i>).</li>
+<li><b>Time zone:</b> chosen from the list; the clock on the badge is correct.</li>
+<li><b>History backup:</b> <i>Download history file</i> saves a file.</li>
+<li><b>Wi-Fi setup key:</b> hold STOP for 5 s at <code>READY</code>. The screen shows <code>ReuseWater-Setup</code> and a key like <code>gw-a1b2c3</code>, unique to this board; it is also printed over USB. Join the network with that key. The old shared password <code>greywater</code> works only if the screen is missing.</li>
+<li><b>Float switches:</b> with the low float down, hold the high float up for 5 s. Expect the alert <i>check level switches</i> and <i>Check float switches</i> in the app (and three long beeps with the buzzer on).</li>
+<li><b>Language:</b> Settings → Language switches the app, the screen and the alerts; the household’s language is set before handover.</li>
+<li><b>Test alert:</b> the app reports <i>Test alert delivered</i> (or the reason it failed).</li>
+</ul>
+<h3>Accessibility</h3>
+<ul class="check">
+<li>Use the app with VoiceOver (iPhone) or TalkBack (Android): start a cycle, hear the step changes, stop it.</li>
+</ul>
+<p style="margin-top:14pt">Checked by: <span class="blank"></span> Date: <span class="blank short"></span></p>
+
+</body>
+</html>
