@@ -11,12 +11,12 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 // ── OLED display ───────────────────────────────────────────────────────────
 // Layout on the 128x32 screen:
 //
-//   y  0-8   header : step/title (built-in 6x8 font) | tank level | wash valve
+//   y  0-9   header : step/title (built-in 6x8 font, x 0-95) | tank level (x 98-114) | wash valve (x 117-127)
 //   y 10     separator line
 //   y 12-31  message: FreeSans 9pt, centred when it fits, scrolled when not
 //
 //   +--------------------------------------------------+
-//   |1/4 FILL                          [##]  [W]       |
+//   |1/4 FILL                            [###] [W]     |
 //   |--------------------------------------------------|
 //   |            Using tank water                      |
 //   +--------------------------------------------------+
@@ -31,10 +31,11 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 #define HEADER_TEXT_Y    1
 #define SEPARATOR_Y      10
 #define MSG_BASELINE     27
-#define TANK_ICON_X      100
-#define WASH_ICON_X      115
-#define ICON_W           13
-#define ICON_H           9
+#define TANK_ICON_X      98    // titles are at most 16 characters (96 px), see tools/check_screen_text.py
+#define TANK_ICON_W      17
+#define WASH_ICON_X      117
+#define WASH_ICON_W      11
+#define ICON_H           10    // full header height, down to the separator
 
 static char statusTitle[DISP_TITLE_LEN]   = "";
 static char statusMessage[DISP_MSG_LEN]   = "";
@@ -80,24 +81,32 @@ void displayClearNotice() {
 }
 
 // Tank icon: outline, filled bottom-up according to the level sensors.
+// Half-way ticks on both sides mark the low float, so an empty tank still
+// reads as a tank and "half" is easy to tell from "full".
 static void drawTankIcon(WaterLevel level) {
-  oled.drawRect(TANK_ICON_X, 0, ICON_W, ICON_H, WHITE);
-  int16_t fillH = (level == high) ? ICON_H - 2 : (level == medium) ? (ICON_H - 2) / 2 : 0;
+  const int16_t innerH = ICON_H - 2;
+  oled.drawRect(TANK_ICON_X, 0, TANK_ICON_W, ICON_H, WHITE);
+  int16_t fillH = (level == high) ? innerH : (level == medium) ? innerH / 2 : 0;
   if (fillH > 0) {
-    oled.fillRect(TANK_ICON_X + 1, ICON_H - 1 - fillH, ICON_W - 2, fillH, WHITE);
+    oled.fillRect(TANK_ICON_X + 1, ICON_H - 1 - fillH, TANK_ICON_W - 2, fillH, WHITE);
+  }
+  if (level != high) {
+    int16_t tickY = ICON_H - 1 - innerH / 2 - 1;   // just above the half-way fill line
+    oled.drawFastHLine(TANK_ICON_X + 1, tickY, 2, WHITE);
+    oled.drawFastHLine(TANK_ICON_X + TANK_ICON_W - 3, tickY, 2, WHITE);
   }
 }
 
 // Wash icon: "W" in an outline when the valve is closed, inverted when open.
 static void drawWashIcon(bool open) {
   if (open) {
-    oled.fillRoundRect(WASH_ICON_X, 0, ICON_W, ICON_H, 2, WHITE);
+    oled.fillRoundRect(WASH_ICON_X, 0, WASH_ICON_W, ICON_H, 2, WHITE);
     oled.setTextColor(BLACK);
   } else {
-    oled.drawRoundRect(WASH_ICON_X, 0, ICON_W, ICON_H, 2, WHITE);
+    oled.drawRoundRect(WASH_ICON_X, 0, WASH_ICON_W, ICON_H, 2, WHITE);
     oled.setTextColor(WHITE);
   }
-  oled.setCursor(WASH_ICON_X + 4, HEADER_TEXT_Y);
+  oled.setCursor(WASH_ICON_X + 3, HEADER_TEXT_Y);   // 5 px glyph centred in the 11 px box, on the title line
   oled.print('W');
   oled.setTextColor(WHITE);
 }
