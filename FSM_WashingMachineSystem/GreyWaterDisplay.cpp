@@ -1,6 +1,8 @@
 #include "GreyWaterSystem.h"
 #include "GreyWaterOutputs.h"
 #include "BootAnimation.h"
+#include "FontHelvBold12.h"
+#include "FontHelvBold14.h"
 #include <math.h>
 
 // OLED display. State logic only sets the text (displaySetStatus /
@@ -15,7 +17,8 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 //
 //   y  0-9   header : step/title (built-in 6x8 font, x 0-95) | tank level (x 98-114) | wash valve (x 117-127)
 //   y 10     separator line
-//   y 12-31  message: FreeSans 9pt, centred when it fits, scrolled when not
+//   y 12-31  message: Helvetica Bold pixel font, 14 px when the message fits,
+//            else 12 px; centred when it fits, scrolled when not
 //
 //   +--------------------------------------------------+
 //   |1/4 FILL                            [###] [W]     |
@@ -32,7 +35,8 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 #define DISP_MSG_LEN     48
 #define HEADER_TEXT_Y    1
 #define SEPARATOR_Y      10
-#define MSG_BASELINE     27
+#define MSG_BASELINE_14  28    // 14 px capitals on rows 14-27, descenders to row 31
+#define MSG_BASELINE_12  27    // 12 px capitals on rows 15-26, descenders to row 30
 #define TANK_ICON_X      98    // titles are at most 16 characters (96 px), see tools/check_screen_text.py
 #define TANK_ICON_W      17
 #define WASH_ICON_X      117
@@ -211,6 +215,8 @@ void displayUpdate(bool force) {
   static bool shownWash        = false;
   static int16_t msgWidth      = 0;
   static int16_t msgOffsetX    = 0;
+  static const GFXfont* msgFont = &HelvBold14;
+  static int16_t msgBaseline   = MSG_BASELINE_14;
   static int16_t scrollX       = 0;
   static unsigned long scrollStart = 0;
 
@@ -236,14 +242,22 @@ void displayUpdate(bool force) {
   const char* title   = noticeActive ? noticeTitle   : statusTitle;
   const char* message = noticeActive ? noticeMessage : statusMessage;
 
-  // New message: measure it once and restart the scroll from the left.
+  // New message: pick the size and measure it once, restart the scroll from
+  // the left. 14 px when it fits the width, else 12 px (every screen text fits
+  // in 12 px, see tools/check_screen_text.py).
   if (setText(shownMessage, sizeof(shownMessage), message)) {
-    oled.setFont(&FreeSans9pt7b);
     oled.setTextSize(1);
     oled.setTextWrap(false);
     int16_t x1, y1;
     uint16_t w, h;
-    oled.getTextBounds(message, 0, MSG_BASELINE, &x1, &y1, &w, &h);
+    msgFont = &HelvBold14;  msgBaseline = MSG_BASELINE_14;
+    oled.setFont(msgFont);
+    oled.getTextBounds(message, 0, msgBaseline, &x1, &y1, &w, &h);
+    if (w > OLED_WIDTH) {
+      msgFont = &HelvBold12;  msgBaseline = MSG_BASELINE_12;
+      oled.setFont(msgFont);
+      oled.getTextBounds(message, 0, msgBaseline, &x1, &y1, &w, &h);
+    }
     msgWidth    = w;
     msgOffsetX  = x1;
     scrollX     = 0;
@@ -276,17 +290,17 @@ void displayUpdate(bool force) {
   oled.drawFastHLine(0, SEPARATOR_Y, OLED_WIDTH, WHITE);
 
   // Message
-  oled.setFont(&FreeSans9pt7b);
+  oled.setFont(msgFont);
   oled.setTextColor(WHITE);
   if (!scrolling) {
-    oled.setCursor((OLED_WIDTH - msgWidth) / 2 - msgOffsetX, MSG_BASELINE);
+    oled.setCursor((OLED_WIDTH - msgWidth) / 2 - msgOffsetX, msgBaseline);
     oled.print(message);
   } else {
     // Draw the text twice so the start follows the end around seamlessly.
     int16_t loopLen = msgWidth + SCROLL_GAP_PX;
-    oled.setCursor(-scrollX - msgOffsetX, MSG_BASELINE);
+    oled.setCursor(-scrollX - msgOffsetX, msgBaseline);
     oled.print(message);
-    oled.setCursor(-scrollX + loopLen - msgOffsetX, MSG_BASELINE);
+    oled.setCursor(-scrollX + loopLen - msgOffsetX, msgBaseline);
     oled.print(message);
 
     if (moving) {

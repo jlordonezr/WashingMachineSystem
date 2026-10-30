@@ -4,7 +4,6 @@
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <Fonts/FreeSans9pt7b.h>
 #include "FlowMeter.h"
 #include "TankLevel.h"
 #include "AgileStateMachine.h"

@@ -557,7 +557,7 @@ The 128x32 screen is split into a header and a message area:
 - **Header (small built-in font):** the current step and the cycle progress (for example `1/4 FILL`). In Drain2 it also shows the time left before the cycle finishes, for example `4/4 DRAIN 18:42`.
 - **Tank icon:** empty when the tank is low, half filled at medium, full at high. It reads the level sensors directly, so it is always live.
 - **Wash icon `W`:** outlined when the tank-wash valve is closed, inverted (white box) when it is open. During the tank-water fill you will see it light up every 10 seconds.
-- **Message (FreeSans 9 pt):** a sans-serif font, easier to read on a small OLED than the previous serif italic. Short messages are centred and stay still. Long messages pause for 1.5 s, then scroll smoothly and loop with a gap.
+- **Message (Helvetica Bold pixel font, `FontHelvBold14.h` / `FontHelvBold12.h`):** a bitmap font drawn for screens, so every stroke sits on whole pixels and stays sharp. Each message uses 14 px when it fits the 128 px width, otherwise 12 px; every screen text fits in 12 px (`tools/check_screen_text.py`). Messages are centred and stay still; a longer one would pause for 1.5 s, then scroll smoothly and loop with a gap.
 
 ### Messages
 
