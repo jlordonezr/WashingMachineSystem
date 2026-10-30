@@ -196,7 +196,7 @@ int main(int argc, char** argv) {
   }
   else if (sc == "F4b") {
     printf("F4 power cut during the rinse (part 2: power back)\n");
-    Preferences::loadFile(flash); simReset = ESP_RST_POWERON; boot(); runFor(1);
+    Preferences::loadFile(flash); simReset = ESP_RST_POWERON; boot(); runFor(7);   // after the start-up animation and "System ready"
     int st; uint32_t ep; bool intr = interruptedInfo(st, ep);
     CHECK(intr && st == stFill2, "interruption not detected (flag %d, step %d)", intr, st);
     CHECK(activeState == stIdle && pinOut[OUT_MOTOR] == LOW, "not safely in Ready after power-up");

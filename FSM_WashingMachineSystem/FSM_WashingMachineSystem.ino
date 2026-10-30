@@ -103,7 +103,8 @@ void setup() {
     DEBUG_PRINT("SSD1306 not found: running without a screen");
   }
 
-  displayShowNotice(TRS("REUSE WATER", "REUSO DE AGUA"), TRS("System ready", "Sistema listo"), 2000);
+  // Border Collie chasing a butterfly (about 4 s), then "System ready" for 2 s.
+  displayStartIntro(TRS("REUSE WATER", "REUSO DE AGUA"), TRS("System ready", "Sistema listo"), 2000);
   displayUpdate();
   setupStateMachine();
   netBegin();        // Wi-Fi connects in the background; the cycle never waits for it

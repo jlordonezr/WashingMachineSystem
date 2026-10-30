@@ -168,7 +168,8 @@ bool displayBegin();  // starts the OLED; false if it does not answer (the contr
 bool displayAvailable();
 void displaySetStatus(const char* title, const char* message, const char* detail = nullptr); // OLED title + short message; detail = longer sentence for the dashboard (defaults to message)
 void displayShowNotice(const char* title, const char* message, unsigned long durationMs); // Shows a temporary message that overrides the status for durationMs
-void displayClearNotice(); // Removes an active notice immediately
+void displayClearNotice(); // Removes an active notice immediately (also ends the start-up animation)
+void displayStartIntro(const char* title, const char* message, unsigned long durationMs); // Start-up animation (Border Collie and butterfly), then this notice
 void displayUpdate(bool force = false); // Draws the OLED; call on every loop() pass (non-blocking, frame-timed). force = draw now
 const char* displayGetTitle();   // Text currently shown in the OLED header
 const char* displayGetMessage(); // Text currently shown as the OLED message

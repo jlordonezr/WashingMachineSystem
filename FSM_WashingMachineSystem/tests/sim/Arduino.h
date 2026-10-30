@@ -11,6 +11,7 @@
 typedef uint8_t byte;
 class __FlashStringHelper;
 #define F(x) (reinterpret_cast<const __FlashStringHelper*>(x))
+#define PROGMEM
 #define HIGH 1
 #define LOW 0
 #define INPUT 0

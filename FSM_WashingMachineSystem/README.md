@@ -563,6 +563,7 @@ The 128x32 screen is split into a header and a message area:
 
 | State | Header | Message |
 |---|---|---|
+| Boot (about 4 s) | — | Start-up animation, full screen: a Border Collie chases a butterfly (`BootAnimation.h`). START or a tank wash ends it; notices that arrive meanwhile are shown after "System ready" |
 | Boot (2 s) | `REUSE WATER` | System ready |
 | Idle | `READY` | Press START |
 | Run | `STARTING` | Starting cycle... |
@@ -624,7 +625,7 @@ For faster scrolling, raise `SCROLL_SPEED_PX` to 3. Lowering `DISPLAY_FRAME_MS` 
 4. Fill1 switching from tank water to tap water: the wash valve closes within 250 ms.
 5. Fill2 (rinse) and Drain2: the wash valve must stay closed.
 6. Press Stop during any state: the system returns to Idle and the wash valve closes within 250 ms.
-7. Power on: the screen shows `REUSE WATER / System ready` for 2 s, then `READY / Press START`, with no "Cycle complete" message.
+7. Power on: the screen shows the Border Collie chasing a butterfly (about 4 s), then `REUSE WATER / System ready` for 2 s, then `READY / Press START`, with no "Cycle complete" message.
 8. During each step, the header shows the right step (`1/4` to `4/4`) and long messages scroll smoothly without jumping.
 9. During the tank-water fill, the `W` icon turns white every 10 s and the tank icon follows the level sensors.
 10. In Drain2, the countdown decreases every second.

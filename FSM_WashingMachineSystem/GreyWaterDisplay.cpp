@@ -1,5 +1,7 @@
 #include "GreyWaterSystem.h"
 #include "GreyWaterOutputs.h"
+#include "BootAnimation.h"
+#include <math.h>
 
 // OLED display. State logic only sets the text (displaySetStatus /
 // displayShowNotice); displayUpdate(), called every loop() pass, does all the
@@ -67,7 +69,91 @@ void displaySetStatus(const char* title, const char* message, const char* detail
   if (changed) displayDirty = true;
 }
 
+// ── Start-up animation ─────────────────────────────────────────────────────
+// After power-on a Border Collie chases a butterfly across the whole screen
+// (about 4 s), then the start-up notice ("System ready") follows. Notices that
+// arrive meanwhile (Wi-Fi address, setup key, "Interrupted") are held and shown
+// after it. Start or a tank wash (displayClearNotice) ends it at once.
+static bool introActive = false;
+static char introNextTitle[DISP_TITLE_LEN] = "";
+static char introNextMessage[DISP_MSG_LEN] = "";
+static unsigned long introNextMs = 0;
+static bool deferredNotice = false;
+static char deferredTitle[DISP_TITLE_LEN] = "";
+static char deferredMessage[DISP_MSG_LEN] = "";
+static unsigned long deferredMs = 0;
+
+#define INTRO_SPEED_PX   2.2f   // dog speed per frame (55 px/s at 25 fps)
+#define INTRO_STALK_X    66.0f  // the collie starts to stalk here...
+#define INTRO_STALK_FRAMES 28   // ...for this many frames (1.1 s)
+#define INTRO_END_X      (-(COLLIE_W + 2))
+
+static struct {
+  float dogX, flyX, flyBoost;
+  uint16_t frame, stalkT;
+  bool stalking, stalkDone;
+} intro;
+
+void displayStartIntro(const char* title, const char* message, unsigned long durationMs) {
+  if (!displayOk) { displayShowNotice(title, message, durationMs); return; }
+  setText(introNextTitle, sizeof(introNextTitle), title);
+  setText(introNextMessage, sizeof(introNextMessage), message);
+  introNextMs = durationMs;
+  intro.dogX = OLED_WIDTH + 4;  intro.flyX = OLED_WIDTH - 6;  intro.flyBoost = 0;
+  intro.frame = 0;  intro.stalkT = 0;  intro.stalking = false;  intro.stalkDone = false;
+  introActive = true;
+}
+
+static int16_t roundPx(float v) { return (int16_t)floorf(v + 0.5f); }
+
+// One frame of the chase. Returns false when both have left the screen.
+static bool drawIntroFrame() {
+  const float v = INTRO_SPEED_PX;
+  intro.frame++;
+  intro.dogX -= v;
+  // The butterfly flutters ahead, letting the dog close in, then pulling away.
+  float gap  = intro.dogX - intro.flyX;
+  float want = 18.0f + 8.0f * sinf(intro.frame * 0.09f);
+  float flyStep = v * (gap < want ? 1.35f : 0.8f);
+  intro.flyX -= flyStep;
+  float flyY = 7.0f + 5.0f * sinf(intro.frame * 0.21f) + 2.0f * sinf(intro.frame * 0.53f);
+
+  // Gallop in; the butterfly hovers and the collie drops into its stalk and
+  // creeps; then the butterfly darts off and the collie sprints after it.
+  if (intro.dogX <= INTRO_STALK_X && !intro.stalking && !intro.stalkDone) {
+    intro.stalking = true;
+    intro.stalkT = 0;
+  }
+  if (intro.stalking) {
+    intro.dogX += v - v * 0.18f;                                  // creep instead of run
+    intro.stalkT++;
+    intro.flyX += (intro.dogX - 34.0f - intro.flyX) * 0.08f - flyStep;   // hover in front of the dog
+    if (intro.stalkT > INTRO_STALK_FRAMES - 1) { intro.stalking = false; intro.stalkDone = true; intro.flyBoost = 10.0f; }
+  }
+  if (intro.flyBoost > 0) { intro.flyX -= v * 0.9f; intro.flyBoost -= 0.2f; }
+
+  oled.clearDisplay();
+  int16_t groundShift = (int16_t)floorf(intro.frame * v);           // dotted ground moving with the dog
+  for (int16_t x = 0; x < OLED_WIDTH; x++) {
+    if ((x + groundShift) % 5 < 3) oled.drawPixel(x, OLED_HEIGHT - 1, WHITE);
+  }
+  int16_t fy = roundPx(flyY) - 1;
+  oled.drawBitmap(roundPx(intro.flyX), fy < 0 ? 0 : fy, flyFrames[(intro.frame / 2) % 4], FLY_W, FLY_H, WHITE);
+  uint8_t dogFrame = intro.stalking ? COLLIE_GALLOP_FRAMES + (intro.stalkT / 7) % 2
+                                    : (uint8_t)((int)floorf(intro.frame * v / 4.0f) % COLLIE_GALLOP_FRAMES);
+  oled.drawBitmap(roundPx(intro.dogX), OLED_HEIGHT - COLLIE_H, collieFrames[dogFrame], COLLIE_W, COLLIE_H, WHITE);
+  oled.display();
+  return intro.dogX >= INTRO_END_X;
+}
+
 void displayShowNotice(const char* title, const char* message, unsigned long durationMs) {
+  if (introActive) {             // keep it for after the start-up animation
+    setText(deferredTitle, sizeof(deferredTitle), title);
+    setText(deferredMessage, sizeof(deferredMessage), message);
+    deferredMs = durationMs;
+    deferredNotice = true;
+    return;
+  }
   setText(noticeTitle, sizeof(noticeTitle), title);
   setText(noticeMessage, sizeof(noticeMessage), message);
   noticeStart    = millis();
@@ -76,8 +162,10 @@ void displayShowNotice(const char* title, const char* message, unsigned long dur
 }
 
 void displayClearNotice() {
-  if (noticeDuration) displayDirty = true;
+  if (noticeDuration || introActive) displayDirty = true;
   noticeDuration = 0;
+  introActive    = false;   // Start or a tank wash: straight to the cycle screens
+  deferredNotice = false;
 }
 
 // Tank icon: outline, filled bottom-up according to the level sensors.
@@ -131,8 +219,19 @@ void displayUpdate(bool force) {
   if (force) displayDirty = true;
   lastFrame = millis();
 
+  if (introActive) {
+    if (drawIntroFrame()) return;
+    introActive = false;    // animation done: the start-up notice, then any held notice
+    displayShowNotice(introNextTitle, introNextMessage, introNextMs);
+  }
+
   // A notice overrides the status until it expires.
   bool noticeActive = noticeDuration && (millis() - noticeStart < noticeDuration);
+  if (!noticeActive && deferredNotice) {
+    deferredNotice = false;
+    displayShowNotice(deferredTitle, deferredMessage, deferredMs);
+    noticeActive = true;
+  }
   if (!noticeActive && noticeDuration) { noticeDuration = 0; displayDirty = true; }
   const char* title   = noticeActive ? noticeTitle   : statusTitle;
   const char* message = noticeActive ? noticeMessage : statusMessage;
