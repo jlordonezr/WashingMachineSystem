@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
            (unsigned)stats.stepAvgS[0], (unsigned)stats.stepAvgS[1], (unsigned)stats.stepAvgS[2]);
     CHECK(stats.stepSamples[0] == 1 && stats.stepAvgS[0] >= 600 && stats.stepAvgS[0] <= 608, "step 1 typical time %u s", (unsigned)stats.stepAvgS[0]);
     int prio = 0;
-    CHECK(alertSeen("Grey water: cycle complete", &prio) && prio == 2, "cycle-complete alert missing or not low priority (%d)", prio);
+    CHECK(alertSeen("Reuse Water: cycle complete", &prio) && prio == 2, "cycle-complete alert missing or not low priority (%d)", prio);
     for (const char* e : {"Cycle started", "Step 1/4 wash started", "Machine filled", "Pump on", "Pump stopped: machine closed its inlet", "Cycle complete"})
       CHECK(eventSeen(e), "event log has no \"%s\"", e);
     Preferences p; CHECK(p.getBytesLength("cyc") == 0, "cycle marker left behind after a normal end");
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
     CHECK(activeState == stIdle, "not back to Ready after STOP");
     CHECK(pinOut[OUT_MOTOR] == LOW && pinOut[OUT_FILL_EV] == LOW && pinOut[OUT_WASH_EV] == LOW, "pump, fill or wash output still on");
     CHECK(pinOut[OUT_TAP_EV] == HIGH && pinOut[OUT_DRAIN_EV] == HIGH, "tap and drain not back to normal");
-    int prio = 0; CHECK(alertSeen("Grey water: cycle stopped", &prio) && prio == 1, "stop alert missing or not minimum priority");
+    int prio = 0; CHECK(alertSeen("Reuse Water: cycle stopped", &prio) && prio == 1, "stop alert missing or not minimum priority");
     Preferences p; CHECK(p.getBytesLength("cyc") == 0, "cycle marker left behind after STOP");
   }
   else if (sc == "F4a") {
@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
     int st; uint32_t ep; bool intr = interruptedInfo(st, ep);
     CHECK(intr && st == stFill2, "interruption not detected (flag %d, step %d)", intr, st);
     CHECK(activeState == stIdle && pinOut[OUT_MOTOR] == LOW, "not safely in Ready after power-up");
-    CHECK(alertSeen("Grey water: cycle interrupted"), "no interrupted alert");
+    CHECK(alertSeen("Reuse Water: cycle interrupted"), "no interrupted alert");
     CHECK(eventSeen("Cycle interrupted"), "interruption not in the event log");
     bool shown = false; for (auto& s : oled.shown) if (s == "INTERRUPTED") shown = true;
     CHECK(shown, "screen does not show INTERRUPTED");
@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
     printf("F7 low float failed dry, tank full (high float wet)\n");
     tankL = 42.0; lowStuckDry = true; typicalProgram(); boot(); runFor(3);
     CHECK(tankFault(), "disagreement not detected");
-    CHECK(alertSeen("Grey water: check level switches"), "no level-switch alert");
+    CHECK(alertSeen("Reuse Water: check level switches"), "no level-switch alert");
     pressStart(); runFor(1800);
     CHECK(rec.pumpOnFirst < 0, "pump ran with the low float dry");
     CHECK(!rec.fillWhileHighWet, "fill valve open into a tank whose high float is wet (overflow)");
@@ -239,7 +239,7 @@ int main(int argc, char** argv) {
     printf("F9 screen missing at start-up\n");
     oledFailBegin = true; typicalProgram(); boot();
     CHECK(!displayAvailable(), "missing screen not detected");
-    CHECK(alertSeen("Grey water: screen not working"), "no screen alert");
+    CHECK(alertSeen("Reuse Water: screen not working"), "no screen alert");
     CHECK(eventSeen("Screen not found"), "missing screen not in the event log");
     pressStart(); runFor(1800);
     CHECK(stats.totalCycles == 1, "cycle did not complete without a screen");
@@ -284,7 +284,7 @@ int main(int argc, char** argv) {
       CHECK(sawMsg(m), "screen never showed \"%s\"", m);
     CHECK(activeState == stIdle && stats.totalCycles == 1, "cycle did not complete");
     int prio = 0;
-    CHECK(alertSeen("Aguas grises: ciclo completo", &prio) && prio == 2, "Spanish cycle-complete alert missing");
+    CHECK(alertSeen("Reúso de Agua: ciclo completo", &prio) && prio == 2, "Spanish cycle-complete alert missing");
     CHECK(eventSeen("Cycle complete"), "event log should stay in English");
     bool reused = false; for (auto& t : oled.shown) if (t.rfind("Reusados ", 0) == 0) reused = true;
     CHECK(reused, "end-of-cycle screen does not say \"Reusados ... L\"");

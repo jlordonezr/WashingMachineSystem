@@ -103,7 +103,7 @@ void setup() {
     DEBUG_PRINT("SSD1306 not found: running without a screen");
   }
 
-  displayShowNotice(TRS("GREY WATER", "AGUAS GRISES"), TRS("System ready", "Sistema listo"), 2000);
+  displayShowNotice(TRS("REUSE WATER", "REUSO DE AGUA"), TRS("System ready", "Sistema listo"), 2000);
   displayUpdate();
   setupStateMachine();
   netBegin();        // Wi-Fi connects in the background; the cycle never waits for it

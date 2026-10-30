@@ -1,5 +1,5 @@
 {
- "Grey Water Controller": "Controlador de aguas grises",
+ "Reuse Water System": "Sistema de Reúso de Agua",
  "Connecting": "Conectando",
  "Refresh": "Actualizar",
  "Overview": "Resumen",
@@ -307,7 +307,7 @@
  "Both passwords need 8 to 32 characters.": "Las dos contraseñas deben tener de 8 a 32 caracteres.",
  "Choose passwords other than the default one.": "Elija contraseñas distintas a la de fábrica.",
  "Passwords saved. Your browser will ask you to sign in with the new password.": "Contraseñas guardadas. El navegador le pedirá entrar con la nueva contraseña.",
- "That file is not a grey water history file.": "Ese archivo no es un historial de aguas grises.",
+ "That file is not a Reuse Water System history file.": "Ese archivo no es un historial del Sistema de Reúso de Agua.",
  "Restore water history?": "¿Restaurar el historial de agua?",
  "This replaces the history on the controller with the file’s: {0} washes, {1} L of tank water reused.": "Esto reemplaza el historial del controlador por el del archivo: {0} lavados, {1} L de agua del tanque reusada.",
  "The controller gets the history from the file: {0} washes, {1} L of tank water reused.": "El controlador recibe el historial del archivo: {0} lavados, {1} L de agua del tanque reusada.",

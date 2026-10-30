@@ -1,4 +1,4 @@
-# Grey Water System – Firmware 3.1 (Wi-Fi)
+# Reuse Water System – Firmware 3.1 (Wi-Fi)
 
 ## What's new in 3.1: Spanish
 
@@ -145,7 +145,7 @@ Firmware 2.8 protects the history in three layers.
 - Restoring over existing history asks for confirmation first.
 
 **Notes**
-- The phone copy belongs to one browser and one address. Opening the app as `greywater.local` and by IP address keeps two separate copies, so use the same address each time.
+- The phone copy belongs to one browser and one address. Opening the app as `reusewater.local` and by IP address keeps two separate copies, so use the same address each time.
 - Settings and the Wi-Fi network are not part of the history file. After a full flash erase they must be set again.
 - **New API:** `GET /api/history` (the full history as JSON) and `POST /api/history/restore` (refused if the controller already has history, unless `force=1`). The status adds `history.source` and `history.hasData`.
 - **Tests:** `tests/test_history.cpp` adds 19 storage checks. All 52 flow checks still pass.
@@ -173,7 +173,7 @@ The screen uses plain words and two key phrases: **Reusing water** (filling from
 | Cycle stopped | `STOPPED` | Cycle stopped |
 | Manual tank wash | `TANK WASH 9:42` | Cleaning tank |
 | Tank wash finished / stopped / problem | `TANK CLEANED` / `WASH STOPPED` | Tank full / Stopped early / Check tank |
-| Wi-Fi setup | `GreyWater-Setup` | Join this Wi-Fi |
+| Wi-Fi setup | `ReuseWater-Setup` | Join this Wi-Fi |
 | Wi-Fi connected | IP address | Connected |
 
 ### Dashboard tabs
@@ -330,7 +330,7 @@ Firmware 2.0 adds Wi-Fi features on the Arduino Nano ESP32. The wash cycle works
 
 | Feature | What it does |
 |---|---|
-| Dashboard | Web page at `http://greywater.local`: current step, countdown, tank level, tank-wash valve, live flow rates, water statistics, Start and Stop buttons |
+| Dashboard | Web page at `http://reusewater.local`: current step, countdown, tank level, tank-wash valve, live flow rates, water statistics, Start and Stop buttons |
 | Phone alerts | Push messages through [ntfy](https://ntfy.sh): cycle complete, cycle stopped, tank full, step stuck (no flow), tank water too old |
 | Step watchdog | Steps 1–3 that run longer than the alert time send one alert and show *No flow seen: check sensors* on the OLED. The step keeps waiting, so a slow machine is never cut short |
 | Water statistics | Litres of tank water reused, rinse water saved to the tank and tap water used: this cycle, this month, all time. Stored in flash |
@@ -377,10 +377,10 @@ Board: **Arduino Nano ESP32**, pin numbering **By Arduino pin (default)**. Verif
 ## First-time setup
 
 1. Upload the firmware over USB once.
-2. On first boot the OLED shows `GreyWater-Setup` and `Key gw-xxxxxx`. On a phone, join the Wi-Fi network **GreyWater-Setup** with that key (it is unique to the board and also printed on the USB serial monitor at 9600 baud). If the board has no working screen, the key is `greywater`.
+2. On first boot the OLED shows `ReuseWater-Setup` and `Key gw-xxxxxx`. On a phone, join the Wi-Fi network **ReuseWater-Setup** with that key (it is unique to the board and also printed on the USB serial monitor at 9600 baud). If the board has no working screen, the key is `greywater`.
 3. A setup page opens (if not, browse to `192.168.4.1`). Choose the home network and enter its password.
 4. The controller connects and the OLED shows its IP address for 6 seconds.
-5. Open `http://greywater.local` (or the IP address). Sign in as `admin` / `greywater`.
+5. Open `http://reusewater.local` (or the IP address). Sign in as `admin` / `greywater`.
 6. Open **Settings**: set new dashboard and update passwords, and an alert topic.
 7. Install the **ntfy** app on the phone, subscribe to the same topic, and press **Send a test alert**.
 
@@ -388,7 +388,7 @@ The setup page closes after 3 minutes; the system then runs without Wi-Fi. To op
 
 ## Wireless firmware updates
 
-In the Arduino IDE, choose **Tools > Port > greywater at <IP>** (network port), then Upload. Enter the update password when asked. Updates are accepted only while the controller is Ready and no tank wash runs (since 2.9). The controller switches all valves and the pump off, shows `UPDATING`, and restarts when finished.
+In the Arduino IDE, choose **Tools > Port > reusewater at <IP>** (network port), then Upload. Enter the update password when asked. Updates are accepted only while the controller is Ready and no tank wash runs (since 2.9). The controller switches all valves and the pump off, shows `UPDATING`, and restarts when finished.
 
 ## Dashboard API
 
@@ -563,7 +563,7 @@ The 128x32 screen is split into a header and a message area:
 
 | State | Header | Message |
 |---|---|---|
-| Boot (2 s) | `GREY WATER` | System ready |
+| Boot (2 s) | `REUSE WATER` | System ready |
 | Idle | `READY` | Press START |
 | Run | `STARTING` | Starting cycle... |
 | Fill1, tank low | `1/4 FILL` | Tank low: using tap water |
@@ -624,7 +624,7 @@ For faster scrolling, raise `SCROLL_SPEED_PX` to 3. Lowering `DISPLAY_FRAME_MS` 
 4. Fill1 switching from tank water to tap water: the wash valve closes within 250 ms.
 5. Fill2 (rinse) and Drain2: the wash valve must stay closed.
 6. Press Stop during any state: the system returns to Idle and the wash valve closes within 250 ms.
-7. Power on: the screen shows `GREY WATER / System ready` for 2 s, then `READY / Press START`, with no "Cycle complete" message.
+7. Power on: the screen shows `REUSE WATER / System ready` for 2 s, then `READY / Press START`, with no "Cycle complete" message.
 8. During each step, the header shows the right step (`1/4` to `4/4`) and long messages scroll smoothly without jumping.
 9. During the tank-water fill, the `W` icon turns white every 10 s and the tank icon follows the level sensors.
 10. In Drain2, the countdown decreases every second.

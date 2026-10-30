@@ -38,10 +38,11 @@ struct NotifyItem {
 
 static void jsonEscape(char* dst, size_t size, const char* src);
 
-// "Grey water: tank full" -> "tank full", for the event log.
+// "Reuse Water: tank full" -> "tank full", for the event log.
 static const char* shortTitle(const char* t) {
-  if (strncmp(t, "Grey water: ", 12) == 0)   return t + 12;
-  if (strncmp(t, "Aguas grises: ", 14) == 0) return t + 14;
+  static const char EN[] = "Reuse Water: ", ES[] = "Reúso de Agua: ";
+  if (strncmp(t, EN, sizeof(EN) - 1) == 0) return t + sizeof(EN) - 1;
+  if (strncmp(t, ES, sizeof(ES) - 1) == 0) return t + sizeof(ES) - 1;
   return t;
 }
 
@@ -204,7 +205,7 @@ static bool authorized() {
       return false;
     }
   }
-  server.requestAuthentication(BASIC_AUTH, "Grey water controller");
+  server.requestAuthentication(BASIC_AUTH, "Reuse Water System");
   return false;
 }
 
@@ -509,9 +510,9 @@ static void handleWashStop() {
 static void handleTestAlert() {
   if (!actionAllowed()) return;
   if (cfg.ntfyTopic[0] == '\0') { sendError(400, "Add an alert topic in Settings first."); return; }
-  notify(TR("Grey water: test alert", "Aguas grises: alerta de prueba"),
-         TR("Alerts from your grey water controller are working.",
-            "Las alertas de su controlador de aguas grises funcionan."), 3, "bell");
+  notify(TR("Reuse Water: test alert", "Reúso de Agua: alerta de prueba"),
+         TR("Alerts from your Reuse Water System are working.",
+            "Las alertas de su Sistema de Reúso de Agua funcionan."), 3, "bell");
   sendJson(200, "{\"ok\":true}");
 }
 
@@ -565,7 +566,7 @@ static void startServices() {
   strlcpy(ip, WiFi.localIP().toString().c_str(), sizeof(ip));
   displayShowNotice(ip, TRS("Connected", "Conectado"), 6000);          // the address of the dashboard
   logEvent("Wi-Fi connected: %s", ip);
-  DEBUG_PRINT("Dashboard: http://greywater.local");
+  DEBUG_PRINT("Dashboard: http://reusewater.local");
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -600,7 +601,7 @@ void netBegin() {
   wm.setConfigPortalBlocking(false);
   wm.setConfigPortalTimeout(CONFIG_PORTAL_TIMEOUT_S);
   wm.setHostname(NET_HOSTNAME);
-  wm.setTitle("Grey water controller");
+  wm.setTitle("Reuse Water System");
   static const char* menu[] = { "wifi", "info", "exit" };   // no "update" or "erase" on the setup page
   wm.setMenu(menu, 3);
   wm.setShowInfoUpdate(false);

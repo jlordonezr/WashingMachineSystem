@@ -9,14 +9,14 @@
 //  - Wi-Fi setup page (WiFiManager): on first boot, or after holding STOP for
 //    5 s while the screen shows READY, the board opens the network
 //    WIFI_AP_NAME. Join it with a phone and pick the home Wi-Fi.
-//  - Dashboard at http://greywater.local (or the IP shown on the OLED),
+//  - Dashboard at http://reusewater.local (or the IP shown on the OLED),
 //    user "admin", password from the settings (default "greywater").
-//  - Wireless firmware updates (ArduinoOTA), host name "greywater".
+//  - Wireless firmware updates (ArduinoOTA), host name "reusewater".
 //  - Phone alerts through ntfy (https://ntfy.sh) when a topic is set.
 //  - Clock from NTP for monthly statistics and tank water age.
 
-#define NET_HOSTNAME            "greywater"
-#define WIFI_AP_NAME            "GreyWater-Setup"
+#define NET_HOSTNAME            "reusewater"
+#define WIFI_AP_NAME            "ReuseWater-Setup"
 #define WIFI_AP_PASSWORD        "greywater"   // fallback only (no screen); normally "gw-" + MAC digits, shown on the screen
 #define CONFIG_PORTAL_TIMEOUT_S 180           // setup page closes after 3 minutes
 #define WIFI_RETRY_MS           60000         // try to reconnect every minute when offline

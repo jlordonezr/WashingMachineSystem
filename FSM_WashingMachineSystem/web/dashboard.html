@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>Grey Water Controller</title>
+<title>Reuse Water System</title>
 <style>
 :root{
   --bg:#F4F6F5;--surface:#FFFFFF;--sunken:#EEF2F1;--line:#DCE3E1;--line-strong:#6F8183;
@@ -269,7 +269,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   <div class="bar-in">
     <h1 class="brand">
       <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect width="26" height="26" rx="7" fill="var(--primary)"/><path d="M13 5.5c3.2 4 5 6.9 5 9.3a5 5 0 0 1-10 0c0-2.4 1.8-5.3 5-9.3z" fill="var(--on-primary)"/></svg>
-      Grey Water Controller
+      Reuse Water System
     </h1>
     <span class="badge" id="conn"><span class="dot"></span><span id="connText">Connecting</span></span>
     <button type="button" class="refresh" id="btnRefresh" aria-describedby="connText">
@@ -1164,7 +1164,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     var f=this.files&&this.files[0];this.value='';if(!f)return;
     f.text().then(function(txt){
       var h;try{h=JSON.parse(txt)}catch(e){h=null}
-      if(!h||h.format!=='greywater-history'||!hasHistory(h)){toast(t('That file is not a grey water history file.'),true);return;}
+      if(!h||h.format!=='greywater-history'||!hasHistory(h)){toast(t('That file is not a Reuse Water System history file.'),true);return;}
       var replacing=last&&last.history&&last.history.hasData;
       ask(t('Restore water history?'),(replacing?t('This replaces the history on the controller with the file\u2019s: {0} washes, {1} L of tank water reused.',h.totalCycles,litres(h.totalReused)):
           t('The controller gets the history from the file: {0} washes, {1} L of tank water reused.',h.totalCycles,litres(h.totalReused)))+

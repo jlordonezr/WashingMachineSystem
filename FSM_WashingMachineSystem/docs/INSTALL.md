@@ -23,15 +23,16 @@ arduino-cli compile --fqbn esp32:esp32:nano_nora FSM_WashingMachineSystem
 ## 3. Upload
 
 - **First time, or from 2.x over USB:** Upload with the board on USB.
-- **Wireless (2.x already installed):** Tools → Port → *greywater at <IP>*, Upload, enter the update password. The controller must be Ready with no tank wash running.
+- **Wireless (2.x already installed):** Tools → Port → *reusewater at <IP>*, Upload, enter the update password. The controller must be Ready with no tank wash running.
+- **Name change:** boards running a build from before the rename appear as *greywater at <IP>*; after that upload they appear as *reusewater at <IP>* and the app moves to `http://reusewater.local`. The IP address, passwords, settings and history do not change.
 
 Settings and water history are kept. 3.1 upgrades settings version 6 to 7 by adding the language, which starts as Spanish; change it under Configuración → Idioma.
 
 ## 4. First-time setup (new board, or new Wi-Fi)
 
-1. On first boot the screen shows `GreyWater-Setup` and `Key gw-xxxxxx`. The key is unique to the board; it is also printed on the USB serial monitor (9600 baud). Without a working screen the key is `greywater`.
-2. Join **GreyWater-Setup** with that key on a phone. The setup page opens (or browse to `192.168.4.1`). Choose the home network.
-3. The screen shows the controller's IP address for 6 s. Open `http://greywater.local` or that address; sign in as `admin` / `greywater`.
+1. On first boot the screen shows `ReuseWater-Setup` and `Key gw-xxxxxx`. The key is unique to the board; it is also printed on the USB serial monitor (9600 baud). Without a working screen the key is `greywater`.
+2. Join **ReuseWater-Setup** with that key on a phone. The setup page opens (or browse to `192.168.4.1`). Choose the home network.
+3. The screen shows the controller's IP address for 6 s. Open `http://reusewater.local` or that address; sign in as `admin` / `greywater`.
 4. The app asks for two new passwords (app and wireless updates). Both take effect at once.
 5. **Settings → Language:** Español (default) or English, for the app, the screen and the alerts.
 6. **Settings → Alerts:** *Create a private topic*, subscribe to it in the ntfy app, press **Send a test alert**. The app now reports whether it was delivered.

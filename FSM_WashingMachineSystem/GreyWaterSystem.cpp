@@ -32,7 +32,7 @@ void bootChecks() {
   logEvent("Controller started (%s), firmware %s", resetReasonText(), FIRMWARE_VERSION);
   if (!displayAvailable()) {
     logEvent("Screen not found: running without it");
-    notify(TR("Grey water: screen not working", "Aguas grises: la pantalla no responde"),
+    notify(TR("Reuse Water: screen not working", "Reúso de Agua: la pantalla no responde"),
            TR("The controller screen did not answer at start-up. The wash cycle, buttons and app work as normal. "
               "Check the screen's wiring (I2C, address 0x3C).",
               "La pantalla del controlador no respondió al encender. El ciclo, los botones y la app funcionan normalmente. "
@@ -49,7 +49,7 @@ void bootChecks() {
                                     "Check the washing machine; start a new cycle if needed.",
                                     "El ciclo de lavado se interrumpió (%s). El controlador volvió a Listo. "
                                     "Revise la lavadora; inicie un ciclo nuevo si hace falta."), resetReasonTextLocal());
-    notify(TR("Grey water: cycle interrupted", "Aguas grises: ciclo interrumpido"), body, 4, "warning");
+    notify(TR("Reuse Water: cycle interrupted", "Reúso de Agua: ciclo interrumpido"), body, 4, "warning");
     beep(BEEP_ALARM);
   }
 }
@@ -75,7 +75,7 @@ void updateInputs() {
     tankFaultReported = true;
     logEvent("Level switches disagree: high wet, low dry");
     beep(BEEP_ALARM);
-    notify(TR("Grey water: check level switches", "Aguas grises: revise los flotadores"),
+    notify(TR("Reuse Water: check level switches", "Reúso de Agua: revise los flotadores"),
            TR("The high-level switch reports water but the low-level switch does not. "
               "The tank is treated as full and the pump is not used until the switches agree.",
               "El flotador alto indica agua, pero el bajo no. El tanque se trata como lleno "
@@ -167,7 +167,7 @@ static void handleSafetyEvents() {
     if (e.pumpStoppedDry && e.dryStarts >= PUMP_DRY_ALERT && !pumpDryAlertSent) {
       pumpDryAlertSent = true;
       beep(BEEP_ALARM);
-      notify(TR("Grey water: tank pump not pumping", "Aguas grises: la bomba no bombea"),
+      notify(TR("Reuse Water: tank pump not pumping", "Reúso de Agua: la bomba no bombea"),
              TR("The tank pump started several times without any water flow, so tap water was used. "
                 "Check the pump, its intake and the hose for an air lock.",
                 "La bomba del tanque arrancó varias veces sin flujo de agua, así que se usó agua de la llave. "
@@ -289,8 +289,8 @@ void handleIdleStateEntry() {
                            : TR("The wash cycle is complete.", "El ciclo de lavado terminó."),
              cycleReusedL, cycleSavedL);
     // Routine news is low priority (no sound on most phones); problems stay high.
-    notify(stoppedByUser ? TR("Grey water: cycle stopped", "Aguas grises: ciclo detenido")
-                         : TR("Grey water: cycle complete", "Aguas grises: ciclo completo"),
+    notify(stoppedByUser ? TR("Reuse Water: cycle stopped", "Reúso de Agua: ciclo detenido")
+                         : TR("Reuse Water: cycle complete", "Reúso de Agua: ciclo completo"),
            body, stoppedByUser ? 1 : 2, stoppedByUser ? "stop_sign" : "white_check_mark");
     logEvent(stoppedByUser ? "Cycle stopped" : "Cycle complete: reused %.0f L, saved %.0f L", cycleReusedL, cycleSavedL);
     if (!stoppedByUser) beep(BEEP_DONE);
@@ -369,7 +369,7 @@ static bool stepIsStuck() {
                 "Revise los sensores de flujo y que la lavadora esté funcionando."),
              displayGetTitle(), (unsigned long)(cfg.stepAlertMs / 60000UL));
     beep(BEEP_ALARM);
-    notify(TR("Grey water: check sensors", "Aguas grises: revise los sensores"), body, 4, "warning");
+    notify(TR("Reuse Water: check sensors", "Reúso de Agua: revise los sensores"), body, 4, "warning");
   }
   return true;
 }
@@ -428,13 +428,13 @@ static void endManualWash(const char* result) {
   if (strcmp(result, "full") == 0) {
     if (tankLowSwitchWet()) {
       displayShowNotice(TRS("TANK CLEANED", "TANQUE LIMPIO"), TRS("Tank full", "Tanque lleno"), NOTICE_DURATION);
-      notify(TR("Grey water: tank wash complete", "Aguas grises: lavado del tanque terminado"),
+      notify(TR("Reuse Water: tank wash complete", "Reúso de Agua: lavado del tanque terminado"),
              TR("The tank is full and the wash valve is closed.",
                 "El tanque está lleno y la válvula de lavado está cerrada."), 2, "droplet");
     } else {
       displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Check tank", "Revise tanque"), NOTICE_DURATION);
       beep(BEEP_ALARM);
-      notify(TR("Grey water: check level switches", "Aguas grises: revise los flotadores"),
+      notify(TR("Reuse Water: check level switches", "Reúso de Agua: revise los flotadores"),
              TR("The tank wash stopped because the high-level switch reports water, but the "
                 "low-level switch does not. Check both float switches.",
                 "El lavado del tanque se detuvo porque el flotador alto indica agua, pero el "
@@ -450,7 +450,7 @@ static void endManualWash(const char* result) {
              (unsigned long)(cfg.manualWashMs / 60000UL));
     displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Check tank", "Revise tanque"), NOTICE_DURATION);
     beep(BEEP_ALARM);
-    notify(TR("Grey water: tank wash time limit", "Aguas grises: límite de tiempo del lavado"), body, 4, "warning");
+    notify(TR("Reuse Water: tank wash time limit", "Reúso de Agua: límite de tiempo del lavado"), body, 4, "warning");
   } else {
     displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Stopped early", "Detenido antes"), NOTICE_DURATION);
   }
@@ -541,7 +541,7 @@ void drain2StateLogic() {
 
     if (outputsMode() != modeSaveTank && !tankFullAlertSent) {
       tankFullAlertSent = true;
-      notify(TR("Grey water: tank full", "Aguas grises: tanque lleno"),
+      notify(TR("Reuse Water: tank full", "Reúso de Agua: tanque lleno"),
              TR("The storage tank is full. The rest of the rinse water is going to the drain.",
                 "El tanque de almacenamiento está lleno. El resto del agua de enjuague va al desagüe."),
              2, "droplet");
@@ -645,7 +645,7 @@ void systemPeriodic() {
                 "or empty and clean the tank.",
                 "El agua del tanque tiene %.0f horas. Úsela en el próximo lavado, "
                 "o vacíe y limpie el tanque."), age);
-    notify(TR("Grey water: tank water is old", "Aguas grises: el agua del tanque es vieja"), body, 3, "hourglass");
+    notify(TR("Reuse Water: tank water is old", "Reúso de Agua: el agua del tanque es vieja"), body, 3, "hourglass");
   }
 }
 

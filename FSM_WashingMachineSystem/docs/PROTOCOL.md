@@ -6,7 +6,7 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 
 | Item | Rule |
 |---|---|
-| Address | `http://greywater.local` (mDNS) or the IP shown on the screen |
+| Address | `http://reusewater.local` (mDNS) or the IP shown on the screen |
 | Authentication | HTTP Basic, user `admin`, the dashboard password (8–32 characters) |
 | Wrong passwords | 5 within a minute from one IP address → that address gets `429` for 1 minute (per device from 3.0) |
 | Actions | Every `POST` also needs the header `X-GW: 1`, else `403`. Other websites cannot send it, so they cannot press buttons with a remembered password |
@@ -104,4 +104,4 @@ From 3.1: `POST <ntfyServer>/` (the server root) with `Content-Type: application
 
 ## Wireless updates (ArduinoOTA)
 
-Host name `greywater`, update password from Settings (applied at once from 3.0). Accepted only while `updatesAllowed` is true. On start: watchdog paused, all outputs off, history saved, screen shows `UPDATING`.
+Host name `reusewater`, update password from Settings (applied at once from 3.0). Accepted only while `updatesAllowed` is true. On start: watchdog paused, all outputs off, history saved, screen shows `UPDATING`.
