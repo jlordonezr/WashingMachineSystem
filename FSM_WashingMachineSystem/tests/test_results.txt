@@ -1,0 +1,54 @@
+== Flow meter, step gates and pump protection ==
+52 checks passed, 0 failed
+== Tank level switches ==
+19 checks passed, 0 failed
+== Screen texts fit the OLED (both languages) ==
+94 screen texts checked, 0 do not fit
+== Every dashboard text has a Spanish translation (web/es.json) ==
+377 texts, 0 missing, 0 unused
+== Water history storage ==
+24 checks passed, 0 failed
+== Full cycle simulation of the real firmware ==
+All simulation scenarios passed.
+== Dashboard in a headless browser (needs Node.js + Playwright; axe-core optional) ==
+38 checks passed, 0 failed
+== Firmware 2.3 behaviour (reference, shows the old faults) ==
+S2b pulses 5/s   fill1=604 drain1=784 fill2=-1
+S7 trickle 1.5   fill1=604 drain1=784 fill2=-1
+S8 60 Hz pickup  fill1=4 drain1=784 fill2=-1
+All tests passed.
+
+== Simulation detail ==
+F1 full cycle reusing tank water
+    steps began at: wash 0.3 s, soapy drain 604.5 s, rinse 784.5 s, save 1504.5 s
+    pump first on at 19.5 s; worst run against a closed inlet 302 ms
+    reused 15.8 L, saved 25.9 L; typical step times 604 / 180 / 720 s
+    28 checks passed, 0 failed
+F2 machine runs its drain pump at program start, then fills
+    soapy drain began at 604.5 s
+    1 checks passed, 0 failed
+F3 STOP pressed during the wash
+    5 checks passed, 0 failed
+F4 power cut during the rinse (part 1: run until 900 s, then cut power)
+    2 checks passed, 0 failed
+F4 power cut during the rinse (part 2: power back)
+    8 checks passed, 0 failed
+F5 normal power-up with no cycle running
+    2 checks passed, 0 failed
+F6 watchdog restart while Ready (no cycle)
+    2 checks passed, 0 failed
+F7 low float failed dry, tank full (high float wet)
+    7 checks passed, 0 failed
+F8 high float bobbing at the mark during the save step
+    fill valve switched 2 times; tank 38.1 L
+    4 checks passed, 0 failed
+F9 screen missing at start-up
+    4 checks passed, 0 failed
+F10 loop() blocked for 3 s just as the machine closes its inlet (pump running)
+    worst run against a closed inlet 302 ms (2.9 had no protection during a stall)
+    5 checks passed, 0 failed
+F11 loop() blocked for 3 s while the tank fills during the save step
+    tank 40.06 L after the stall
+    4 checks passed, 0 failed
+F12 full cycle in Spanish (factory default language)
+    13 checks passed, 0 failed

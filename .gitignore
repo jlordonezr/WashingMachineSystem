@@ -1,0 +1,12 @@
+# macOS / editors
+.DS_Store
+*.swp
+.vscode/
+.idea/
+# Arduino / PlatformIO build output
+build/
+.pio/
+# Test output
+*.o
+/tmp/
+node_modules/

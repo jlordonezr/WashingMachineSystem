@@ -1,0 +1,16 @@
+#pragma once
+#include "GreyWaterSettings.h"
+#define OPERATION_DELAY 250
+#define TRANSITION_DELAY 1200000
+#define EDGE_DETECTION_DELAY 4000
+#define TANK_WASH_PERIOD 10000
+#define TANK_WASH_OPEN_TIME 2000
+#define STEP_ALERT_DELAY 5400000UL
+#define TANK_MAX_AGE_HOURS 48
+#define MANUAL_WASH_TIME 600000UL
+#define FLOW_ON_LPM 1.0f
+#define MIN_FILL_LITRES 3.0f
+#define DEFAULT_NTFY_SERVER "https://ntfy.sh"
+#define DEFAULT_TIME_ZONE "<-05>5"
+#define DEFAULT_WEB_PASSWORD "greywater"
+#define DEFAULT_OTA_PASSWORD "greywater"

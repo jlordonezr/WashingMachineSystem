@@ -1,0 +1,1277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Grey Water Controller</title>
+<style>
+:root{
+  --bg:#F4F6F5;--surface:#FFFFFF;--sunken:#EEF2F1;--line:#DCE3E1;--line-strong:#6F8183;
+  --ink:#15282B;--muted:#5A6B6E;--faint:#8A9A9C;
+  --primary:#2F7D6B;--primary-hover:#276A5B;--primary-soft:#E1F0EB;--on-primary:#FFFFFF;--primary-ink:#276A5B;
+  --danger:#B3261E;--danger-hover:#981F18;--danger-soft:#FBE9E7;
+  --warn-ink:#7A5200;--warn-soft:#FFF1CC;--ok:#2F7D6B;
+  --water:#3F8F7A;
+  --r-panel:12px;--r-ctl:8px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans",Ubuntu,"Helvetica Neue",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0E1A19;--surface:#14231F;--sunken:#10201C;--line:#23362F;--line-strong:#5F7A73;
+  --ink:#E4ECEA;--muted:#9CB0AD;--faint:#7F9693;
+  --primary:#5BB89E;--primary-hover:#6CC6AC;--primary-soft:#173A31;--on-primary:#06201A;--primary-ink:#5BB89E;
+  --danger:#F07D6F;--danger-hover:#F4948A;--danger-soft:#3A1C19;
+  --warn-ink:#F2C46B;--warn-soft:#3A2E14;--ok:#5BB89E;--water:#5BB89E;
+  color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 0.9375rem/1.5 var(--font);
+  padding-bottom:env(safe-area-inset-bottom,0)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+h1.brand{margin:0 auto 0 0}
+#headline{color:var(--ink)}
+.ferr{grid-column:1/-1;margin:0;color:var(--danger);font-size:0.8125rem;font-weight:500}
+.ferr[hidden]{display:none}
+.inp:has(input[aria-invalid=true]){border-color:var(--danger);border-width:2px}
+#toast .dismiss{margin-left:12px;background:none;border:1px solid currentColor;color:inherit;border-radius:6px;padding:4px 10px;font:inherit;cursor:pointer;pointer-events:auto}
+
+/* App bar */
+.bar{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);
+  padding-top:env(safe-area-inset-top,0)}
+.bar-in{max-width:1040px;margin:0 auto;padding:12px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:1rem;margin-right:auto}
+.brand svg{flex:none}
+.badge{display:inline-flex;align-items:center;gap:7px;font-size:0.8125rem;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:4px 11px 4px 9px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.badge.on .dot{background:var(--ok)}
+.badge.off{color:var(--danger);border-color:var(--danger)}
+.badge.off .dot{background:var(--danger)}
+.badge.slow{color:var(--warn-ink);border-color:var(--warn-ink)}
+.badge.slow .dot{background:var(--warn-ink)}
+.refresh{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;
+  border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font:500 0.875rem/1 var(--font);cursor:pointer}
+.refresh:hover{background:var(--sunken)}
+.refresh[aria-busy=true] svg{animation:spin 0.9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.refresh[aria-busy=true] svg{animation:none}}
+@media (forced-colors:active){.refresh{border-color:ButtonText}}
+nav.tabs{max-width:1040px;margin:0 auto;padding:0 20px;display:flex;flex-wrap:wrap;gap:4px}
+@media (max-width:480px){nav.tabs{padding:0 12px;gap:0}nav.tabs button{padding-left:9px;padding-right:9px}}
+nav.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;
+  font-weight:500;color:var(--muted);cursor:pointer;min-height:44px}
+nav.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--primary)}
+
+main{max-width:1040px;margin:0 auto;padding:20px 20px 56px}
+.view[hidden]{display:none}
+.grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px}
+.panel{min-width:0;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-panel);padding:20px}
+.panel h2{font-size:0.875rem;font-weight:600;color:var(--muted);margin:0 0 14px}
+@media (max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Status */
+.status-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:0.8125rem;font-weight:600;border-radius:999px;
+  padding:3px 10px;background:var(--sunken);color:var(--muted)}
+.chip.run{background:var(--primary-soft);color:var(--primary-ink)}
+.chip.attn{background:var(--warn-soft);color:var(--warn-ink)}
+#stepText{font-size:0.8125rem;color:var(--muted)}
+#headline{font-size:1.75rem;line-height:1.2;font-weight:650;letter-spacing:-.01em;margin:8px 0 4px;text-wrap:balance}
+#timing{color:var(--muted);margin:0 0 18px;min-height:1.5em}
+.alert{display:flex;gap:10px;background:var(--warn-soft);color:var(--warn-ink);border-radius:var(--r-ctl);
+  padding:10px 12px;margin:0 0 16px;font-size:0.875rem}
+.alert[hidden]{display:none}
+ol.steps[hidden],#timing[hidden]{display:none}
+ol.steps{list-style:none;margin:0 0 22px;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;counter-reset:s}
+ol.steps li{counter-increment:s;font-size:0.8125rem;color:var(--muted);padding-top:10px;border-top:4px solid var(--line-strong);
+  display:flex;gap:6px;align-items:baseline}
+ol.steps li::before{content:counter(s);font-weight:600;color:var(--muted)}
+ol.steps li.done{border-color:var(--primary)}
+ol.steps li.done::before{content:"\2713";color:var(--primary-ink)}
+ol.steps li.on{border-color:var(--primary);color:var(--ink);font-weight:600}
+ol.steps li.on::before{color:var(--primary-ink)}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 18px;
+  border-radius:var(--r-ctl);border:1px solid var(--line-strong);background:var(--surface);font-weight:600;cursor:pointer}
+.btn:hover:not(:disabled):not([aria-disabled=true]){background:var(--sunken)}
+.btn:disabled,.btn.primary:disabled,.btn.danger:disabled,.btn[aria-disabled=true],.btn.primary[aria-disabled=true],.btn.danger[aria-disabled=true]{background:var(--sunken);border-color:var(--line);color:var(--faint);opacity:1;cursor:not-allowed}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.btn.primary:hover:not(:disabled):not([aria-disabled=true]){background:var(--primary-hover)}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.danger:hover:not(:disabled):not([aria-disabled=true]){background:var(--danger-hover)}
+@media (prefers-color-scheme:dark){.btn.danger{color:#2A0D0A}}
+.btn svg{flex:none}
+#ctlHint{font-size:0.8125rem;color:var(--muted);margin:10px 0 0;min-height:1.4em}
+
+/* Tank */
+.tank{display:flex;flex-direction:column;align-items:center;text-align:center}
+.tank svg{width:150px;height:auto;display:block}
+#water{transition:y .8s ease,height .8s ease}
+.spray{opacity:0}
+.spray.on{opacity:1;animation:drip 1.2s linear infinite}
+@keyframes drip{from{transform:translateY(-6px)}to{transform:translateY(10px);opacity:0}}
+@media (prefers-reduced-motion:reduce){#water{transition:none}.spray.on{animation:none}}
+dl.facts{width:100%;margin:16px 0 0;display:grid;grid-template-columns:auto 1fr;gap:8px 12px;text-align:left;font-size:0.875rem}
+dl.facts dt{color:var(--muted)}
+dl.facts dd{margin:0;text-align:right;font-weight:500}
+@media (max-width:760px){.tank{flex-direction:row;gap:18px;text-align:left}.tank svg{width:96px}dl.facts{margin:0}}
+
+.tank-actions{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.tank-actions .btn{width:100%}
+.btn.outline-danger{color:var(--danger);border-color:var(--danger)}
+.btn.outline-danger:hover:not(:disabled):not([aria-disabled=true]){background:var(--danger-soft)}
+.hint{font-size:0.8125rem;color:var(--muted);margin:8px 0 0;min-height:1.4em}
+
+/* Ready state */
+#ready[hidden],.last[hidden],.last-empty[hidden],.notes p[hidden],.notes[hidden],#sharePct[hidden]{display:none}
+#readyText{margin:0 0 18px;color:var(--muted)}
+#readyText.warn{color:var(--warn-ink)}
+.last{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 22px;padding:14px 0 0;border-top:1px solid var(--line)}
+.last div{min-width:0}
+.last dt{font-size:0.8125rem;color:var(--muted)}
+.last dd{margin:2px 0 0;font-weight:600;font-variant-numeric:tabular-nums}
+.last dd.good{color:var(--primary)}
+.last-empty{margin:0 0 22px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:0.875rem}
+@media (max-width:760px){.last{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Impact */
+.impact-lead{margin:0 0 14px;font-size:1.25rem;line-height:1.35;font-weight:500;max-width:40ch;text-wrap:balance}
+.impact-lead b{display:block;font-size:2.75rem;line-height:1.05;font-weight:700;color:var(--primary);letter-spacing:-.02em;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.split{display:flex;gap:2px;height:12px;border-radius:999px;overflow:hidden;background:var(--sunken);margin:0 0 10px}
+.split i{display:block;height:100%;transition:width .6s ease}
+.split .tank{background:var(--primary)}
+.split .tap{background:var(--line-strong)}
+@media (prefers-reduced-motion:reduce){.split i{transition:none}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:0.875rem;color:var(--muted);margin:0 0 18px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.sw.tank{background:var(--primary)}.sw.tap{background:var(--line-strong)}
+.notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding-top:14px;border-top:1px solid var(--line)}
+.notes p{margin:0;font-size:0.875rem;color:var(--muted)}
+.notes p strong{display:block;color:var(--ink);font-weight:600;font-size:0.9375rem;margin-bottom:2px}
+@media (max-width:760px){.notes{grid-template-columns:1fr;gap:12px}.impact-lead{font-size:1.125rem}.impact-lead b{font-size:2.375rem}}
+
+/* Water use and Service tabs */
+#view-water>section:first-child .last,#view-water>section:first-child .last-empty{margin:0;padding-top:0;border-top:0}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.svc-note{margin:0 0 16px;color:var(--muted);font-size:0.875rem}
+.svc-foot{margin:12px 0 0;color:var(--muted);font-size:0.8125rem}
+table.svc td:not(:first-child),table.svc th:not(:first-child){text-align:left}
+.svc-facts{margin:0}
+.state-on{font-weight:600;color:var(--primary-ink)}
+
+.restore{border-color:var(--primary);background:var(--primary-soft);margin-bottom:16px}
+.restore p{margin:0 0 14px}
+.backup-text{margin:0 0 14px;color:var(--muted);font-size:0.875rem}
+.backup-text:last-child{margin:14px 0 0}
+
+.intr{border-color:var(--warn-ink);background:var(--warn-soft);margin-bottom:16px}
+.intr h2{color:var(--warn-ink)}
+.intr p{margin:0 0 14px}
+ol.events{list-style:none;margin:0;padding:0;font-size:0.875rem;max-height:22rem;overflow-y:auto}
+ol.events li{display:grid;grid-template-columns:8.5rem minmax(0,1fr);gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}
+ol.events time{color:var(--muted);font-variant-numeric:tabular-nums}
+.topic-tools{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.topic-tools p{margin:0}
+select{width:100%;font:inherit;padding:10px 12px;border:0;background:none;color:var(--ink)}
+.pw-row{display:grid;gap:6px;margin:0 0 14px;font-weight:500}
+.pw-row input{font:inherit;padding:10px 12px;border:1px solid var(--line-strong);border-radius:var(--r-ctl);background:var(--surface);color:var(--ink)}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-panel);padding:14px 16px}
+.kpi>span{display:block;font-size:0.8125rem;color:var(--muted)}
+.kpi b{display:block;font-size:1.5rem;font-weight:650;margin-top:2px}
+.kpi small{font-size:0.8125rem;color:var(--muted);font-weight:500;margin-left:3px}
+.kpi.accent b{color:var(--primary)}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kpi b{font-size:1.25rem}}
+
+/* Table */
+.wide{margin-top:16px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:11px 0 11px 16px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;padding-left:0;white-space:normal}
+thead th{font-size:0.8125rem;font-weight:500;color:var(--muted)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.hl td:not(:first-child){color:var(--primary);font-weight:650}
+
+/* Device */
+dl.device{margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+dl.device div{min-width:0}
+dl.device dt{font-size:0.8125rem;color:var(--muted)}
+dl.device dd{margin:2px 0 0;font-weight:500;overflow:hidden;text-overflow:ellipsis}
+
+.bars{display:inline-flex;gap:2px;align-items:flex-end;height:12px;margin-right:6px;vertical-align:-1px}
+.bars i{width:3px;background:var(--line-strong);border-radius:1px}
+.bars i.on{background:var(--ink)}
+
+/* Settings */
+.settings{display:grid;gap:16px}
+fieldset{border:1px solid var(--line);border-radius:var(--r-panel);background:var(--surface);padding:0 20px 8px;margin:0;min-width:0}
+legend{float:left;width:100%;font-weight:600;font-size:0.9375rem;padding:16px 0 4px;margin:0}
+legend+*{clear:both}
+.field{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:16px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.field:last-child{border-bottom:0}
+.field.wide-in{grid-template-columns:minmax(0,1fr) minmax(0,320px)}
+.field span{font-weight:500}
+.field small{display:block;color:var(--muted);font-size:0.8125rem;font-weight:400;margin-top:2px}
+.inp{display:flex;align-items:center;border:1px solid var(--line-strong);border-radius:var(--r-ctl);background:var(--surface);overflow:hidden}
+.inp:focus-within{outline:3px solid var(--primary);outline-offset:1px}
+.inp input{flex:1;min-width:0;border:0;background:none;padding:10px 12px;outline:none}
+.inp em{font-style:normal;color:var(--muted);font-size:0.8125rem;padding:0 12px;border-left:1px solid var(--line);align-self:stretch;display:flex;align-items:center;background:var(--sunken)}
+.switch{justify-self:end;position:relative;width:46px;height:28px}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.switch i{position:absolute;inset:0;border-radius:999px;background:var(--line-strong);transition:background .15s}
+.switch i::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch input:checked+i{background:var(--primary)}
+.switch input:checked+i::after{transform:translateX(18px)}
+.switch input:focus-visible+i{outline:3px solid var(--primary);outline-offset:2px}
+@media (max-width:760px){.field,.field.wide-in{grid-template-columns:1fr;gap:8px}.switch{justify-self:start}}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.actions .spacer{flex:1}
+
+/* Dialog and toast */
+dialog{border:1px solid var(--line);border-radius:var(--r-panel);padding:22px;max-width:420px;width:calc(100% - 32px);
+  background:var(--surface);color:var(--ink);box-shadow:0 18px 48px rgba(8,24,22,.28)}
+dialog::backdrop{background:rgba(8,20,19,.45)}
+dialog h3{margin:0 0 8px;font-size:1.125rem}
+dialog p{margin:0 0 18px;color:var(--muted)}
+dialog .actions{justify-content:flex-end}
+#toast{display:flex;align-items:center;position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0));transform:translateX(-50%);
+  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:var(--r-ctl);font-size:0.875rem;max-width:calc(100% - 32px);
+  opacity:0;pointer-events:none;transition:opacity .2s}
+#toast:empty{display:none}
+#toast.show{opacity:1}
+#toast.err{background:var(--danger);color:#fff}
+footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;color:var(--muted)}
+@media (forced-colors:active){
+  nav.tabs button{border-bottom-style:none;padding-bottom:12px}
+  nav.tabs button[aria-selected=true]{border-bottom:2px solid Highlight;padding-bottom:10px}
+  .btn:disabled,.btn[aria-disabled=true],.btn.primary[aria-disabled=true],.btn.danger[aria-disabled=true],.btn.outline-danger[aria-disabled=true]{color:GrayText;border-color:GrayText}
+  ol.steps li{border-top-color:GrayText}
+  ol.steps li.done,ol.steps li.on{border-top-color:Highlight}
+  .split,.sw,.dot,.bars i{forced-color-adjust:none}
+  .chip{border:1px solid CanvasText}
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <h1 class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect width="26" height="26" rx="7" fill="var(--primary)"/><path d="M13 5.5c3.2 4 5 6.9 5 9.3a5 5 0 0 1-10 0c0-2.4 1.8-5.3 5-9.3z" fill="var(--on-primary)"/></svg>
+      Grey Water Controller
+    </h1>
+    <span class="badge" id="conn"><span class="dot"></span><span id="connText">Connecting</span></span>
+    <button type="button" class="refresh" id="btnRefresh" aria-describedby="connText">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span id="refreshText">Refresh</span>
+    </button>
+  </div>
+  <div id="announce" class="sr-only" aria-live="polite"></div>
+  <div id="announceAlert" class="sr-only" role="alert"></div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true" tabindex="0">Overview</button>
+    <button role="tab" id="tab-water" aria-controls="view-water" aria-selected="false" tabindex="-1">Water use</button>
+    <button role="tab" id="tab-service" aria-controls="view-service" aria-selected="false" tabindex="-1">Service</button>
+    <button role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Settings</button>
+  </nav>
+</header>
+
+<main>
+  <div class="view" id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
+    <section class="panel intr" id="intrPanel" aria-labelledby="h-intr" hidden>
+      <h2 id="h-intr">The last cycle was interrupted</h2>
+      <p id="intrText"></p>
+      <div class="actions"><button type="button" class="btn" id="btnIntrOk">OK, I checked the machine</button></div>
+    </section>
+    <div class="grid">
+      <section class="panel" aria-labelledby="headline">
+        <div class="status-top">
+          <span class="chip" id="chip">Ready</span>
+          <span id="stepText"></span>
+        </div>
+        <h2 id="headline">Ready for the next wash</h2>
+        <p id="timing" class="num"></p>
+        <div id="ready" hidden>
+          <p id="readyText"></p>
+        </div>
+        <p class="alert" id="stuck" hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3zm0 6v6m0 3v.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          <span>No water flow detected for a long time. Check the flow sensors and that the washing machine program is running.</span>
+        </p>
+        <ol class="steps" id="steps" aria-label="Cycle progress">
+          <li>Wash<span class="sr-only"></span></li><li>Soapy drain<span class="sr-only"></span></li><li>Rinse<span class="sr-only"></span></li><li>Save<span class="sr-only"></span></li>
+        </ol>
+        <div class="controls">
+          <button class="btn primary" id="btnStart" type="button" aria-describedby="ctlHint">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+            <span>Start cycle</span>
+          </button>
+          <button class="btn danger" id="btnStop" type="button" aria-describedby="ctlHint">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
+            <span>Stop cycle</span>
+          </button>
+        </div>
+        <p id="ctlHint"></p>
+      </section>
+
+      <section class="panel" aria-label="Storage tank">
+        <h2>Storage tank</h2>
+        <div class="tank">
+          <svg viewBox="0 0 168 196" aria-hidden="true" focusable="false">
+            <defs><clipPath id="tankClip"><rect x="16" y="24" width="136" height="160" rx="14"/></clipPath></defs>
+            <rect x="16" y="24" width="136" height="160" rx="14" fill="var(--sunken)"/>
+            <g clip-path="url(#tankClip)"><rect id="water" x="16" y="166" width="136" height="18" fill="var(--water)" opacity=".85"/></g>
+            <rect x="16" y="24" width="136" height="160" rx="14" fill="none" stroke="var(--ink)" stroke-width="2.5"/>
+            <line x1="152" y1="70" x2="162" y2="70" stroke="var(--muted)" stroke-width="2"/>
+            <line x1="152" y1="140" x2="162" y2="140" stroke="var(--muted)" stroke-width="2"/>
+            <rect x="70" y="8" width="28" height="16" rx="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>
+            <g id="spray" class="spray" fill="var(--water)"><circle cx="76" cy="36" r="3"/><circle cx="84" cy="42" r="3"/><circle cx="92" cy="36" r="3"/></g>
+          </svg>
+          <dl class="facts">
+            <dt>Level</dt><dd id="tankLevel">—</dd>
+            <dt>Water age</dt><dd id="tankAge" class="num">—</dd>
+            <dt>Wash valve</dt><dd id="washState">Closed</dd>
+          </dl>
+        </div>
+        <div class="tank-actions">
+          <button class="btn" id="btnWash" type="button" aria-describedby="washHint">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5c2.6 3.2 4 5.5 4 7.4a4 4 0 0 1-8 0c0-1.9 1.4-4.2 4-7.4z" fill="currentColor"/></svg>
+            <span>Wash tank</span>
+          </button>
+          <p class="hint" id="washHint"></p>
+        </div>
+      </section>
+    </div>
+
+
+
+
+  </div>
+
+  <div class="view" id="view-water" role="tabpanel" aria-labelledby="tab-water" hidden>
+    <section class="panel restore" id="restorePanel" aria-labelledby="h-restore" hidden>
+      <h2 id="h-restore">Water history saved on this phone</h2>
+      <p id="restoreText"></p>
+      <div class="actions"><button type="button" class="btn primary" id="btnRestore">Restore to controller</button></div>
+    </section>
+    <section class="panel" aria-labelledby="h-last">
+      <h2 id="h-last">Last wash</h2>
+            <dl class="last lastwash" id="lastWash" hidden>
+              <div><dt id="lastWhenLabel">Last wash</dt><dd id="lastWhen">—</dd></div>
+              <div><dt>Took</dt><dd id="lastTook">—</dd></div>
+              <div><dt>Tank water reused</dt><dd id="lastReused" class="good">—</dd></div>
+              <div><dt>Saved to the tank</dt><dd id="lastSaved" class="good">—</dd></div>
+            </dl>
+            <p class="last-empty lastwash" id="lastEmpty" hidden>No washes recorded yet. The first one will appear here.</p>
+    </section>
+
+    <section class="panel wide" aria-labelledby="impactTitle">
+      <h2 id="impactTitle">This month</h2>
+      <p class="impact-lead" id="impactLead"><b id="sharePct">—</b><span id="shareText">Waiting for data from the controller</span></p>
+      <div id="impactBars">
+        <div class="split" aria-hidden="true"><i class="tank" id="splitTank" style="width:0"></i><i class="tap" id="splitTap" style="width:0"></i></div>
+        <div class="legend">
+          <span><i class="sw tank"></i>Tank water <b id="legTank">0 L</b></span>
+          <span><i class="sw tap"></i>Tap water <b id="legTap">0 L</b></span>
+        </div>
+      </div>
+      <div class="notes">
+        <p id="noteTrend"></p>
+        <p id="noteWashes"></p>
+        <p id="noteAll"></p>
+      </div>
+    </section>
+
+    <div class="kpis">
+      <div class="kpi"><span>Washes this month</span><b class="num"><span id="kCycles">0</span></b></div>
+      <div class="kpi accent"><span>Tank water reused this month</span><b class="num"><span id="kReused">0</span><small>L</small></b></div>
+      <div class="kpi accent"><span>Saved to the tank this month</span><b class="num"><span id="kSaved">0</span><small>L</small></b></div>
+      <div class="kpi"><span>Tap water used this month</span><b class="num"><span id="kTap">0</span><small>L</small></b></div>
+    </div>
+
+    <section class="panel wide" aria-labelledby="h-saved">
+      <h2 id="h-saved">By period</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Measure</th><th scope="col">This cycle</th><th scope="col">This month</th><th scope="col">All time</th></tr></thead>
+          <tbody>
+            <tr class="hl"><td>Tank water reused</td><td id="cR">0 L</td><td id="mR">0 L</td><td id="tR">0 L</td></tr>
+            <tr class="hl"><td>Rinse water saved to the tank</td><td id="cS">0 L</td><td id="mS">0 L</td><td id="tS">0 L</td></tr>
+            <tr><td>Tap water used</td><td id="cT">0 L</td><td id="mT">0 L</td><td id="tT">0 L</td></tr>
+            <tr><td>Completed cycles</td><td>—</td><td id="mC">0</td><td id="tC">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel wide" aria-labelledby="h-backup">
+      <h2 id="h-backup">Backup</h2>
+      <p class="backup-text" id="backupText">This phone keeps a copy of the water history and updates it automatically.</p>
+      <div class="actions">
+        <button type="button" class="btn" id="btnDownload">Download history file</button>
+        <button type="button" class="btn" id="btnUpload">Restore from file</button>
+        <input type="file" id="fileHistory" accept=".json,application/json" hidden>
+      </div>
+      <p class="backup-text">The file keeps the history safe even if the controller is replaced or its memory is fully erased.</p>
+    </section>
+  </div>
+
+  <div class="view" id="view-service" role="tabpanel" aria-labelledby="tab-service" hidden>
+    <p class="svc-note">For installers and service technicians. Live readings, refreshed every 2 seconds.</p>
+    <div class="grid2">
+      <section class="panel" aria-labelledby="h-flow">
+        <h2 id="h-flow">Flow sensors</h2>
+        <div class="table-wrap"><table class="svc">
+          <thead><tr><th scope="col">Sensor</th><th scope="col">Rate</th><th scope="col">State</th><th scope="col">Pulses</th></tr></thead>
+          <tbody>
+            <tr><td>Tap (D2)</td><td id="sTapRate">—</td><td id="sTapState">—</td><td id="sTapPulses">—</td></tr>
+            <tr><td>Drain (D3)</td><td id="sDrainRate">—</td><td id="sDrainState">—</td><td id="sDrainPulses">—</td></tr>
+          </tbody>
+        </table></div>
+        <p class="svc-foot" id="sFlowNote">—</p>
+      </section>
+      <section class="panel" aria-labelledby="h-outputs">
+        <h2 id="h-outputs">Valves and pump</h2>
+        <div class="table-wrap"><table class="svc">
+          <thead><tr><th scope="col">Output</th><th scope="col">Pin</th><th scope="col">State</th></tr></thead>
+          <tbody>
+            <tr><td>Tap valve</td><td>D6</td><td id="oTap">—</td></tr>
+            <tr><td>Drain valve</td><td>D4</td><td id="oDrain">—</td></tr>
+            <tr><td>Fill valve (to tank)</td><td>D5</td><td id="oFill">—</td></tr>
+            <tr><td>Tank pump</td><td>D7</td><td id="oPump">—</td></tr>
+            <tr><td>Tank-wash valve</td><td>D0</td><td id="oWash">—</td></tr>
+          </tbody>
+        </table></div>
+        <p class="svc-foot" id="outNote">States as set by the controller.</p>
+      </section>
+      <section class="panel" aria-labelledby="h-level">
+        <h2 id="h-level">Tank level switches</h2>
+        <dl class="facts svc-facts">
+          <dt>Low switch (D9)</dt><dd id="lvLow">—</dd>
+          <dt>High switch (D8)</dt><dd id="lvHigh">—</dd>
+          <dt>Tank level</dt><dd id="lvLevel">—</dd>
+        </dl>
+      </section>
+      <section class="panel" aria-labelledby="h-step">
+        <h2 id="h-step">Current step</h2>
+        <dl class="facts svc-facts">
+          <dt>Step</dt><dd id="stStep">—</dd>
+          <dt>Running for</dt><dd id="stTime" class="num">—</dd>
+          <dt>Water taken in this fill</dt><dd id="stFill" class="num">—</dd>
+          <dt>Machine filled (guard)</dt><dd id="stGuard">—</dd>
+          <dt>Flow threshold / minimum fill</dt><dd id="stLimits" class="num">—</dd>
+        </dl>
+      </section>
+    </div>
+    <section class="panel wide" aria-labelledby="h-device">
+      <h2 id="h-device">Controller</h2>
+      <dl class="device">
+        <div><dt>Wi-Fi signal</dt><dd id="dSignal">—</dd></div>
+        <div><dt>IP address</dt><dd id="dIp" class="num">—</dd></div>
+        <div><dt>Running for</dt><dd id="dUptime" class="num">—</dd></div>
+        <div><dt>Phone alerts</dt><dd id="dAlerts">—</dd></div>
+        <div><dt>Firmware</dt><dd id="dFw" class="num">—</dd></div>
+        <div><dt>Water history</dt><dd id="dHistory">—</dd></div>
+        <div><dt>Last restart</dt><dd id="dBoot">—</dd></div>
+        <div><dt>Wireless updates</dt><dd id="dUpdates">—</dd></div>
+        <div><dt>Last alert</dt><dd id="dLastAlert">—</dd></div>
+        <div><dt>Screen</dt><dd id="dScreen">—</dd></div>
+        <div><dt>Slowest loop pass</dt><dd id="dLoop" class="num">—</dd></div>
+        <div><dt>Memory</dt><dd id="dHeap" class="num">—</dd></div>
+      </dl>
+    </section>
+    <section class="panel wide" aria-labelledby="h-events">
+      <h2 id="h-events">Recent events</h2>
+      <ol class="events" id="eventList"><li>Loading…</li></ol>
+      <p class="svc-foot">The last 50 events since the controller started. Times are the controller’s clock.</p>
+    </section>
+  </div>
+
+  <div class="view" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+    <form id="settingsForm" class="settings" novalidate>
+      <fieldset>
+        <legend>Language</legend>
+        <div class="field"><span><label for="f-language">Language</label><small id="h-language">For this app, the controller screen and phone alerts</small></span>
+          <span class="inp"><select id="f-language" name="language" aria-describedby="h-language"><option value="es" lang="es">Español</option><option value="en" lang="en">English</option></select></span></div>
+      </fieldset>
+      <fieldset>
+        <legend>Tank wash</legend>
+        <div class="field"><span><label for="f-washPeriodS">Wash interval</label><small id="h-washPeriodS">Time between valve openings during the tank-water fill (in seconds)</small></span>
+          <span class="inp"><input id="f-washPeriodS" aria-describedby="h-washPeriodS e-washPeriodS" type="number" name="washPeriodS" min="1" max="600" step="0.25" required><em aria-hidden="true">s</em></span><p class="ferr" id="e-washPeriodS" hidden></p></div>
+        <div class="field"><span><label for="f-washOpenS">Valve open time</label><small id="h-washOpenS">Per opening; must be shorter than the interval (in seconds)</small></span>
+          <span class="inp"><input id="f-washOpenS" aria-describedby="h-washOpenS e-washOpenS" type="number" name="washOpenS" min="0.25" max="599" step="0.25" required><em aria-hidden="true">s</em></span><p class="ferr" id="e-washOpenS" hidden></p></div>
+        <div class="field"><span><label for="f-manualWashMaxMin">Manual wash time limit</label><small id="h-manualWashMaxMin">The Wash tank button closes the valve when the tank is full, or after this time at the latest (in minutes)</small></span>
+          <span class="inp"><input id="f-manualWashMaxMin" aria-describedby="h-manualWashMaxMin e-manualWashMaxMin" type="number" name="manualWashMaxMin" min="1" max="30" step="1" required><em aria-hidden="true">min</em></span><p class="ferr" id="e-manualWashMaxMin" hidden></p></div>
+      </fieldset>
+      <fieldset>
+        <legend>Cycle</legend>
+        <div class="field"><span><label for="f-drain2Min">Final drain length</label><small id="h-drain2Min">Duration of step 4 before the cycle ends (in minutes)</small></span>
+          <span class="inp"><input id="f-drain2Min" aria-describedby="h-drain2Min e-drain2Min" type="number" name="drain2Min" min="1" max="120" step="1" required><em aria-hidden="true">min</em></span><p class="ferr" id="e-drain2Min" hidden></p></div>
+        <div class="field"><span><label for="f-edgeS">Flow detection time</label><small id="h-edgeS">How long water must flow before it counts (in seconds)</small></span>
+          <span class="inp"><input id="f-edgeS" aria-describedby="h-edgeS e-edgeS" type="number" name="edgeS" min="1" max="30" step="0.5" required><em aria-hidden="true">s</em></span><p class="ferr" id="e-edgeS" hidden></p></div>
+        <div class="field"><span><label for="f-flowOnLpm">Flow threshold</label><small id="h-flowOnLpm">Water counts as flowing above this rate and as stopped below it; raise it if noise or a trickle confuses the steps (in litres per minute)</small></span>
+          <span class="inp"><input id="f-flowOnLpm" aria-describedby="h-flowOnLpm e-flowOnLpm" type="number" name="flowOnLpm" min="0.2" max="10" step="0.1" required><em aria-hidden="true">L/min</em></span><p class="ferr" id="e-flowOnLpm" hidden></p></div>
+        <div class="field"><span><label for="f-minFillLitres">Minimum fill</label><small id="h-minFillLitres">Water the machine must take before a drain can end a fill step; stops an early drain or a splash from skipping the wash (in litres)</small></span>
+          <span class="inp"><input id="f-minFillLitres" aria-describedby="h-minFillLitres e-minFillLitres" type="number" name="minFillLitres" min="0.5" max="50" step="0.5" required><em aria-hidden="true">L</em></span><p class="ferr" id="e-minFillLitres" hidden></p></div>
+        <div class="field"><span><label for="f-allowRemoteStart">Start from the dashboard</label><small id="h-allowRemoteStart">Shows a confirmation before every start</small></span>
+          <span class="switch"><input type="checkbox" id="f-allowRemoteStart" aria-describedby="h-allowRemoteStart" name="allowRemoteStart" role="switch"><i></i></span></div>
+        <div class="field"><span><label for="f-buzzerOn">Buzzer</label><small id="h-buzzerOn">Beeps when a cycle ends and on alarms; needs a buzzer wired to D12</small></span>
+          <span class="switch"><input type="checkbox" id="f-buzzerOn" aria-describedby="h-buzzerOn" name="buzzerOn" role="switch"><i></i></span></div>
+      </fieldset>
+      <fieldset>
+        <legend>Alerts</legend>
+        <div class="field"><span><label for="f-stepAlertMin">Step time limit</label><small id="h-stepAlertMin">Alert when step 1, 2 or 3 waits longer for water flow (in minutes)</small></span>
+          <span class="inp"><input id="f-stepAlertMin" aria-describedby="h-stepAlertMin e-stepAlertMin" type="number" name="stepAlertMin" min="10" max="600" step="5" required><em aria-hidden="true">min</em></span><p class="ferr" id="e-stepAlertMin" hidden></p></div>
+        <div class="field"><span><label for="f-tankMaxAgeH">Tank water age limit</label><small id="h-tankMaxAgeH">Alert when stored water is older than this (in hours)</small></span>
+          <span class="inp"><input id="f-tankMaxAgeH" aria-describedby="h-tankMaxAgeH e-tankMaxAgeH" type="number" name="tankMaxAgeH" min="1" max="240" step="1" required><em aria-hidden="true">h</em></span><p class="ferr" id="e-tankMaxAgeH" hidden></p></div>
+        <div class="field wide-in"><span><label for="f-ntfyServer">Alert server</label><small id="h-ntfyServer">Usually https://ntfy.sh</small></span>
+          <span class="inp"><input id="f-ntfyServer" aria-describedby="h-ntfyServer e-ntfyServer" type="text" name="ntfyServer" maxlength="63" autocomplete="off" spellcheck="false"></span><p class="ferr" id="e-ntfyServer" hidden></p></div>
+        <div class="field wide-in"><span><label for="f-ntfyTopic">Alert topic</label><small id="h-ntfyTopic">Subscribe to the same topic in the ntfy app. Leave empty to turn alerts off. Use a long, hard-to-guess name.</small></span>
+          <span class="inp"><input id="f-ntfyTopic" aria-describedby="h-ntfyTopic e-ntfyTopic" type="text" name="ntfyTopic" maxlength="63" autocomplete="off" spellcheck="false"></span><p class="ferr" id="e-ntfyTopic" hidden></p>
+          <div class="topic-tools"><button type="button" class="btn" id="btnTopic">Create a private topic</button>
+            <p id="topicHelp" class="svc-foot"></p></div></div>
+      </fieldset>
+      <fieldset>
+        <legend>Clock</legend>
+        <div class="field wide-in"><span><label for="f-tzSel">Time zone</label><small id="h-tzSel">Used for the monthly figures, the water age and the clock</small></span>
+          <span class="inp"><select id="f-tzSel" aria-describedby="h-tzSel"><option value="UTC0">UTC (no time zone)</option><option value="&lt;-03&gt;3">UTC−3: Buenos Aires, São Paulo, Montevideo</option><option value="&lt;-04&gt;4&lt;-03&gt;,M9.1.6/24,M4.1.6/24">UTC−4/−3: Santiago (with daylight saving)</option><option value="&lt;-04&gt;4">UTC−4: Caracas, La Paz, Santo Domingo</option><option value="&lt;-05&gt;5">UTC−5: Bogotá, Lima, Quito, Panama</option><option value="EST5EDT,M3.2.0,M11.1.0">UTC−5/−4: New York, Toronto (with daylight saving)</option><option value="&lt;-06&gt;6">UTC−6: Mexico City, Guatemala, San José</option><option value="CST6CDT,M3.2.0,M11.1.0">UTC−6/−5: Chicago (with daylight saving)</option><option value="MST7MDT,M3.2.0,M11.1.0">UTC−7/−6: Denver (with daylight saving)</option><option value="MST7">UTC−7: Phoenix</option><option value="PST8PDT,M3.2.0,M11.1.0">UTC−8/−7: Los Angeles, Vancouver (with daylight saving)</option><option value="GMT0BST,M3.5.0/1,M10.5.0">UTC+0/+1: London, Dublin, Lisbon (with daylight saving)</option><option value="CET-1CEST,M3.5.0,M10.5.0/3">UTC+1/+2: Madrid, Paris, Berlin, Rome (with daylight saving)</option><option value="EET-2EEST,M3.5.0/3,M10.5.0/4">UTC+2/+3: Athens, Helsinki (with daylight saving)</option><option value="&lt;+04&gt;-4">UTC+4: Dubai</option><option value="IST-5:30">UTC+5:30: India</option><option value="&lt;+07&gt;-7">UTC+7: Bangkok, Jakarta</option><option value="&lt;+08&gt;-8">UTC+8: Singapore, Beijing, Perth</option><option value="JST-9">UTC+9: Tokyo, Seoul</option><option value="AEST-10AEDT,M10.1.0,M4.1.0/3">UTC+10/+11: Sydney, Melbourne (with daylight saving)</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">UTC+12/+13: Auckland (with daylight saving)</option><option value="custom">Other (enter it below)</option></select></span></div>
+        <div class="field wide-in" id="tzCustomRow" hidden><span><label for="f-timeZone">Time zone code</label><small id="h-timeZone">POSIX format, for example &lt;-05&gt;5 for UTC−5</small></span>
+          <span class="inp"><input id="f-timeZone" aria-describedby="h-timeZone e-timeZone" type="text" name="timeZone" maxlength="47" autocomplete="off" spellcheck="false"></span><p class="ferr" id="e-timeZone" hidden></p></div>
+      </fieldset>
+      <fieldset>
+        <legend>Security</legend>
+        <div class="field wide-in"><span><label for="f-webPassword">New dashboard password</label><small id="h-webPassword">8 to 32 characters. Leave empty to keep the current password.</small></span>
+          <span class="inp"><input id="f-webPassword" aria-describedby="h-webPassword e-webPassword" type="password" name="webPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-webPassword" hidden></p></div>
+        <div class="field wide-in"><span><label for="f-otaPassword">New firmware update password</label><small id="h-otaPassword">8 to 32 characters. Leave empty to keep the current password. Takes effect at once.</small></span>
+          <span class="inp"><input id="f-otaPassword" aria-describedby="h-otaPassword e-otaPassword" type="password" name="otaPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-otaPassword" hidden></p></div>
+      </fieldset>
+      <div class="actions">
+        <button type="submit" class="btn primary" id="btnSave">Save settings</button>
+        <button type="button" class="btn" id="btnTest">Send test alert</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="btnRestart">Restart controller</button>
+      </div>
+    </form>
+  </div>
+  <div id="toast"></div>
+</main>
+<footer id="foot"></footer>
+
+<dialog id="pwDlg" aria-labelledby="pwTitle">
+  <h3 id="pwTitle">Choose new passwords</h3>
+  <p>The controller still uses the default password, which anyone on your Wi-Fi could guess. Choose two new passwords of 8 to 32 characters. Your browser will then ask you to sign in again with the new dashboard password.</p>
+  <form id="pwForm" novalidate>
+    <label class="pw-row" for="pwWeb">New dashboard password<input type="password" id="pwWeb" autocomplete="new-password" maxlength="32"></label>
+    <label class="pw-row" for="pwOta">New firmware update password<input type="password" id="pwOta" autocomplete="new-password" maxlength="32"></label>
+    <p class="ferr" id="pwErr" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn danger" id="pwStop" hidden>Stop cycle</button>
+      <span class="spacer"></span>
+      <button type="submit" class="btn primary">Save passwords</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <h3 id="dlgTitle"></h3>
+  <p id="dlgBody"></p>
+  <div class="actions">
+    <button type="button" class="btn" id="dlgCancel">Cancel</button>
+    <button type="button" class="btn primary" id="dlgOk"></button>
+  </div>
+</dialog>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var last=null,failures=0,formLoaded=false,pending=null,pendingWash=false,toastTimer=null,offline=false,connShown='';
+  // Actions are reported as done only when the controller's status shows them (3.0).
+  var pendingSince=0,washSince=0,alertWait=null,CONFIRM_MS=10000,ALERT_WAIT_MS=75000;
+
+  // ── Language (3.1) ──
+  // The controller's setting decides (status "lang"); this phone remembers the
+  // last one so the page does not flash English first. English is the source
+  // text; ES holds the Spanish (Colombia, usted). Static page text is
+  // translated by walking the page; texts set by the script go through t().
+  var LANG='es';
+  try{var sl=localStorage.getItem('greywater-lang');if(sl==='en'||sl==='es')LANG=sl;}catch(e){}
+  function locale(){return LANG==='es'?'es-CO':undefined}
+  function t(str){
+    var r=(LANG==='es'&&ES.hasOwnProperty(str))?ES[str]:str;
+    for(var i=1;i<arguments.length;i++)r=r.split('{'+(i-1)+'}').join(arguments[i]);
+    return r;
+  }
+  function strong(el,head,rest){var b=document.createElement('strong');b.textContent=head;el.appendChild(b);el.appendChild(document.createTextNode(rest));}
+  var ATTRS=['aria-label','title','placeholder'];
+  function translatePage(){
+    document.documentElement.lang=LANG;
+    if(!document.__enTitle)document.__enTitle=document.title;
+    document.title=t(document.__enTitle);
+    var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null),n;
+    while((n=w.nextNode())){
+      var p=n.parentNode&&n.parentNode.nodeName;if(p==='SCRIPT'||p==='STYLE')continue;
+      if(n.__en===undefined){var k=n.nodeValue.trim();if(!k||!ES.hasOwnProperty(k))continue;n.__en=n.nodeValue;}
+      var raw=n.__en,key=raw.trim();n.nodeValue=raw.replace(key,t(key));
+    }
+    document.querySelectorAll('['+ATTRS.join('],[')+']').forEach(function(el){
+      ATTRS.forEach(function(a){
+        if(!el.hasAttribute(a))return;
+        var en=el['__en_'+a];if(en===undefined){en=el.getAttribute(a);if(!ES.hasOwnProperty(en))return;el['__en_'+a]=en;}
+        el.setAttribute(a,t(en));
+      });
+    });
+  }
+  function setLang(l){
+    l=(l==='en')?'en':'es';
+    if(l===LANG&&document.__translated)return;
+    LANG=l;document.__translated=true;
+    try{localStorage.setItem('greywater-lang',l)}catch(e){}
+    translatePage();
+    if(last){var s=last;s.lang=l;last=null;render(s);}   // redraw in the new language; the next status confirms it
+  }
+  var ES=/*ES-DICTIONARY*/{};
+  var LEVEL={low:{y:166,h:18,t:'Low'},medium:{y:104,h:80,t:'Half full'},high:{y:36,h:148,t:'Full'}};
+
+  function litres(v){return v>=100?Math.round(v).toLocaleString():v.toFixed(1)}
+  function clock(s){var m=Math.floor(s/60),r=s%60;return m+':'+(r<10?'0':'')+r}
+  function uptime(s){var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);
+    return d?t('{0} d {1} h',d,h):(h?t('{0} h {1} min',h,m):t('{0} min',m))}
+  // Screen-reader announcements: one polite region and one alert region,
+  // written only when something changes (never on every poll).
+  function announce(text,urgent){
+    var el=$(urgent?'announceAlert':'announce');el.textContent='';
+    setTimeout(function(){el.textContent=text},50);
+  }
+  // Visible message. Successes fade after 4 s; errors stay until dismissed.
+  function toast(msg,err){
+    var el=$('toast');clearTimeout(toastTimer);el.textContent='';
+    el.appendChild(document.createTextNode(msg));
+    if(err){var b=document.createElement('button');b.type='button';b.className='dismiss';b.textContent=t('Dismiss');
+      b.onclick=function(){el.className='';el.textContent=''};el.appendChild(b);}
+    el.className='show'+(err?' err':'');
+    announce(msg,err);
+    if(!err)toastTimer=setTimeout(function(){el.className='';el.textContent=''},4000);
+  }
+  // aria-disabled keeps the button focusable and its reason readable (A8, A13).
+  function setDis(el,on){el.setAttribute('aria-disabled',on?'true':'false')}
+  function isDis(el){return el.getAttribute('aria-disabled')==='true'}
+  // Every request gives up after a few seconds, so one stalled request (weak
+  // Wi-Fi, busy controller) can never freeze the page.
+  function api(path,opts){
+    opts=opts||{};opts.headers=Object.assign({'X-GW':'1'},opts.headers||{});opts.cache='no-store';
+    var ctrl=opts.controller||new AbortController(),timer=setTimeout(function(){ctrl.abort()},opts.timeoutMs||8000);
+    opts.signal=ctrl.signal;delete opts.controller;delete opts.timeoutMs;
+    return fetch(path,opts).then(function(r){
+      return r.json().catch(function(){return {}}).then(function(j){if(!r.ok)throw new Error(j.error?t(j.error):t('Request failed ({0})',r.status));return j});
+    },function(e){
+      if(e&&e.name==='AbortError')throw new Error(t('The controller took too long to answer. Try Refresh.'));
+      throw new Error(t('Can\u2019t reach the controller. Check that this device is on the home Wi-Fi.'));
+    }).finally(function(){clearTimeout(timer)});
+  }
+  function ask(title,body,ok){
+    return new Promise(function(res){
+      var d=$('dlg');
+      if(typeof d.showModal!=='function'){res(window.confirm(title+'\n\n'+body));return;}
+      $('dlgTitle').textContent=title;$('dlgBody').textContent=body;$('dlgOk').textContent=ok;
+      function done(v){d.close();$('dlgOk').onclick=$('dlgCancel').onclick=null;res(v)}
+      $('dlgOk').onclick=function(){done(true)};$('dlgCancel').onclick=function(){done(false)};
+      d.oncancel=function(){res(false)};
+      d.showModal();$('dlgCancel').focus();
+    });
+  }
+
+  function setControls(s){
+    var idle=s.state===0, start=$('btnStart'), stop=$('btnStop'), hint='';
+    setDis(start,!idle||!s.allowRemoteStart||pending!==null);
+    setDis(stop,idle||pending!==null);
+    start.querySelector('span').textContent=pending==='start'?t('Starting…'):t('Start cycle');
+    stop.querySelector('span').textContent=pending==='stop'?t('Stopping…'):t('Stop cycle');
+    if(idle&&!s.allowRemoteStart)hint='Starting from the dashboard is turned off in Settings. Use the START button on the controller.';
+    else if(idle&&s.manualWash)hint='Starting a cycle ends the tank wash first.';
+    else if(idle)hint='Start the washing machine program first, then start the cycle here or on the controller.';
+    else hint='Stop ends the cycle at once and returns the controller to Ready. Start is available when the controller is Ready.';
+    hint=t(hint);if(idle&&!s.manualWash)hint+=' '+t('Stop is available while a cycle runs.');
+    $('ctlHint').textContent=hint;
+  }
+
+  var WASH_END={full:['Tank full: wash valve closed',false],timeout:['Time limit reached: check the high-level switch',true],
+    stopped:['Tank wash stopped',false],cycle:['Tank wash ended because a cycle started',false]};
+
+  function setWash(s){
+    var b=$('btnWash'),label=b.querySelector('span'),hint='';
+    if(s.manualWash){
+      b.className='btn outline-danger';label.textContent=pendingWash?t('Stopping…'):t('Stop washing');setDis(b,pendingWash);
+      hint='Closes automatically when the high-level switch reports full.';
+    }else{
+      b.className='btn';label.textContent=pendingWash?t('Starting…'):t('Wash tank');
+      setDis(b,pendingWash||s.state!==0||s.tank==='high');
+      if(s.state!==0)hint='Available when no cycle is running.';
+      else if(s.tank==='high')hint='The tank is full.';
+      else hint=t('Opens the wash valve until the tank is full, for up to {0} min.',s.manualWashMaxMin);
+    }
+    $('washHint').textContent=t(hint);
+  }
+
+  function monthName(key){
+    if(!key)return '';
+    return new Date(Math.floor(key/100),key%100-1,1).toLocaleString(locale(),{month:'long'});
+  }
+  function ago(sec){
+    if(sec<60)return t('just now');
+    if(sec<3600){var m=Math.round(sec/60);return t('{0} min ago',m);}
+    if(sec<86400){var h=Math.round(sec/3600);return t('{0} h ago',h);}
+    var d=Math.round(sec/86400);return d===1?t('yesterday'):t('{0} days ago',d);
+  }
+  function dur(sec){
+    var m=Math.round(sec/60);
+    return m<60?t('{0} min',m):t('{0} h {1} min',Math.floor(m/60),m%60);
+  }
+  function share(m){var f=m.reused+m.tap;return f>0?m.reused/f:null}
+
+  function renderReady(s){
+    var r=$('readyText');r.className='';
+    if(s.tankFault){r.className='warn';
+      r.textContent=t('The tank\u2019s level switches disagree: the high switch reports water, the low switch does not. The next wash will use tap water and no water will be saved until both switches are checked.');}
+    else if(s.tank==='low')r.textContent=t('The tank is empty, so the next wash will use tap water.');
+    else if(s.tankAgeH>=s.tankMaxAgeH){r.className='warn';
+      r.textContent=t('The tank water is {0} h old. Use it on the next wash, or empty and clean the tank.',Math.round(s.tankAgeH));}
+    else if(s.tankAgeH>=0)r.textContent=s.tankAgeH<1?t('The tank has water ready for the next wash, stored for under an hour.'):
+      t('The tank has water ready for the next wash, stored for {0} h.',Math.round(s.tankAgeH));
+    else r.textContent=t('The tank has water ready for the next wash.');
+  }
+
+  function renderLastWash(s){
+    var L=s.last;
+    $('lastWash').hidden=!L.valid;$('lastEmpty').hidden=L.valid;
+    if(L.valid){
+      $('lastWhenLabel').textContent=L.completed?t('Last wash'):t('Last wash, stopped');
+      $('lastWhen').textContent=L.agoS>=0?ago(L.agoS):t('Before the last restart');
+      $('lastTook').textContent=dur(L.durationS);
+      $('lastReused').textContent=litres(L.reused)+' L';
+      $('lastSaved').textContent=litres(L.saved)+' L';
+    }
+  }
+
+  function renderImpact(s){
+    var m=s.month,p=s.prevMonth,sh=share(m),psh=share(p),name=monthName(m.key);
+    $('impactTitle').textContent=name?t('This month, {0}',name):t('This month');
+    var bars=$('impactBars');
+    var tot=s.total,anyEver=(tot.tap+tot.reused)>0;
+    $('sharePct').hidden=(sh===null);
+    if(sh===null){
+      $('shareText').textContent=!anyEver?t('Your water savings will appear here after the first wash.'):
+        (psh!==null?t('No washes yet this month. In {0}, {1}% of the fill water came from the tank.',monthName(p.key),Math.round(psh*100)):t('No washes yet this month.'));
+      bars.hidden=true;
+    }else{
+      bars.hidden=false;
+      $('sharePct').textContent=Math.round(sh*100)+'%';
+      $('shareText').textContent=t('of the water used to fill the washing machine came from the tank');
+      $('splitTank').style.width=(sh*100)+'%';$('splitTap').style.width=((1-sh)*100)+'%';
+      $('legTank').textContent=litres(m.reused)+' L';$('legTap').textContent=litres(m.tap)+' L';
+    }
+    var tr=$('noteTrend'),wn=$('noteWashes'),al=$('noteAll');
+    // Trend against the previous month with data
+    tr.hidden=(sh===null||psh===null);
+    if(!tr.hidden){
+      var a=Math.round(sh*100),b=Math.round(psh*100),pm=monthName(p.key);
+      tr.textContent='';strong(tr,a>b?t('Better than {0}',pm):a<b?t('Lower than {0}',pm):t('Same as {0}',pm),t('{0}% of the fill water came from the tank then',b));
+    }
+    // Litres translated into washes, using this controller's own average fill
+    var avg=tot.cycles>0?(tot.tap+tot.reused)/tot.cycles:0;
+    wn.hidden=(sh===null||m.reused<=0);
+    if(!wn.hidden){
+      if(avg>=5){
+        var n=Math.round(m.reused/avg);
+        wn.textContent='';strong(wn,m.reused/avg<0.75?t('Less than one wash'):(n===1?t('About 1 wash'):t('About {0} washes',n)),t('worth of fill water came from the tank, not the tap'));
+      }else{
+        wn.textContent='';strong(wn,m.cycles===1?t('1 wash'):t('{0} washes',m.cycles),t('completed this month'));
+      }
+    }
+    al.hidden=!anyEver;
+    tr.parentNode.hidden=(tr.hidden&&wn.hidden&&al.hidden);
+    if(anyEver){al.textContent='';strong(al,t('{0} L reused',litres(tot.reused)),t('since installation, and {0} L saved to the tank',litres(tot.saved)));}
+  }
+
+  function announceChanges(s){
+    if(!last)return;
+    if(s.state!==last.state){
+      if(s.state>=2)announce(t('Step {0} of 4, {1}: {2}',s.state-1,t(STEP_NAMES[s.state]),plain(s.message)));
+      else if(s.state===1)announce(t('Cycle starting'));
+      else if(last.state>=1)announce(s.last&&s.last.valid&&!s.last.completed?t('Cycle stopped'):t('Cycle complete'));
+    }
+    if(s.stuck&&!last.stuck)announce(t('Warning: no water flow detected for a long time. Check the flow sensors.'),true);
+  }
+
+  // ── Water history backup ──
+  // Each phone keeps a copy of the controller's water history in its browser
+  // storage. If the controller ever comes back without history (a full flash
+  // erase or a replaced board), the Water use tab keeps showing this copy and
+  // offers to restore it. A downloaded file protects it beyond this phone.
+  var BKEY='greywater-history',backupKey='',backupBusy=false;
+  var HFIELDS=['totalTap','totalReused','totalSaved','totalCycles','monthKey','monthTap','monthReused','monthSaved','monthCycles',
+    'prevMonthKey','prevMonthTap','prevMonthReused','prevMonthSaved','prevMonthCycles','lastEndEpoch','lastDurationS',
+    'lastTap','lastReused','lastSaved','lastCompleted','lastValid'];
+  function readBackup(){try{var b=JSON.parse(localStorage.getItem(BKEY));return b&&b.format==='greywater-history'?b:null}catch(e){return null}}
+  function writeBackup(h){try{h.savedAt=Date.now();localStorage.setItem(BKEY,JSON.stringify(h))}catch(e){}}
+  function score(h){return h?(h.totalCycles*1000+h.totalTap+h.totalReused+h.totalSaved):-1}
+  function hasHistory(h){return !!h&&(h.totalCycles>0||h.totalTap+h.totalReused+h.totalSaved>0.5||h.lastValid)}
+  function dateText(ms){return new Date(ms).toLocaleString(locale(),{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+
+  // Keep the phone copy current: fetch the full history only when it changed.
+  function syncBackup(s){
+    var b=readBackup();
+    $('backupText').textContent=b?t('This phone keeps a copy of the water history and updates it automatically. Last copied {0}.',dateText(b.savedAt)):
+      t('This phone keeps a copy of the water history and updates it automatically.');
+    var empty=s.history&&!s.history.hasData;
+    $('restorePanel').hidden=!(empty&&hasHistory(b));
+    if(empty&&hasHistory(b)){
+      $('restoreText').textContent=t('The controller has no water history, for example after its memory was erased. This phone has a copy from {0}: {1} washes and {2} L of tank water reused. The Water use figures below are from that copy.',
+        dateText(b.savedAt),b.totalCycles,litres(b.totalReused));
+    }
+    if(empty||backupBusy)return;
+    var key=[s.total.cycles,s.total.tap.toFixed(1),s.total.reused.toFixed(1),s.total.saved.toFixed(1),s.last.valid,s.month.key].join('|');
+    if(key===backupKey&&b)return;
+    backupBusy=true;
+    api('/api/history').then(function(h){
+      var cur=readBackup();
+      // Never replace a fuller copy with less, unless the controller's last wash is newer.
+      if(!cur||score(h)>=score(cur)-0.5||h.lastEndEpoch>(cur.lastEndEpoch||0))writeBackup(h);
+      backupKey=key;
+    }).catch(function(){}).finally(function(){backupBusy=false});
+  }
+
+  // Water use figures from this phone's copy when the controller has none.
+  function waterSource(s){
+    var b=readBackup();
+    if(!(s.history&&!s.history.hasData&&hasHistory(b)))return s;
+    var now=Date.now()/1000;
+    return {cycle:{tap:0,reused:0,saved:0},
+      month:{key:b.monthKey,tap:b.monthTap,reused:b.monthReused,saved:b.monthSaved,cycles:b.monthCycles},
+      prevMonth:{key:b.prevMonthKey,tap:b.prevMonthTap,reused:b.prevMonthReused,saved:b.prevMonthSaved,cycles:b.prevMonthCycles},
+      total:{tap:b.totalTap,reused:b.totalReused,saved:b.totalSaved,cycles:b.totalCycles},
+      last:{valid:!!b.lastValid,completed:!!b.lastCompleted,durationS:b.lastDurationS,tap:b.lastTap,reused:b.lastReused,saved:b.lastSaved,
+            agoS:b.lastEndEpoch?Math.max(0,Math.round(now-b.lastEndEpoch)):-1}};
+  }
+
+  function restoreHistory(h,force){
+    var body=new URLSearchParams();
+    HFIELDS.forEach(function(k){body.append(k,h[k]===undefined?0:h[k])});
+    for(var i=0;i<3;i++){body.append('stepAvg'+i,(h.stepAvgS||[])[i]||0);body.append('stepN'+i,(h.stepSamples||[])[i]||0);}
+    if(force)body.append('force','1');
+    return api('/api/history/restore',{method:'POST',body:body}).then(function(){backupKey='';toast(t('Water history restored to the controller'))});
+  }
+
+  // Same words as the controller's screen, so the household sees one vocabulary.
+  var STEP_NAMES=['Ready','Starting','Wash','Soapy drain','Rinse','Save'];
+  var PLAIN={'Using tank water':'Reusing water from the tank','Using tap water':'Using tap water',
+    'Tank low: using tap water':'Tank low, so using tap water','Draining soapy water':'Draining soapy water (not saved)',
+    'Saving water to tank':'Saving rinse water to the tank','Tank full: not saving':'Tank full, so rinse water goes to the drain',
+    'The machine is washing':'The machine is washing','The machine is rinsing':'The machine is rinsing',
+    'Waiting for the machine to take water':'Waiting for the machine to fill','Rinsing with tap water':'Rinsing with tap water',
+    'No flow seen: check sensors':'No water flow detected'};
+  function plain(m){return PLAIN[m]?t(PLAIN[m]):m}
+
+  // Service tab. Valve and pump states (except the tank-wash valve, which the
+  // controller reports) follow the relay table for the current step and the
+  // fill source shown in the status message.
+  function expectedOutputs(s){
+    var m=s.message||'',o={tap:true,drain:true,fill:false,pump:false};
+    if(s.state===2&&!s.manualWash){
+      if(s.stuck){o.tap=null;o.pump=null;}
+      else if(m==='Using tank water'){o.tap=false;o.pump=true;}
+    }
+    if(s.state===5&&m.indexOf('Saving')===0){o.drain=false;o.fill=true;}
+    return o;
+  }
+  function onOff(el,v){el.textContent=v===null?t('Unknown'):(v?t('On'):t('Off'));el.className=v?'state-on':'';}
+  function renderService(s){
+    var se=s.sensors||{};
+    $('sTapRate').textContent=s.tapLpm.toFixed(1)+' L/min';$('sDrainRate').textContent=s.drainLpm.toFixed(1)+' L/min';
+    $('sTapState').textContent=se.tapFlowing?t('Flowing'):t('No flow');$('sDrainState').textContent=se.drainFlowing?t('Flowing'):t('No flow');
+    $('sTapPulses').textContent=(se.tapPulses||0).toLocaleString(locale());$('sDrainPulses').textContent=(se.drainPulses||0).toLocaleString(locale());
+    $('sFlowNote').textContent=t('Pulses that keep counting while no water flows mean electrical noise on that sensor wire.');
+    var o=expectedOutputs(s);
+    if(typeof s.outputs==='number'){            // real states reported by the controller (2.9)
+      o={tap:!!(s.outputs&1),drain:!!(s.outputs&2),fill:!!(s.outputs&4),pump:!!(s.outputs&8)};
+      $('outNote').textContent=t('States as set by the controller.');
+    }else $('outNote').textContent=t('Tank-wash valve: read from the controller. The others: expected for the current step.');
+    onOff($('oTap'),o.tap);onOff($('oDrain'),o.drain);onOff($('oFill'),o.fill);onOff($('oPump'),o.pump);onOff($('oWash'),!!s.wash);
+    $('lvLow').textContent=(s.tank==='low'||s.tankFault)?t('Dry'):t('Wet');
+    $('lvHigh').textContent=s.tank==='high'?t('Wet'):t('Dry');
+    $('lvLevel').textContent=s.tankFault?t('Switches disagree: treated as full, pump not used'):t((LEVEL[s.tank]||LEVEL.low).t);
+    var stepNo=s.state>=2?s.state-1:0;
+    $('stStep').textContent=s.manualWash?t('Manual tank wash'):(stepNo?t('Step {0} of 4: {1}',stepNo,t(STEP_NAMES[s.state])):t(STEP_NAMES[s.state]));
+    $('stTime').textContent=stepNo?clock(s.stepElapsedS):'—';
+    var inFill=s.fill&&(s.state===2||s.state===4);
+    $('stFill').textContent=inFill?(s.fill.litres.toFixed(1)+' L'):t('Not in a fill step');
+    $('stGuard').textContent=inFill?(s.fill.complete?t('Yes: waiting for a drain to start'):t('Not yet')):'—';
+    $('stLimits').textContent=(se.flowOnLpm!==undefined?se.flowOnLpm.toFixed(1):'—')+' L/min / '+(s.fill?s.fill.minLitres:'—')+' L';
+  }
+
+  // "Usually about 25 min": this machine's typical time for steps 1-3.
+  function typicalText(s,stepNo){
+    var v=(s.typicalS||[])[stepNo-1];
+    if(!v||stepNo>3)return '';
+    var m=Math.max(1,Math.round(v/60));
+    return '. '+t('Usually about {0}',m<60?t('{0} min',m):t('{0} h {1} min',Math.floor(m/60),m%60));
+  }
+
+  // A cycle cut short by a power cut, a crash or a watchdog restart.
+  function renderInterrupted(s){
+    var i=s.interrupted||{};
+    $('intrPanel').hidden=!i.active;
+    if(i.active){
+      var when=i.epoch?(' '+t('at {0}',new Date(i.epoch*1000).toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'}))):'';
+      $('intrText').textContent=t('It stopped')+when+(i.step?' '+t('during step {0} of 4, {1}',i.step,t(STEP_NAMES[i.step+1])):'')+
+        ' ('+(s.boot||t('restart'))+'). '+t('The controller is back to Ready. Check the washing machine: it may still be running, or may still hold water. Start a new cycle if needed.');
+    }
+  }
+
+  // Service tab: event log, fetched every 5 s while the tab is open.
+  var eventsAt=0;
+  function renderEvents(){
+    if($('view-service').hidden||Date.now()-eventsAt<5000)return;
+    eventsAt=Date.now();
+    api('/api/events',{timeoutMs:5000}).then(function(list){
+      var ol=$('eventList');ol.textContent='';
+      if(!list.length){var e=document.createElement('li');e.textContent=t('No events yet.');ol.appendChild(e);return;}
+      list.forEach(function(ev){
+        var li=document.createElement('li'),tm=document.createElement('time'),tx=document.createElement('span');
+        tm.textContent=ev.epoch?new Date(ev.epoch*1000).toLocaleString(locale(),{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}):
+          (ev.uptimeS<60?t('At start-up'):t('{0} after start-up',uptime(ev.uptimeS)));
+        tx.textContent=ev.text;li.appendChild(tm);li.appendChild(tx);ol.appendChild(li);
+      });
+    }).catch(function(){});
+  }
+
+  // Default passwords: ask for new ones once per visit.
+  var pwAsked=false;
+  function checkPasswords(s){
+    if(!s.defaultPasswords||pwAsked)return;
+    var d=$('pwDlg');if(typeof d.showModal!=='function')return;
+    pwAsked=true;$('pwStop').hidden=(s.state===0);
+    d.oncancel=function(e){e.preventDefault()};
+    d.showModal();$('pwWeb').focus();
+  }
+
+  function render(s){
+    if(s.lang)setLang(s.lang);
+    announceChanges(s);
+    if(last&&last.manualWash&&!s.manualWash){var r=WASH_END[s.manualWashResult];if(r)toast(t(r[0]),r[1]);}
+    if(last&&last.manualWash!==s.manualWash){if(pendingWash&&s.manualWash)toast(t('Tank wash started'));pendingWash=false;}
+    last=s;
+    var stepNo=s.state>=2?s.state-1:0, chip=$('chip');
+    if(s.stuck){chip.className='chip attn';chip.textContent=t('Needs attention');}
+    else if(s.manualWash){chip.className='chip run';chip.textContent=t('Cleaning tank');}
+    else if(s.state===0){chip.className='chip';chip.textContent=t('Ready');}
+    else{chip.className='chip run';chip.textContent=t('Running');}
+    $('stepText').textContent=stepNo?t('Step {0} of 4: {1}',stepNo,t(STEP_NAMES[s.state])):(s.state===1?t('Starting'):'');
+    var isReady=s.state===0&&!s.manualWash;
+    $('headline').textContent=s.manualWash?t('Cleaning the tank'):(s.state===0?t('Ready for the next wash'):(s.state===1?t('Starting the cycle'):plain(s.message)));
+    $('ready').hidden=!isReady;
+    $('steps').hidden=isReady;
+    $('timing').hidden=isReady;
+    if(isReady)renderReady(s);
+    $('stuck').hidden=!s.stuck;
+    var li=$('steps').children;
+    for(var i=0;i<4;i++){
+      var st=stepNo>i+1?'done':(stepNo===i+1?'on':'');
+      li[i].className=st;
+      if(st==='on')li[i].setAttribute('aria-current','step');else li[i].removeAttribute('aria-current');
+      li[i].lastChild.textContent=st==='done'?t(', completed'):(st==='on'?t(', current step'):'');
+    }
+    $('timing').textContent=s.manualWash?t('Stops when the tank is full, or in {0} at the latest',clock(s.manualWashLeftS)):
+      (s.state===5?t('{0} left in the final drain',clock(s.drain2LeftS)):(stepNo?(t('Step running for {0}',clock(s.stepElapsedS))+typicalText(s,stepNo)):''));
+    if(pending&&((pending==='start'&&s.state!==0)||(pending==='stop'&&s.state===0))){
+      toast(pending==='start'?t('Cycle started'):t('Cycle stopped'));pending=null;}
+    setControls(s);
+    setWash(s);
+
+    var L=LEVEL[s.tank]||LEVEL.low, w=$('water');
+    w.setAttribute('y',L.y);w.setAttribute('height',L.h);
+    $('tankLevel').textContent=s.tankFault?t('Check float switches'):t(L.t);
+    $('tankAge').textContent=s.tankAgeH<0?t('Empty'):(s.tankAgeH<1?t('Under 1 h'):Math.round(s.tankAgeH)+' h')+(s.tankAgeH>=s.tankMaxAgeH?' '+t('(over limit)'):'');
+    $('washState').textContent=s.wash?t('Open'):t('Closed');
+    $('spray').setAttribute('class','spray'+(s.wash?' on':''));
+
+    renderService(s);
+    // Water use: from the controller, or from this phone's copy if the controller has none.
+    var w=waterSource(s);
+    renderLastWash(w);
+    $('kCycles').textContent=w.month.cycles;$('kSaved').textContent=litres(w.month.saved);
+    $('kReused').textContent=litres(w.month.reused);$('kTap').textContent=litres(w.month.tap);
+    renderImpact(w);
+    [['cR',w.cycle.reused],['cS',w.cycle.saved],['cT',w.cycle.tap],['mR',w.month.reused],['mS',w.month.saved],['mT',w.month.tap],
+     ['tR',w.total.reused],['tS',w.total.saved],['tT',w.total.tap]].forEach(function(p){$(p[0]).textContent=litres(p[1])+' L'});
+    $('mC').textContent=w.month.cycles;$('tC').textContent=w.total.cycles;
+    $('dHistory').textContent=s.history?t(s.history.source):'—';
+    $('dBoot').textContent=s.boot||'—';
+    $('dUpdates').textContent=s.updatesAllowed===undefined?'—':(s.updatesAllowed?t('Allowed now'):t('Blocked while a cycle or tank wash runs'));
+    renderInterrupted(s);renderEvents();checkPasswords(s);
+    if(alertWait&&s.alert&&s.alert.seq>alertWait.seq){
+      toast(s.alert.ok?t('Test alert delivered. Check your phone.'):t('Test alert failed ({0}). Check the alert server and topic.',alertCodeText(s.alert.code)),!s.alert.ok);
+      alertWait=null;
+    }
+    $('dScreen').textContent=s.screen===false?t('Not found: check its wiring'):t('Working');
+    if(s.loop)$('dLoop').textContent=t('{0} ms (last minute: {1} ms)',s.loop.maxMs,s.loop.lastMinMaxMs);
+    if(s.heap)$('dHeap').textContent=t('{0} KB free (lowest {1} KB)',Math.round(s.heap.free/1024),Math.round(s.heap.min/1024));
+    $('dLastAlert').textContent=!s.alert||!s.alert.seq?t('None since start-up'):(s.alert.ok?t('Delivered'):t('Failed: {0}',alertCodeText(s.alert.code)));
+    syncBackup(s);
+
+    var q=s.wifi.rssi>=-55?4:s.wifi.rssi>=-65?3:s.wifi.rssi>=-75?2:1, bars='<span class="bars" aria-hidden="true">';
+    for(var b=1;b<=4;b++)bars+='<i class="'+(b<=q?'on':'')+'" style="height:'+(b*3)+'px"></i>';
+    $('dSignal').innerHTML=bars+'</span>'+s.wifi.rssi+' dBm';
+    $('dIp').textContent=s.wifi.ip;$('dUptime').textContent=uptime(s.uptimeS);
+    $('dAlerts').textContent=s.alerts?t('On'):t('Off');$('dFw').textContent=s.fw;
+
+    if(offline){offline=false;announce(t('Connected to the controller again'));}
+    $('conn').className='badge on';
+    var ct=t('Online')+(s.time?', '+s.time.slice(11):'');
+    if(ct!==connShown){connShown=ct;$('connText').textContent=ct;}
+    $('foot').textContent=t('Updated {0}',new Date().toLocaleTimeString(locale()));
+  }
+
+  // Status updates every 2 s. Refresh cancels a request that is still waiting
+  // and asks again at once.
+  var pollTimer=null,pollCtrl=null,lastOk=0,manualRefresh=false;
+  function setRefreshing(on){
+    var b=$('btnRefresh');b.setAttribute('aria-busy',on?'true':'false');$('refreshText').textContent=on?t('Refreshing\u2026'):t('Refresh');
+  }
+  function poll(){
+    clearTimeout(pollTimer);
+    if(pollCtrl)pollCtrl.abort();
+    var ctrl=new AbortController(),manual=manualRefresh;pollCtrl=ctrl;manualRefresh=false;
+    api('/api/status',{controller:ctrl,timeoutMs:5000}).then(function(s){
+      if(pollCtrl!==ctrl)return;
+      failures=0;lastOk=Date.now();render(s);
+      if(manual)announce(t('Screen updated'));
+    }).catch(function(e){
+      if(pollCtrl!==ctrl)return;                      // replaced by a newer request
+      if(manual)toast(e.message,true);
+      if(++failures>=2&&!offline){offline=true;$('conn').className='badge off';connShown='Offline';$('connText').textContent=t('Offline');
+        announce(t('Connection to the controller lost'),true);
+        $('foot').textContent=t('Can\u2019t reach the controller. Check that this device is on the home Wi-Fi.');}
+    }).finally(function(){
+      if(pollCtrl!==ctrl)return;
+      pollCtrl=null;setRefreshing(false);pollTimer=setTimeout(poll,2000);
+    });
+  }
+  $('btnRefresh').addEventListener('click',function(){
+    manualRefresh=true;setRefreshing(true);poll();
+  });
+  // Show when updates are late, so people know when Refresh helps.
+  function alertCodeText(c){return c===-2?t('no Wi-Fi'):c===-3?t('bad server address'):c<0?t('could not connect'):t('server answered {0}',c)}
+  setInterval(function(){
+    var now=Date.now();
+    if(pending&&now-pendingSince>CONFIRM_MS){
+      toast(pending==='start'?t('The controller has not confirmed the start. Check its screen, then try again.'):
+        t('The controller has not confirmed the stop. Press STOP on the controller.'),true);
+      pending=null;if(last)setControls(last);
+    }
+    if(pendingWash&&now-washSince>CONFIRM_MS){
+      toast(t('The controller has not confirmed the tank wash change. Check its screen.'),true);pendingWash=false;if(last)setWash(last);
+    }
+    if(alertWait&&now-alertWait.since>ALERT_WAIT_MS){
+      toast(t('No answer from the alert server yet. Recent events on the Service tab will show the result.'),true);alertWait=null;
+    }
+    if(offline||!lastOk)return;
+    if(Date.now()-lastOk>6000&&connShown!=='Updating slowly'){
+      $('conn').className='badge slow';connShown='Updating slowly';$('connText').textContent=t('Updating slowly');
+    }
+  },1000);
+
+  $('btnStart').addEventListener('click',function(){
+    if(isDis(this))return;
+    ask(t('Start a wash cycle?'),t('Load the washing machine and start its program first. The controller follows the machine; it does not start it.'),t('Start cycle'))
+      .then(function(ok){
+        if(!ok)return;
+        pending='start';if(last)setControls(last);
+        pendingSince=Date.now();
+        api('/api/start',{method:'POST'}).then(function(){announce(t('Start sent, waiting for the controller'))})
+          .catch(function(e){pending=null;if(last)setControls(last);toast(e.message,true)});
+      });
+  });
+  $('btnStop').addEventListener('click',function(){
+    if(isDis(this))return;
+    pending='stop';pendingSince=Date.now();if(last)setControls(last);
+    api('/api/stop',{method:'POST'}).then(function(){announce(t('Stop sent, waiting for the controller'))})
+      .catch(function(e){pending=null;if(last)setControls(last);toast(e.message,true)});
+  });
+
+  $('btnRestore').addEventListener('click',function(){
+    var b=readBackup();if(!b)return;
+    restoreHistory(b,false).catch(function(e){toast(e.message,true)});
+  });
+  $('btnDownload').addEventListener('click',function(){
+    api('/api/history').catch(function(){return readBackup()}).then(function(h){
+      if(!hasHistory(h)){h=readBackup();}
+      if(!hasHistory(h)){toast(t('There is no water history to download yet.'),true);return;}
+      var a=document.createElement('a'),d=new Date();
+      a.href=URL.createObjectURL(new Blob([JSON.stringify(h,null,2)],{type:'application/json'}));
+      a.download='greywater-history-'+d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+'.json';
+      document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);
+      toast(t('History file downloaded'));
+    });
+  });
+  $('btnIntrOk').addEventListener('click',function(){
+    api('/api/interrupted/dismiss',{method:'POST'}).then(function(){$('intrPanel').hidden=true}).catch(function(e){toast(e.message,true)});
+  });
+  // Alerts: create a hard-to-guess topic and show how to subscribe.
+  function topicHelp(){
+    var tp=$('f-ntfyTopic').value.trim(),sv=($('f-ntfyServer').value.trim()||'https://ntfy.sh').replace(/\/$/,''),h=$('topicHelp');h.textContent='';
+    if(!tp){h.textContent=t('No topic: phone alerts are off.');return;}
+    var url=sv+'/'+encodeURIComponent(tp),a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=url;
+    h.appendChild(document.createTextNode(t('In the ntfy app, subscribe to this topic, or open')+' '));h.appendChild(a);
+    h.appendChild(document.createTextNode('. '+t('Save settings, then send a test alert.')));
+  }
+  $('btnTopic').addEventListener('click',function(){
+    var abc='abcdefghijkmnopqrstuvwxyz23456789',r=new Uint8Array(14),s='greywater-';
+    crypto.getRandomValues(r);for(var i=0;i<r.length;i++)s+=abc[r[i]%abc.length];
+    $('f-ntfyTopic').value=s;topicHelp();toast(t('Private topic created. Save settings to use it.'));
+  });
+  $('f-ntfyTopic').addEventListener('input',topicHelp);$('f-ntfyServer').addEventListener('input',topicHelp);
+  $('f-tzSel').addEventListener('change',function(){
+    var custom=this.value==='custom';$('tzCustomRow').hidden=!custom;
+    if(!custom)$('f-timeZone').value=this.value;else $('f-timeZone').focus();
+  });
+  // Password prompt
+  $('pwStop').addEventListener('click',function(){pending='stop';pendingSince=Date.now();
+    api('/api/stop',{method:'POST'}).catch(function(e){pending=null;toast(e.message,true)})});
+  $('pwForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var w=$('pwWeb').value,o=$('pwOta').value,err=$('pwErr'),bad='';
+    if(w.length<8||w.length>32||o.length<8||o.length>32)bad=t('Both passwords need 8 to 32 characters.');
+    else if(w==='greywater'||o==='greywater')bad=t('Choose passwords other than the default one.');
+    if(bad){err.textContent=bad;err.hidden=false;return;}
+    err.hidden=true;
+    var body=new URLSearchParams();body.append('webPassword',w);body.append('otaPassword',o);
+    api('/api/settings',{method:'POST',body:body}).then(function(){
+      $('pwDlg').close();toast(t('Passwords saved. Your browser will ask you to sign in with the new password.'));
+    }).catch(function(e2){err.textContent=e2.message;err.hidden=false;});
+  });
+  $('btnUpload').addEventListener('click',function(){$('fileHistory').click()});
+  $('fileHistory').addEventListener('change',function(){
+    var f=this.files&&this.files[0];this.value='';if(!f)return;
+    f.text().then(function(txt){
+      var h;try{h=JSON.parse(txt)}catch(e){h=null}
+      if(!h||h.format!=='greywater-history'||!hasHistory(h)){toast(t('That file is not a grey water history file.'),true);return;}
+      var replacing=last&&last.history&&last.history.hasData;
+      ask(t('Restore water history?'),(replacing?t('This replaces the history on the controller with the file\u2019s: {0} washes, {1} L of tank water reused.',h.totalCycles,litres(h.totalReused)):
+          t('The controller gets the history from the file: {0} washes, {1} L of tank water reused.',h.totalCycles,litres(h.totalReused)))+
+          (h.settings?' '+t('The settings saved in the file are restored too (not the passwords).'):''),t('Restore'))
+        .then(function(ok){
+          if(!ok)return;
+          restoreHistory(h,replacing).then(function(){
+            if(!h.settings)return;
+            var c=h.settings,b=new URLSearchParams();
+            ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','language']
+              .forEach(function(k){if(c[k]!==undefined)b.append(k,c[k])});
+            b.append('allowRemoteStart',c.allowRemoteStart?'1':'0');b.append('buzzerOn',c.buzzerOn?'1':'0');
+            return api('/api/settings',{method:'POST',body:b}).then(function(nc){fill(nc);toast(t('Water history and settings restored'))});
+          }).catch(function(e){toast(e.message,true)});
+        });
+    });
+  });
+
+  $('btnWash').addEventListener('click',function(){
+    if(!last||isDis(this))return;
+    var stopping=last.manualWash;
+    pendingWash=true;washSince=Date.now();setWash(last);
+    api(stopping?'/api/wash/stop':'/api/wash',{method:'POST'})
+      .catch(function(e){pendingWash=false;setWash(last);toast(e.message,true)});
+  });
+
+  var TABS=['overview','water','service','settings'];
+  function showTab(name,focus){
+    TABS.forEach(function(n){
+      var tb=$('tab-'+n);tb.setAttribute('aria-selected',n===name?'true':'false');
+      tb.setAttribute('tabindex',n===name?'0':'-1');$('view-'+n).hidden=(n!==name);
+    });
+    if(focus)$('tab-'+name).focus();
+    if(name==='settings'&&!formLoaded){api('/api/settings').then(function(c){fill(c);formLoaded=true}).catch(function(e){toast(e.message,true)});}
+  }
+  $('tab-overview').addEventListener('click',function(){showTab('overview')});
+  $('tab-water').addEventListener('click',function(){showTab('water')});
+  $('tab-service').addEventListener('click',function(){showTab('service')});
+  $('tab-settings').addEventListener('click',function(){showTab('settings')});
+  document.querySelector('[role=tablist]').addEventListener('keydown',function(e){
+    var i=TABS.indexOf(document.activeElement.id.replace('tab-','')),n=null;
+    if(i<0)return;
+    if(e.key==='ArrowRight')n=(i+1)%TABS.length;else if(e.key==='ArrowLeft')n=(i-1+TABS.length)%TABS.length;
+    else if(e.key==='Home')n=0;else if(e.key==='End')n=TABS.length-1;
+    if(n!==null){e.preventDefault();showTab(TABS[n],true);}
+  });
+
+  var form=$('settingsForm');
+  function fill(c){
+    form.washPeriodS.value=c.washPeriodS;form.washOpenS.value=c.washOpenS;form.drain2Min.value=c.drain2Min;
+    form.edgeS.value=c.edgeS;form.flowOnLpm.value=c.flowOnLpm;form.minFillLitres.value=c.minFillLitres;form.stepAlertMin.value=c.stepAlertMin;form.tankMaxAgeH.value=c.tankMaxAgeH;form.manualWashMaxMin.value=c.manualWashMaxMin;
+    form.allowRemoteStart.checked=!!c.allowRemoteStart;form.ntfyServer.value=c.ntfyServer;
+    form.ntfyTopic.value=c.ntfyTopic;form.timeZone.value=c.timeZone;form.buzzerOn.checked=!!c.buzzerOn;
+    form.language.value=c.language==='en'?'en':'es';setLang(form.language.value);
+    var sel=$('f-tzSel'),found=false;
+    for(var i=0;i<sel.options.length;i++)if(sel.options[i].value===c.timeZone){sel.selectedIndex=i;found=true;}
+    if(!found)sel.value='custom';$('tzCustomRow').hidden=found;topicHelp();form.webPassword.value='';form.otaPassword.value='';
+  }
+  function clearErrors(){
+    form.querySelectorAll('[aria-invalid]').forEach(function(i){i.removeAttribute('aria-invalid')});
+    form.querySelectorAll('.ferr').forEach(function(p){p.hidden=true;p.textContent=''});
+  }
+  function fieldError(name,msg){
+    var i=form[name];if(i.getAttribute('aria-invalid'))return;
+    i.setAttribute('aria-invalid','true');var p=$('e-'+name);p.textContent=msg;p.hidden=false;
+  }
+  form.addEventListener('input',function(e){
+    if(e.target.getAttribute('aria-invalid')){e.target.removeAttribute('aria-invalid');var p=$('e-'+e.target.name);if(p){p.hidden=true;p.textContent='';}}
+  });
+  form.addEventListener('submit',function(e){
+    e.preventDefault();
+    if(isDis($('btnSave')))return;
+    clearErrors();
+    form.querySelectorAll('input[type=number]').forEach(function(i){
+      if(i.value===''||!i.checkValidity())fieldError(i.name,t('Enter a number from {0} to {1}.',i.min,i.max));
+    });
+    if(Number(form.washOpenS.value)>=Number(form.washPeriodS.value))fieldError('washOpenS',t('Must be shorter than the wash interval.'));
+    ['webPassword','otaPassword'].forEach(function(n){var v=form[n].value;if(v&&(v.length<8||v.length>32))fieldError(n,t('Use 8 to 32 characters.'));});
+    var bad=form.querySelector('[aria-invalid=true]');
+    if(bad){var c=form.querySelectorAll('[aria-invalid=true]').length;
+      toast(c===1?t('One setting needs attention. Nothing was saved.'):t('Some settings need attention. Nothing was saved.'),true);bad.focus();return;}
+    var body=new URLSearchParams();
+    ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','webPassword','otaPassword','language']
+      .forEach(function(k){body.append(k,form[k].value)});
+    body.append('allowRemoteStart',form.allowRemoteStart.checked?'1':'0');
+    body.append('buzzerOn',form.buzzerOn.checked?'1':'0');
+    setDis($('btnSave'),true);
+    api('/api/settings',{method:'POST',body:body}).then(function(c){fill(c);toast(t('Settings saved'))})
+      .catch(function(e){toast(e.message,true)}).finally(function(){setDis($('btnSave'),false)});
+  });
+  $('btnTest').addEventListener('click',function(){
+    var seq=last&&last.alert?last.alert.seq:null;
+    api('/api/test-alert',{method:'POST'}).then(function(){
+      toast(t('Test alert handed to the controller. Waiting for the alert server\u2026'));
+      if(seq!==null)alertWait={seq:seq,since:Date.now()};
+    }).catch(function(e){toast(e.message,true)});
+  });
+  $('btnRestart').addEventListener('click',function(){
+    ask(t('Restart the controller?'),t('The dashboard reconnects in about 20 seconds. Restarting is only possible while no cycle is running.'),t('Restart')).then(function(ok){
+      if(!ok)return;
+      api('/api/restart',{method:'POST'}).then(function(){toast(t('Restarting'))}).catch(function(e){toast(e.message,true)});
+    });
+  });
+
+  setLang(LANG);
+  poll();
+})();
+</script>
+</body>
+</html>
