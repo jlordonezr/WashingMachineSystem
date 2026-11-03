@@ -375,5 +375,11 @@
  "Upgraded from an older firmware": "Actualizado desde un firmware anterior",
  "Restored from the app": "Restaurado desde la app",
  "Stored record unreadable (kept aside)": "Registro guardado ilegible (se conservó aparte)",
- "No history stored": "No hay historial guardado"
+ "No history stored": "No hay historial guardado",
+ "too many alerts, try again later": "demasiadas alertas, intente más tarde",
+ "the server refused the topic": "el servidor rechazó el tema",
+ "the server needs a login": "el servidor pide usuario y contraseña",
+ "Use only letters, numbers, - and _.": "Use solo letras, números, - y _.",
+ "Start with https:// or http://.": "Empiece por https:// o http://.",
+ "The alert topic may use only letters, numbers, - and _ (up to 63).": "El tema de alertas solo puede tener letras, números, - y _ (hasta 63)."
 }

@@ -2,6 +2,7 @@
 #include "GreyWaterSystem.h"
 #include "GreyWaterSettings.h"
 #include "DashboardPage.h"
+#include "Ntfy.h"
 
 #include <WiFi.h>
 #include <WiFiManager.h>
@@ -26,17 +27,20 @@ static unsigned long lastRetry = 0;
 // (the Wi-Fi core) sends it, so the wash cycle never waits for the network.
 // Alerts are published as JSON to the server's root URL (ntfy "publish as
 // JSON", from 3.1). JSON carries UTF-8, so Spanish titles with accents arrive
-// intact; HTTP headers (used up to 3.0) only carry plain ASCII.
+// intact; HTTP headers (used up to 3.0) only carry plain ASCII. The message
+// itself is built in Ntfy.h, which the PC tests check.
+//
+// From 3.3 an alert that gets no answer, a timeout, "too many requests" or
+// a server error is tried again (ALERT_ATTEMPTS in all), and an alert raised
+// while Wi-Fi is down waits up to ALERT_WIFI_WAIT_S for it to come back.
 struct NotifyItem {
-  char    url[136];      // server, e.g. https://ntfy.sh
+  char    url[72];       // server root, e.g. https://ntfy.sh/
   char    topic[64];
   char    title[80];
   char    body[360];
   char    tags[32];
   uint8_t priority;
 };
-
-static void jsonEscape(char* dst, size_t size, const char* src);
 
 // "Reuse Water: tank full" -> "tank full", for the event log.
 static const char* shortTitle(const char* t) {
@@ -50,18 +54,53 @@ static QueueHandle_t notifyQueue = nullptr;
 
 // Delivery results travel back to loop() through a second queue, because the
 // event log is only ever written from loop() (it has no lock).
-struct NotifyResult { char title[80]; int code; };   // code: HTTP status, or <0 = not sent
+struct NotifyResult { char title[80]; int code; uint8_t attempts; };   // code: HTTP status, or <0 = not sent
 static QueueHandle_t resultQueue = nullptr;
 static uint32_t alertSeq = 0;      // results received so far (the app watches it change)
 static int      alertLastCode = 0;
 static bool     alertLastOk = false;
 
-static void reportResult(const NotifyItem& item, int code) {
+static void reportResult(const NotifyItem& item, int code, uint8_t attempts) {
   if (!resultQueue) return;
   NotifyResult r;
   strlcpy(r.title, item.title, sizeof(r.title));
   r.code = code;
+  r.attempts = attempts;
   xQueueSend(resultQueue, &r, 0);
+}
+
+static bool waitForWiFi(uint32_t seconds) {
+  for (uint32_t i = 0; i < seconds && WiFi.status() != WL_CONNECTED; ++i) vTaskDelay(pdMS_TO_TICKS(1000));
+  return WiFi.status() == WL_CONNECTED;
+}
+
+// One HTTP POST. Returns the HTTP status, or a negative code (HTTPClient's own
+// errors, NTFY_BAD_URL).
+static int postAlert(const NotifyItem& item) {
+  static char json[1300];          // this task only
+  char click[40];                  // tapping the alert opens the app
+  snprintf(click, sizeof(click), "http://%s/", WiFi.localIP().toString().c_str());
+  if (!ntfyBuildJson(json, sizeof(json), item.topic, item.title, item.body, item.priority, item.tags, click))
+    return NTFY_BAD_URL;
+
+  WiFiClientSecure secureClient;
+  WiFiClient       plainClient;
+  HTTPClient       http;
+  bool ok;
+  if (strncmp(item.url, "https://", 8) == 0) {
+    secureClient.setInsecure();                          // no certificate check: alerts carry no secrets
+    secureClient.setHandshakeTimeout(ALERT_TIMEOUT_MS / 1000);   // default is 120 s
+    ok = http.begin(secureClient, item.url);
+  } else {
+    ok = http.begin(plainClient, item.url);
+  }
+  if (!ok) return NTFY_BAD_URL;
+  http.setConnectTimeout(ALERT_TIMEOUT_MS);
+  http.setTimeout(ALERT_TIMEOUT_MS);
+  http.addHeader("Content-Type", "application/json");
+  int code = http.POST((uint8_t*)json, strlen(json));
+  http.end();
+  return code;
 }
 
 static void notifyTask(void*) {
@@ -69,36 +108,18 @@ static void notifyTask(void*) {
   for (;;) {
     if (xQueueReceive(notifyQueue, &item, portMAX_DELAY) != pdTRUE) continue;
 
-    // Wait up to 60 s for Wi-Fi, so an alert raised during a short drop-out is not lost.
-    for (int i = 0; i < 60 && WiFi.status() != WL_CONNECTED; ++i) vTaskDelay(pdMS_TO_TICKS(1000));
-    if (WiFi.status() != WL_CONNECTED) { reportResult(item, -2); continue; }   // -2: no Wi-Fi for 60 s
-
-    WiFiClientSecure secureClient;
-    WiFiClient       plainClient;
-    HTTPClient       http;
-    bool ok;
-    if (strncmp(item.url, "https://", 8) == 0) {
-      secureClient.setInsecure();   // no certificate check: alerts carry no secrets
-      ok = http.begin(secureClient, item.url);
-    } else {
-      ok = http.begin(plainClient, item.url);
+    int code = NTFY_NO_WIFI;
+    uint8_t attempt = 0;
+    while (attempt < ALERT_ATTEMPTS) {
+      if (!waitForWiFi(attempt == 0 ? ALERT_WIFI_WAIT_S : 30)) { code = NTFY_NO_WIFI; break; }
+      code = postAlert(item);
+      ++attempt;
+      DEBUG_PRINT("Alert sent, HTTP status: ");
+      DEBUG_PRINT(code);
+      if (!ntfyRetryable(code) || attempt >= ALERT_ATTEMPTS) break;
+      vTaskDelay(pdMS_TO_TICKS(ALERT_RETRY_MS * attempt));   // 5 s, then 10 s
     }
-    if (!ok) { reportResult(item, -3); continue; }                            // -3: bad server address
-
-    static char topic[140], title[170], body[740], tags[70], json[1200];   // this task only
-    jsonEscape(topic, sizeof(topic), item.topic);
-    jsonEscape(title, sizeof(title), item.title);
-    jsonEscape(body,  sizeof(body),  item.body);
-    jsonEscape(tags,  sizeof(tags),  item.tags);
-    snprintf(json, sizeof(json), "{\"topic\":\"%s\",\"title\":\"%s\",\"message\":\"%s\",\"priority\":%u%s%s%s}",
-             topic, title, body, item.priority, tags[0] ? ",\"tags\":[\"" : "", tags, tags[0] ? "\"]" : "");
-    http.setTimeout(8000);
-    http.addHeader("Content-Type", "application/json");
-    int code = http.POST((uint8_t*)json, strlen(json));
-    DEBUG_PRINT("Alert sent, HTTP status: ");
-    DEBUG_PRINT(code);
-    http.end();
-    reportResult(item, code);                                                  // 200 = delivered
+    reportResult(item, code, attempt);                         // 200 = delivered
   }
 }
 
@@ -108,9 +129,9 @@ void notify(const char* title, const char* body, uint8_t priority, const char* t
 
   NotifyItem item;
   memset(&item, 0, sizeof(item));
-  size_t len = strlcpy(item.url, cfg.ntfyServer, sizeof(item.url));
-  if (len > 0 && len < sizeof(item.url) && item.url[len - 1] == '/') item.url[len - 1] = '\0';
-  strlcat(item.url, "/", sizeof(item.url));                 // JSON is posted to the server root
+  strlcpy(item.url, cfg.ntfyServer[0] ? cfg.ntfyServer : DEFAULT_NTFY_SERVER, sizeof(item.url));
+  ntfyNormalizeServer(item.url, cfg.ntfyTopic);   // also fixes settings saved before 3.3
+  strlcat(item.url, "/", sizeof(item.url));       // JSON is posted to the server root
   strlcpy(item.topic, cfg.ntfyTopic, sizeof(item.topic));
   strlcpy(item.title, title, sizeof(item.title));
   strlcpy(item.body,  body,  sizeof(item.body));
@@ -128,26 +149,17 @@ static void drainAlertResults() {
   while (resultQueue && xQueueReceive(resultQueue, &r, 0) == pdTRUE) {
     const char* t = shortTitle(r.title);
     alertSeq++; alertLastCode = r.code; alertLastOk = (r.code >= 200 && r.code < 300);
-    if (alertLastOk)        logEvent("Alert delivered: %s", t);
-    else if (r.code == -2)  logEvent("Alert not sent (no Wi-Fi): %s", t);
-    else                    logEvent("Alert failed (code %d): %s", r.code, t);
+    if (alertLastOk && r.attempts > 1) logEvent("Alert delivered (try %u): %s", (unsigned)r.attempts, t);
+    else if (alertLastOk)              logEvent("Alert delivered: %s", t);
+    else if (r.code == NTFY_NO_WIFI)   logEvent("Alert not sent (no Wi-Fi): %s", t);
+    else if (r.code == NTFY_BAD_URL)   logEvent("Alert not sent (bad server address): %s", t);
+    else                               logEvent("Alert failed (code %d, %u tries): %s", r.code, (unsigned)r.attempts, t);
   }
 }
 
 // ── JSON helpers ───────────────────────────────────────────────────────────
-// Copies src into dst with JSON escaping, so settings text such as a time
-// zone with quotes cannot break the response.
-static void jsonEscape(char* dst, size_t size, const char* src) {
-  size_t o = 0;
-  for (; *src && o + 7 < size; ++src) {
-    unsigned char ch = (unsigned char)*src;
-    if (ch == '"' || ch == '\\') { dst[o++] = '\\'; dst[o++] = ch; }
-    else if (ch < 0x20)          { o += snprintf(dst + o, size - o, "\\u%04x", ch); }
-    else                         { dst[o++] = ch; }
-  }
-  dst[o] = '\0';
-}
-
+// jsonEscape() is in Ntfy.h: it keeps settings text such as a time zone with
+// quotes from breaking the response.
 static const char* levelName(WaterLevel l) {
   return l == high ? "high" : (l == medium ? "medium" : "low");
 }
@@ -363,8 +375,19 @@ static void handleSettingsPost() {
   if (server.hasArg("ntfyServer")) strlcpy(next.ntfyServer, server.arg("ntfyServer").c_str(), sizeof(next.ntfyServer));
   if (server.hasArg("ntfyTopic"))  strlcpy(next.ntfyTopic,  server.arg("ntfyTopic").c_str(),  sizeof(next.ntfyTopic));
   if (server.hasArg("timeZone"))   strlcpy(next.timeZone,   server.arg("timeZone").c_str(),   sizeof(next.timeZone));
-  if (next.ntfyServer[0] && strncmp(next.ntfyServer, "http://", 7) != 0 && strncmp(next.ntfyServer, "https://", 8) != 0) {
+  if (server.hasArg("ntfyTopic") && server.arg("ntfyTopic").length() >= sizeof(next.ntfyTopic)) {
+    sendError(400, "The alert topic may use only letters, numbers, - and _ (up to 63).");
+    return;
+  }
+  ntfyNormalizeServer(next.ntfyTopic, "");          // trims spaces around the topic
+  ntfyNormalizeServer(next.ntfyServer, next.ntfyTopic);   // "https://ntfy.sh/my-topic/" -> "https://ntfy.sh"
+  if (next.ntfyServer[0] == '\0') strlcpy(next.ntfyServer, DEFAULT_NTFY_SERVER, sizeof(next.ntfyServer));
+  if (strncmp(next.ntfyServer, "http://", 7) != 0 && strncmp(next.ntfyServer, "https://", 8) != 0) {
     sendError(400, "The alert server must start with https:// or http://.");
+    return;
+  }
+  if (next.ntfyTopic[0] && !ntfyTopicValid(next.ntfyTopic)) {
+    sendError(400, "The alert topic may use only letters, numbers, - and _ (up to 63).");
     return;
   }
 
@@ -542,7 +565,7 @@ static void startServices() {
     logEvent("Wireless firmware update started");
     outputsAllOff();   // never leave a valve open while the firmware is replaced
     statsSave();       // write the latest water history before the update
-    displayShowNotice(TRS("UPDATING", "ACTUALIZANDO"), TRS("Keep power on", "No desconecte"), 600000UL);
+    displayShowNotice(TRS("UPDATING", "ACTUALIZANDO"), TRS("Updating|Do not unplug", "Actualizando|No desconecte"), 600000UL);
     displayUpdate(true);
   });
   ArduinoOTA.onEnd([]() {
@@ -552,7 +575,7 @@ static void startServices() {
   ArduinoOTA.onError([](ota_error_t) {
     enableLoopWDT();
     logEvent("Wireless firmware update failed");
-    displayShowNotice(TRS("UPDATE FAILED", "NO ACTUALIZADO"), TRS("Try again", "Reintente"), NOTICE_DURATION);
+    displayShowNotice(TRS("UPDATE FAILED", "NO ACTUALIZADO"), TRS("Not updated|Try again", "Sin cambios|Reintente"), NOTICE_DURATION);
     displayUpdate(true);
   });
   ArduinoOTA.begin();
@@ -564,7 +587,7 @@ static void startServices() {
 
   char ip[20];
   strlcpy(ip, WiFi.localIP().toString().c_str(), sizeof(ip));
-  displayShowNotice(ip, TRS("Connected", "Conectado"), 6000);          // the address of the dashboard
+  displayShowNotice(ip, TRS("Wi-Fi connected|App: this IP", "Wi-Fi conectado|App: esta IP"), 6000);   // the header is the address of the app
   logEvent("Wi-Fi connected: %s", ip);
   DEBUG_PRINT("Dashboard: http://reusewater.local");
 }
@@ -652,8 +675,8 @@ void netStartConfigPortal() {
   const char* pw = setupPassword();
   wm.startConfigPortal(WIFI_AP_NAME, pw);   // blockSetupPages() runs inside, before WiFiManager's own pages
   portalActive = true;
-  char msg[24];
-  snprintf(msg, sizeof(msg), TRS("Key %s", "%s"), pw);
+  char msg[48];
+  snprintf(msg, sizeof(msg), TRS("Wi-Fi setup|Key %s", "Configurar Wi-Fi|%s"), pw);
   displayShowNotice(WIFI_AP_NAME, msg, (unsigned long)CONFIG_PORTAL_TIMEOUT_S * 1000UL);
   logEvent("Wi-Fi setup page opened");
   Serial.printf("Wi-Fi setup: join \"%s\", password %s\n", WIFI_AP_NAME, pw);

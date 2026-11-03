@@ -596,7 +596,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   var $=function(id){return document.getElementById(id)};
   var last=null,failures=0,formLoaded=false,pending=null,pendingWash=false,toastTimer=null,offline=false,connShown='';
   // Actions are reported as done only when the controller's status shows them (3.0).
-  var pendingSince=0,washSince=0,alertWait=null,CONFIRM_MS=10000,ALERT_WAIT_MS=75000;
+  var pendingSince=0,washSince=0,alertWait=null,CONFIRM_MS=10000,ALERT_WAIT_MS=120000;
 
   // ── Language (3.1) ──
   // The controller's setting decides (status "lang"); this phone remembers the
@@ -1070,7 +1070,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     manualRefresh=true;setRefreshing(true);poll();
   });
   // Show when updates are late, so people know when Refresh helps.
-  function alertCodeText(c){return c===-2?t('no Wi-Fi'):c===-3?t('bad server address'):c<0?t('could not connect'):t('server answered {0}',c)}
+  function alertCodeText(c){return c===-100?t('no Wi-Fi'):c===-101?t('bad server address'):c<0?t('could not connect'):c===429?t('too many alerts, try again later'):c===400||c===404?t('the server refused the topic'):c===401||c===403?t('the server needs a login'):t('server answered {0}',c)}
   setInterval(function(){
     var now=Date.now();
     if(pending&&now-pendingSince>CONFIRM_MS){
@@ -1243,6 +1243,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     });
     if(Number(form.washOpenS.value)>=Number(form.washPeriodS.value))fieldError('washOpenS',t('Must be shorter than the wash interval.'));
     ['webPassword','otaPassword'].forEach(function(n){var v=form[n].value;if(v&&(v.length<8||v.length>32))fieldError(n,t('Use 8 to 32 characters.'));});
+    var tpv=form.ntfyTopic.value.trim();if(tpv&&!/^[A-Za-z0-9_-]{1,63}$/.test(tpv))fieldError('ntfyTopic',t('Use only letters, numbers, - and _.'));
+    var svv=form.ntfyServer.value.trim();if(svv&&!/^https?:\/\/[^\s\/]+/.test(svv))fieldError('ntfyServer',t('Start with https:// or http://.'));
     var bad=form.querySelector('[aria-invalid=true]');
     if(bad){var c=form.querySelectorAll('[aria-invalid=true]').length;
       toast(c===1?t('One setting needs attention. Nothing was saved.'):t('Some settings need attention. Nothing was saved.'),true);bad.focus();return;}

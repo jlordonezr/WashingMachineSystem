@@ -112,7 +112,7 @@ async function fresh(browser, base) {
   }
   // A4 A failed test alert is reported as failed, with the reason.
   {
-    status = baseStatus(); onTestAlert = () => setTimeout(() => { status.alert = { seq: 1, ok: false, code: -2 }; }, 0);
+    status = baseStatus(); onTestAlert = () => setTimeout(() => { status.alert = { seq: 1, ok: false, code: -100 }; }, 0);
     const { ctx, page } = await fresh(browser, base);
     await page.click('#tab-settings'); await tick(page, 500);
     await page.click('#btnTest'); await tick(page, 500);

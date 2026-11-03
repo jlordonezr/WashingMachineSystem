@@ -80,7 +80,7 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `screen` | bool | OLED answered at start-up (3.0) |
 | `loop` | object | `maxMs` since start-up, `lastMinMaxMs` in the last full minute (3.0) |
 | `heap` | object | `free`, `min` bytes (3.0) |
-| `alert` | object | `seq` (results received), `ok`, `code`: HTTP status; −2 no Wi-Fi for 60 s; −3 bad server address; other negative values: could not connect (3.0) |
+| `alert` | object | `seq` (results received), `ok`, `code`: HTTP status; −100 no Wi-Fi for 5 min; −101 bad server address; other negative values (HTTPClient −1 … −11): could not connect (3.0; −2 / −3 until 3.2.0) |
 | `wifi`, `time`, `uptimeS` | | Signal (dBm), IP, local time `YYYY-MM-DD HH:MM`, seconds since start-up |
 
 Fields are only added between versions, never renamed, so an older page keeps working with newer firmware.
@@ -92,15 +92,15 @@ Fields are only added between versions, never renamed, so an older page keeps wo
 | App, status request | 5 s, then counted as a failure; 2 failures → *Offline* badge; no update for 6 s → *Updating slowly* |
 | App, action request | 8 s |
 | App, confirmation of an action | 10 s |
-| App, test-alert result | 75 s |
+| App, test-alert result | 120 s (75 s until 3.2.0) |
 | Controller, Wi-Fi reconnect | every 60 s while disconnected (saved network) |
-| Controller, alert sending | waits up to 60 s for Wi-Fi, 8 s HTTP timeout; queue of 6, extra alerts are dropped and logged |
+| Controller, alert sending | waits up to 5 min for Wi-Fi; 10 s each for connect, TLS handshake and answer; up to 3 tries (5 s, then 10 s apart) when there is no answer, a timeout, 408, 429 or 5xx; queue of 6, extra alerts are dropped and logged (3.3) |
 | Controller, Wi-Fi setup page | closes after 3 min |
 
 ## Alerts (controller → ntfy)
 
 From 3.1: `POST <ntfyServer>/` (the server root) with `Content-Type: application/json` and the body
-`{"topic":"<topic>","title":"<title>","message":"<text>","priority":1-5,"tags":["<tag>"]}` (ntfy "publish as JSON"). JSON carries UTF-8, so Spanish accents arrive intact; up to 3.0 the title went in an HTTP header, which only carries ASCII. HTTPS without certificate checking (alerts carry no secrets; the topic name is the only secret, so use a long random one). Results come back to the event log: *Alert delivered*, *Alert not sent (no Wi-Fi)*, *Alert failed (code n)*.
+`{"topic":"<topic>","title":"<title>","message":"<text>","priority":1-5,"tags":["<tag>"],"click":"http://<controller IP>/"}` (ntfy "publish as JSON"; `click` from 3.3). The body is built by `Ntfy.h`. The topic must be 1–63 characters from `A-Z a-z 0-9 - _` (checked by `POST /api/settings` from 3.3); the server address is stored without spaces, trailing slashes or a pasted topic. JSON carries UTF-8, so Spanish accents arrive intact; up to 3.0 the title went in an HTTP header, which only carries ASCII. HTTPS without certificate checking (alerts carry no secrets; the topic name is the only secret, so use a long random one). Results come back to the event log: *Alert delivered* (with *try n* after a retry), *Alert not sent (no Wi-Fi)*, *Alert not sent (bad server address)*, *Alert failed (code n, n tries)*.
 
 ## Wireless updates (ArduinoOTA)
 

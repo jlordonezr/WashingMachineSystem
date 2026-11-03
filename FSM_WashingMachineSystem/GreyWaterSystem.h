@@ -82,6 +82,7 @@ extern volatile uint32_t drainPulseCount;
 #define DEBOUNCE_DELAY 20        // Debounce delay for button presses in milliseconds
 // OLED display
 #define DISPLAY_FRAME_MS 40      // ms between display frames (25 fps) while scrolling
+#define DISPLAY_PAGE_MS 3000     // ms each page of a screen message stays on ("Reusing water", "from the tank", ...)
 #define SCROLL_SPEED_PX 2        // px the message moves per frame (2 px x 25 fps = 50 px/s)
 #define SCROLL_PAUSE_MS 1500     // ms a long message rests at the start before scrolling
 #define SCROLL_GAP_PX 40         // px of blank space between the end and the repeat

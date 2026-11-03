@@ -5,7 +5,10 @@
 # Needs the AgileStateMachine library: set AGILE to its src folder if it is elsewhere.
 set -e
 cd "$(dirname "$0")"
-AGILE=${AGILE:-$HOME/Arduino/libraries/AgileStateMachine/src}
+if [ -z "$AGILE" ]; then   # Arduino IDE sketchbook: ~/Arduino (Linux, Windows) or ~/Documents/Arduino (macOS)
+  AGILE=$HOME/Arduino/libraries/AgileStateMachine/src
+  [ -d "$AGILE" ] || AGILE=$HOME/Documents/Arduino/libraries/AgileStateMachine/src
+fi
 B=$(mktemp -d)
 cp ../../FSM_WashingMachineSystem.ino "$B/sketch.cpp"
 g++ -std=gnu++17 -O1 -w -I. -I../.. -I"$AGILE" -o "$B/test_cycle" test_cycle.cpp "$B/sketch.cpp" \

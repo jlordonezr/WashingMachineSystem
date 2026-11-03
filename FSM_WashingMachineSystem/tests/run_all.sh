@@ -10,6 +10,8 @@ echo "== Flow meter, step gates and pump protection =="
 g++ -std=c++17 -O1 -Wall test_flow.cpp -o "$T/test_flow" && run flow "$T/test_flow"
 echo "== Tank level switches =="
 g++ -std=c++17 -O1 -Wall test_level.cpp -o "$T/test_level" && run level "$T/test_level"
+echo "== Phone alerts: topic, server address, JSON message, retries =="
+g++ -std=c++17 -O1 -Wall test_ntfy.cpp -o "$T/test_ntfy" && run ntfy "$T/test_ntfy"
 echo "== Screen texts fit the OLED (both languages) =="
 if command -v python3 >/dev/null 2>&1; then run screen python3 ../tools/check_screen_text.py; else echo "skipped: python3 not found"; fi
 echo "== Every dashboard text has a Spanish translation (web/es.json) =="

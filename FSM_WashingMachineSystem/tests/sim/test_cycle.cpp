@@ -120,7 +120,11 @@ static void runFor(double seconds) { uint64_t end = simUs + (uint64_t)(seconds *
 static void pressStart() { startHeldUntil = simUs + 150000; startAt = now(); }
 static void pressStop()  { stopHeldUntil  = simUs + 150000; }
 static double stateAt(int st) { for (auto& s : rec.states) if (s.first == st) return s.second; return -1; }
-static bool sawMsg(const char* m) { return std::find(rec.msgs.begin(), rec.msgs.end(), m) != rec.msgs.end(); }
+// True if any screen message had m as one of its pages ("a|b|c").
+static bool sawMsg(const char* m) {
+  for (auto& msg : rec.msgs) { std::string all = "|" + msg + "|"; if (all.find("|" + std::string(m) + "|") != std::string::npos) return true; }
+  return false;
+}
 static bool eventSeen(const char* needle) { for (int i = 0; i < eventCount(); ++i) { uint32_t e, u; const char* tx; eventAt(i, e, u, tx); if (strstr(tx, needle)) return true; } return false; }
 static bool alertSeen(const char* t, int* prio = nullptr) { for (auto& a : alerts) if (a.title == t) { if (prio) *prio = a.prio; return true; } return false; }
 
@@ -158,7 +162,7 @@ int main(int argc, char** argv) {
     CHECK(rec.worstDeadHeadMs <= 350, "pump ran %u ms against the closed inlet", rec.worstDeadHeadMs);
     CHECK(!rec.pumpWhileTap, "pump and tap valve were on together");
     CHECK(rec.savedWhileSaving, "rinse water was never saved to the tank");
-    const char* expected[] = {"Waiting to fill", "Reusing water", "Washing...", "Not saving", "Rinsing...", "Saving water"};
+    const char* expected[] = {"Waiting for", "Reusing water", "Washing...", "Soapy water", "Rinsing...", "Saving rinse"};
     for (const char* m : expected) CHECK(sawMsg(m), "screen never showed \"%s\"", m);
     CHECK(stats.totalCycles == 1 && stats.totalReusedL > 10 && stats.totalSavedL > 10, "stats: cycles %u, reused %.1f, saved %.1f",
           (unsigned)stats.totalCycles, stats.totalReusedL, stats.totalSavedL);
@@ -170,6 +174,10 @@ int main(int argc, char** argv) {
     for (const char* e : {"Cycle started", "Step 1/4 wash started", "Machine filled", "Pump on", "Pump stopped: machine closed its inlet", "Cycle complete"})
       CHECK(eventSeen(e), "event log has no \"%s\"", e);
     Preferences p; CHECK(p.getBytesLength("cyc") == 0, "cycle marker left behind after a normal end");
+    // Every step has been timed once, so the next cycle can say how long it still needs.
+    rec.msgs.clear(); pressStart(); runFor(30);
+    bool timeLeft = false; for (auto& m : rec.msgs) if (m.find(" min left") != std::string::npos) timeLeft = true;
+    CHECK(timeLeft, "second cycle never showed \"... min left\"");
   }
   else if (sc == "F2") {
     printf("F2 machine runs its drain pump at program start, then fills\n");
@@ -274,20 +282,24 @@ int main(int argc, char** argv) {
     printf("F12 full cycle in Spanish (factory default language)\n");
     simLanguage = LANG_ES; typicalProgram(); boot();
     CHECK(cfg.language == LANG_ES, "language is not Spanish");
-    CHECK(!strcmp(displayGetTitle(), "LISTO") && !strcmp(displayGetMessage(), "Pulse START"), "Ready screen: %s / %s", displayGetTitle(), displayGetMessage());
+    CHECK(!strcmp(displayGetTitle(), "LISTO") && sawMsg("y pulse START"), "Ready screen: %s / %s", displayGetTitle(), displayGetMessage());
     pressStart(); runFor(1600);
     while (activeState != stIdle && now() < 4000) runFor(0.1);   // stop right at the end of the cycle
     runFor(0.5);
     bool doneShown = false; for (auto& t : oled.shown) if (t == "TERMINADO") doneShown = true;
     CHECK(doneShown, "end-of-cycle screen is not TERMINADO");
-    for (const char* m : {"Espera llenado", "Reusando agua", "Lavando...", "No se guarda", "Enjuagando...", "Guardando"})
+    for (const char* m : {"Esperando que", "Reusando agua", "Lavando ropa", "Agua jabonosa", "Enjuagando", "Ahorrando agua"})
       CHECK(sawMsg(m), "screen never showed \"%s\"", m);
     CHECK(activeState == stIdle && stats.totalCycles == 1, "cycle did not complete");
     int prio = 0;
     CHECK(alertSeen("Reúso de Agua: ciclo completo", &prio) && prio == 2, "Spanish cycle-complete alert missing");
     CHECK(eventSeen("Cycle complete"), "event log should stay in English");
-    bool reused = false; for (auto& t : oled.shown) if (t.rfind("Reusados ", 0) == 0) reused = true;
-    CHECK(reused, "end-of-cycle screen does not say \"Reusados ... L\"");
+    bool reused = false, saved = false;   // the end notice shows its pages one after the other
+    for (int i = 0; i < 100; ++i) {
+      runFor(0.1);
+      for (auto& t : oled.shown) { if (t.rfind("Reusados ", 0) == 0) reused = true; if (t.rfind("Guardados ", 0) == 0) saved = true; }
+    }
+    CHECK(reused && saved, "end-of-cycle screen does not page \"Reusados ... L\" and \"Guardados ... L\"");
   }
   else if (sc == "F6") {
     printf("F6 watchdog restart while Ready (no cycle)\n");

@@ -20,6 +20,11 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 //   y 12-31  message: Helvetica Bold pixel font, 14 px when the message fits,
 //            else 12 px; centred when it fits, scrolled when not
 //
+// A message may have several pages separated by '|', for example
+// "Reusing water|from the tank|25 min left". One line holds only about 15
+// characters, so pages let the screen say what is happening, what it means
+// and what to do, in the large font. Pages change every DISPLAY_PAGE_MS.
+//
 //   +--------------------------------------------------+
 //   |1/4 FILL                            [###] [W]     |
 //   |--------------------------------------------------|
@@ -32,7 +37,7 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 // sends a frame over I2C when something on screen actually changed.
 
 #define DISP_TITLE_LEN   22
-#define DISP_MSG_LEN     48
+#define DISP_MSG_LEN     96    // all pages of a message
 #define HEADER_TEXT_Y    1
 #define SEPARATOR_Y      10
 #define MSG_BASELINE_14  28    // 14 px capitals on rows 14-27, descenders to row 31
@@ -45,7 +50,7 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 
 static char statusTitle[DISP_TITLE_LEN]   = "";
 static char statusMessage[DISP_MSG_LEN]   = "";
-static char statusDetail[64]              = "";   // app sentence, may hold UTF-8 (Spanish)
+static char statusDetail[96]              = "";   // app sentence, may hold UTF-8 (Spanish)
 static char noticeTitle[DISP_TITLE_LEN]   = "";
 static char noticeMessage[DISP_MSG_LEN]   = "";
 static unsigned long noticeStart    = 0;
@@ -66,8 +71,30 @@ static bool setText(char* dst, size_t size, const char* src) {
   return true;
 }
 
+// Pages in a message ("a|b|c" = 3).
+static uint8_t pageCount(const char* m) {
+  uint8_t n = 1;
+  for (; *m; ++m) if (*m == '|') ++n;
+  return n;
+}
+
+// Copies page `index` of message m into dst.
+static void pageText(char* dst, size_t size, const char* m, uint8_t index) {
+  for (uint8_t i = 0; i < index && *m; ++m) if (*m == '|') ++i;
+  size_t o = 0;
+  while (*m && *m != '|' && o + 1 < size) dst[o++] = *m++;
+  dst[o] = '\0';
+}
+
 void displaySetStatus(const char* title, const char* message, const char* detail) {
-  setText(statusDetail, sizeof(statusDetail), detail ? detail : message);
+  if (detail) {
+    setText(statusDetail, sizeof(statusDetail), detail);
+  } else {                       // no app sentence: the pages joined by spaces
+    char joined[sizeof(statusDetail)];
+    strlcpy(joined, message, sizeof(joined));
+    for (char* c = joined; *c; ++c) if (*c == '|') *c = ' ';
+    setText(statusDetail, sizeof(statusDetail), joined);
+  }
   bool changed = setText(statusTitle, sizeof(statusTitle), title);
   changed |= setText(statusMessage, sizeof(statusMessage), message);
   if (changed) displayDirty = true;
@@ -161,7 +188,8 @@ void displayShowNotice(const char* title, const char* message, unsigned long dur
   setText(noticeTitle, sizeof(noticeTitle), title);
   setText(noticeMessage, sizeof(noticeMessage), message);
   noticeStart    = millis();
-  noticeDuration = durationMs;
+  unsigned long allPages = (unsigned long)pageCount(message) * DISPLAY_PAGE_MS;
+  noticeDuration = durationMs > allPages ? durationMs : allPages;   // long enough to show every page once
   displayDirty   = true;
 }
 
@@ -211,6 +239,10 @@ void displayUpdate(bool force) {
   static unsigned long lastFrame   = 0;
   static char shownTitle[DISP_TITLE_LEN] = "";
   static char shownMessage[DISP_MSG_LEN] = "\x01";  // never matches: forces first measure
+  static char shownPage[DISP_MSG_LEN]    = "\x01";  // the page on screen now
+  static char firstPage[DISP_MSG_LEN]    = "";
+  static uint8_t pages = 1, pageIndex = 0;
+  static unsigned long pageStart = 0;
   static WaterLevel shownLevel = low;
   static bool shownWash        = false;
   static int16_t msgWidth      = 0;
@@ -242,10 +274,31 @@ void displayUpdate(bool force) {
   const char* title   = noticeActive ? noticeTitle   : statusTitle;
   const char* message = noticeActive ? noticeMessage : statusMessage;
 
-  // New message: pick the size and measure it once, restart the scroll from
+  // New message: start again at its first page, unless only a number in a
+  // later page changed (a countdown), so the pages keep their rhythm.
+  if (setText(shownMessage, sizeof(shownMessage), message)) {
+    char first[DISP_MSG_LEN];
+    pageText(first, sizeof(first), message, 0);
+    uint8_t n = pageCount(message);
+    if (n != pages || strcmp(first, firstPage) != 0) {
+      strlcpy(firstPage, first, sizeof(firstPage));
+      pages = n;
+      pageIndex = 0;
+      pageStart = millis();
+    }
+  }
+  if (pages > 1 && millis() - pageStart >= DISPLAY_PAGE_MS) {
+    pageIndex = (pageIndex + 1) % pages;
+    pageStart = millis();
+  }
+  char page[DISP_MSG_LEN];
+  pageText(page, sizeof(page), message, pageIndex);
+
+  // New page: pick the size and measure it once, restart the scroll from
   // the left. 14 px when it fits the width, else 12 px (every screen text fits
   // in 12 px, see tools/check_screen_text.py).
-  if (setText(shownMessage, sizeof(shownMessage), message)) {
+  if (setText(shownPage, sizeof(shownPage), page)) {
+    message = page;
     oled.setTextSize(1);
     oled.setTextWrap(false);
     int16_t x1, y1;
@@ -292,6 +345,7 @@ void displayUpdate(bool force) {
   // Message
   oled.setFont(msgFont);
   oled.setTextColor(WHITE);
+  message = page;
   if (!scrolling) {
     oled.setCursor((OLED_WIDTH - msgWidth) / 2 - msgOffsetX, msgBaseline);
     oled.print(message);

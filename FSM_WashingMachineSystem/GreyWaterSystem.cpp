@@ -43,7 +43,7 @@ void bootChecks() {
     interruptedFlag = true; interruptedState = st; interruptedEpoch = ep;
     cycleMarkEnd();
     logEvent("Cycle interrupted in step %d (%s)", st >= stFill1 ? st - 1 : 0, resetReasonText());
-    displayShowNotice(TRS("INTERRUPTED", "INTERRUMPIDO"), TRS("Check machine", "Mire la lavadora"), 15000);
+    displayShowNotice(TRS("INTERRUPTED", "INTERRUMPIDO"), TRS("Wash cut short|Check washer|Start again", "Ciclo cortado|Revise lavadora|Inicie de nuevo"), 15000);
     char body[320];
     snprintf(body, sizeof(body), TR("The wash cycle was cut short (%s). The controller is back to Ready. "
                                     "Check the washing machine; start a new cycle if needed.",
@@ -268,13 +268,19 @@ void handleIdleStateEntry() {
   // here with inStop false, which used to show "Cycle Complete!" on power-up.
   if (cycleStarted) {
     if (stoppedByUser) {
-      displayShowNotice(TRS("STOPPED", "DETENIDO"), TRS("Cycle stopped", "Ciclo detenido"), NOTICE_DURATION);
-    } else if (cycleReusedL >= 1.0f) {          // tell the household what the cycle saved
-      char reused[24];
-      snprintf(reused, sizeof(reused), TRS("Reused %.0f L", "Reusados %.0f L"), cycleReusedL);
-      displayShowNotice(TRS("DONE", "TERMINADO"), reused, NOTICE_DURATION);
-    } else {
-      displayShowNotice(TRS("DONE", "TERMINADO"), TRS("Cycle complete", "Ciclo completo"), NOTICE_DURATION);
+      displayShowNotice(TRS("STOPPED", "DETENIDO"), TRS("Cycle stopped|No water saved", "Ciclo detenido|Sin ahorro"), NOTICE_DURATION);
+    } else {                                    // tell the household what the cycle saved
+      char done[64], part[24];
+      strlcpy(done, TRS("Wash finished", "Lavado listo"), sizeof(done));
+      if (cycleReusedL >= 1.0f) {
+        snprintf(part, sizeof(part), TRS("|Reused %.0f L", "|Reusados %.0f L"), cycleReusedL);
+        strlcat(done, part, sizeof(done));
+      }
+      if (cycleSavedL >= 1.0f) {
+        snprintf(part, sizeof(part), TRS("|Saved %.0f L", "|Guardados %.0f L"), cycleSavedL);
+        strlcat(done, part, sizeof(done));
+      }
+      displayShowNotice(TRS("DONE", "TERMINADO"), done, NOTICE_DURATION);
     }
   }
 
@@ -363,27 +369,29 @@ static bool stepIsStuck() {
     stepAlertSent = true;
     char body[320];
     snprintf(body, sizeof(body),
-             TR("Step %s has run for %lu minutes without the expected water flow. "
+             TR("Step %d of 4 has run for %lu minutes without the expected water flow. "
                 "Check the flow sensors and that the washing machine is running.",
-                "El paso %s lleva %lu minutos sin el flujo de agua esperado. "
+                "El paso %d de 4 lleva %lu minutos sin el flujo de agua esperado. "
                 "Revise los sensores de flujo y que la lavadora esté funcionando."),
-             displayGetTitle(), (unsigned long)(cfg.stepAlertMs / 60000UL));
+             activeState - stFill1 + 1, (unsigned long)(cfg.stepAlertMs / 60000UL));
     beep(BEEP_ALARM);
     notify(TR("Reuse Water: check sensors", "Reúso de Agua: revise los sensores"), body, 4, "warning");
   }
   return true;
 }
 
-// Screen (ASCII) and app texts when a step waits too long for water.
-#define STUCK_SHORT   TRS("No water flow", "Sin flujo")
+// Screen (ASCII) and app texts when a step waits too long for water. The
+// screen says what to do, as the Quick Card does.
+#define STUCK_SHORT   TRS("No water flow|Is washer on?|If so: STOP|Call installer", \
+                          "Sin flujo|Revise lavadora|Si funciona,|pulse STOP y|pida ayuda")
 #define STUCK_MESSAGE TR("No flow seen: check sensors", "No se detecta flujo: revise los sensores")
 
 static void periodicAction(unsigned long& lastTime, void(*action)(), const char* debugMsg,
-                           const char* title, const char* message) {
+                           const char* title, const char* message, const char* detail) {
   if (millis() - lastTime >= OPERATION_DELAY) {
     action();
     DEBUG_PRINT(debugMsg);
-    displaySetStatus(title, message);
+    displaySetStatus(title, message, detail);
     lastTime = millis();
   }
 }
@@ -427,12 +435,12 @@ static void endManualWash(const char* result) {
 
   if (strcmp(result, "full") == 0) {
     if (tankLowSwitchWet()) {
-      displayShowNotice(TRS("TANK CLEANED", "TANQUE LIMPIO"), TRS("Tank full", "Tanque lleno"), NOTICE_DURATION);
+      displayShowNotice(TRS("TANK CLEANED", "TANQUE LIMPIO"), TRS("Tank is clean|and full", "Tanque limpio|y lleno"), NOTICE_DURATION);
       notify(TR("Reuse Water: tank wash complete", "Reúso de Agua: lavado del tanque terminado"),
              TR("The tank is full and the wash valve is closed.",
                 "El tanque está lleno y la válvula de lavado está cerrada."), 2, "droplet");
     } else {
-      displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Check tank", "Revise tanque"), NOTICE_DURATION);
+      displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Check the tank|Call installer", "Revise tanque|Pida ayuda"), NOTICE_DURATION);
       beep(BEEP_ALARM);
       notify(TR("Reuse Water: check level switches", "Reúso de Agua: revise los flotadores"),
              TR("The tank wash stopped because the high-level switch reports water, but the "
@@ -448,11 +456,11 @@ static void endManualWash(const char* result) {
                 "El tanque no indicó lleno en %lu minutos, así que se cerró la válvula de lavado. "
                 "Revise el flotador alto y el suministro de agua de lavado."),
              (unsigned long)(cfg.manualWashMs / 60000UL));
-    displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Check tank", "Revise tanque"), NOTICE_DURATION);
+    displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Check the tank|Call installer", "Revise tanque|Pida ayuda"), NOTICE_DURATION);
     beep(BEEP_ALARM);
     notify(TR("Reuse Water: tank wash time limit", "Reúso de Agua: límite de tiempo del lavado"), body, 4, "warning");
   } else {
-    displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Stopped early", "Detenido antes"), NOTICE_DURATION);
+    displayShowNotice(TRS("WASH STOPPED", "LAVADO DETENIDO"), TRS("Stopped early|Tank not full", "Detenido antes|Tanque no lleno"), NOTICE_DURATION);
   }
 }
 
@@ -462,7 +470,13 @@ void stopManualWash() {
 
 void idleStateLogic() {
   if (!manualWashActive) {
-    periodicAction(lastCheckTime, noSavingWater, "System inactive.", TRS("READY", "LISTO"), TRS("Press START", "Pulse START"));
+    // What to do, then how full the tank is (the icon in the corner says the same).
+    WaterLevel lvl = tankLevel();
+    char ready[64];
+    snprintf(ready, sizeof(ready), "%s|%s", TRS("Start washer,|Press START", "Inicie lavadora|y pulse START"),
+             lvl == high ? TRS("Tank: full", "Tanque: lleno") : lvl == medium ? TRS("Tank: half", "Tanque: medio")
+                                                                             : TRS("Tank: low", "Tanque: bajo"));
+    periodicAction(lastCheckTime, noSavingWater, "System inactive.", TRS("READY", "LISTO"), ready, TR("Press START", "Pulse START"));
     return;
   }
 
@@ -478,13 +492,38 @@ void idleStateLogic() {
 
   outputsRequest(modeManualWash);   // as Idle, plus the wash valve (the safety task closes it when full)
   unsigned long left = (cfg.manualWashMs - elapsed) / 1000UL;
-  char title[32];   // longer than the screen header (DISP_TITLE_LEN), which truncates safely
-  snprintf(title, sizeof(title), TRS("TANK WASH %lu:%02lu", "TANQUE %lu:%02lu"), left / 60UL, left % 60UL);
-  displaySetStatus(title, TRS("Cleaning tank", "Limpiando"), TR("Washing until the tank is full", "Lavando hasta que el tanque se llene"));
+  char msg[64];
+  snprintf(msg, sizeof(msg), TRS("Cleaning tank|Stops when full|or in %lu:%02lu", "Limpiando|Para al llenarse|o en %lu:%02lu"),
+           left / 60UL, left % 60UL);
+  displaySetStatus(TRS("TANK CLEANING", "LIMPIEZA TANQUE"), msg, TR("Washing until the tank is full", "Lavando hasta que el tanque se llene"));
 }
 
 void runStateLogic() {
-  periodicAction(lastCheckTime, noSavingWater, "System running.", TRS("STARTING", "INICIANDO"), TRS("Starting...", "Iniciando..."));
+  periodicAction(lastCheckTime, noSavingWater, "System running.", TRS("STARTING", "INICIANDO"), TRS("Getting ready...", "Preparando..."),
+                 TR("Starting...", "Iniciando..."));
+}
+
+// About how many minutes the cycle still needs, from this machine's typical
+// step times (steps 1-3) and the fixed length of step 4. -1 until every step
+// has been timed at least once.
+static long cycleMinutesLeft() {
+  if (activeState < stFill1 || activeState > stFill2 || stepStartTime == 0) return -1;
+  for (int i = 0; i < 3; ++i) if (stats.stepSamples[i] == 0) return -1;
+  int cur = activeState - stFill1;
+  uint32_t elapsed = (millis() - stepStartTime) / 1000UL;
+  uint32_t left = stats.stepAvgS[cur] > elapsed + 60 ? stats.stepAvgS[cur] - elapsed : 60;   // an overdue step: at least 1 min
+  for (int i = cur + 1; i < 3; ++i) left += stats.stepAvgS[i];
+  left += cfg.drain2DurationMs / 1000UL;
+  return (long)((left + 59) / 60);
+}
+
+// Adds the "25 min left" page to a step's screen message, when it is known.
+static const char* withTimeLeft(const char* pages) {
+  static char buf[96];
+  long min = cycleMinutesLeft();
+  if (min < 0) return pages;
+  snprintf(buf, sizeof(buf), TRS("%s|%lu min left", "%s|Faltan %lu min"), pages, (unsigned long)min);
+  return buf;
 }
 
 void fill1StateLogic() {
@@ -495,14 +534,15 @@ void fill1StateLogic() {
     const char* fillMsg = checkAndFillWashingMachine();
     DEBUG_PRINT(fillMsg);
     // Screen text for the household: what the machine and the grey water system are doing.
-    const char* fillShort = fillSource == fillFromTank ? TRS("Reusing water", "Reusando agua")
-                          : fillSource == fillFromTap  ? TRS("Using tap water", "Agua de la llave") : TRS("Tank low: tap", "Tanque bajo");
-    const char* step1 = TRS("1/4 WASH", "1/4 LAVADO");
+    const char* fillShort = fillSource == fillFromTank ? TRS("Reusing water|from the tank", "Reusando agua|del tanque")
+                          : fillSource == fillFromTap  ? TRS("Filling washer|with tap water", "Llenando con|agua de la llave")
+                                                       : TRS("Tank is low|Using tap water", "Tanque bajo|Agua de la llave");
+    const char* step1 = TRS("WASH 1 OF 4", "LAVADO 1 DE 4");
     if (stepIsStuck())        displaySetStatus(step1, STUCK_SHORT, STUCK_MESSAGE);
-    else if (gates.filled)    displaySetStatus(step1, TRS("Washing...", "Lavando..."), TR("The machine is washing", "La lavadora está lavando"));
-    else if (!gates.tapSeen)  displaySetStatus(step1, TRS("Waiting to fill", "Espera llenado"),
+    else if (gates.filled)    displaySetStatus(step1, withTimeLeft(TRS("Washing...", "Lavando ropa")), TR("The machine is washing", "La lavadora está lavando"));
+    else if (!gates.tapSeen)  displaySetStatus(step1, withTimeLeft(TRS("Waiting for|washer to fill", "Esperando que|llene la lavadora")),
                                                TR("Waiting for the machine to take water", "Esperando a que la lavadora tome agua"));
-    else                      displaySetStatus(step1, fillShort, fillMsg);
+    else                      displaySetStatus(step1, withTimeLeft(fillShort), fillMsg);
     lastCheckTime = millis();
   }
 }
@@ -512,9 +552,10 @@ void drain1StateLogic() {
     drainSoapyWater();
     drained1 = gates.drain1Done(tapFlow());               // a new fill (the rinse) started
     DEBUG_PRINT("1st drain: draining soapy water.");
-    const char* step2 = TRS("2/4 SOAPY DRAIN", "2/4 DESAGUE");
+    const char* step2 = TRS("DRAIN 2 OF 4", "DESAGUE 2 DE 4");
     if (stepIsStuck()) displaySetStatus(step2, STUCK_SHORT, STUCK_MESSAGE);
-    else               displaySetStatus(step2, TRS("Not saving", "No se guarda"), TR("Draining soapy water", "Desaguando agua con jabón"));
+    else               displaySetStatus(step2, withTimeLeft(TRS("Soapy water|is not saved", "Agua jabonosa|no se guarda")),
+                                        TR("Draining soapy water", "Desaguando agua con jabón"));
     lastCheckTime = millis();
   }
 }
@@ -526,10 +567,11 @@ void fill2StateLogic() {
     filled2 = gates.fill2Done(tapFlow(), drainFlow(), cfg.minFillLitres);   // rinse filled, then a new drain started
     if (gates.filled && !wasFilled) logEvent("Machine filled (%.1f L); rinsing", gates.litresTaken(tapFlow()));
     DEBUG_PRINT("2nd fill: rinsing with tap water.");
-    const char* step3 = TRS("3/4 RINSE", "3/4 ENJUAGUE");
+    const char* step3 = TRS("RINSE 3 OF 4", "ENJUAGUE 3 DE 4");
     if (stepIsStuck())     displaySetStatus(step3, STUCK_SHORT, STUCK_MESSAGE);
-    else if (gates.filled) displaySetStatus(step3, TRS("Rinsing...", "Enjuagando..."), TR("The machine is rinsing", "La lavadora está enjuagando"));
-    else                   displaySetStatus(step3, TRS("Using tap water", "Agua de la llave"), TR("Rinsing with tap water", "Enjuagando con agua de la llave"));
+    else if (gates.filled) displaySetStatus(step3, withTimeLeft(TRS("Rinsing...", "Enjuagando")), TR("The machine is rinsing", "La lavadora está enjuagando"));
+    else                   displaySetStatus(step3, withTimeLeft(TRS("Rinsing with|tap water", "Enjuague con|agua de la llave")),
+                                            TR("Rinsing with tap water", "Enjuagando con agua de la llave"));
     lastCheckTime = millis();
   }
 }
@@ -547,13 +589,18 @@ void drain2StateLogic() {
              2, "droplet");
     }
 
-    // Header shows the time left until the cycle ends (TRANSITION_DELAY).
+    // The last page shows the time left until the cycle ends.
     unsigned long elapsed = millis() - drain2StartTime;
     drain2Done = (elapsed >= cfg.drain2DurationMs);
     unsigned long left = drain2Done ? 0 : (cfg.drain2DurationMs - elapsed) / 1000UL;
-    char title[32];   // longer than the screen header (DISP_TITLE_LEN), which truncates safely
-    snprintf(title, sizeof(title), TRS("4/4 SAVE %lu:%02lu", "4/4 AHORRO %lu:%02lu"), left / 60UL, left % 60UL);
-    displaySetStatus(title, outputsMode() == modeSaveTank ? TRS("Saving water", "Guardando") : TRS("Tank full: drain", "Tanque lleno"), tankMsg);
+    char msg[64];
+    if (outputsMode() == modeSaveTank)
+      snprintf(msg, sizeof(msg), TRS("Saving rinse|water in tank|Ends in %lu:%02lu", "Ahorrando agua|en el tanque|Fin en %lu:%02lu"),
+               left / 60UL, left % 60UL);
+    else
+      snprintf(msg, sizeof(msg), TRS("Tank is full|Rest to drain|Ends in %lu:%02lu", "Tanque lleno|Ya no se guarda|Fin en %lu:%02lu"),
+               left / 60UL, left % 60UL);
+    displaySetStatus(TRS("SAVE 4 OF 4", "AHORRO 4 DE 4"), msg, tankMsg);
     lastCheckTime = millis();
   }
 }

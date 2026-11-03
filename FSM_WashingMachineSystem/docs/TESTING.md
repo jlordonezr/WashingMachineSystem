@@ -1,6 +1,6 @@
-# Testing – firmware 3.2
+# Testing – firmware 3.3
 
-**Status on 30 Oct 2026:** every automated suite passes and the firmware builds for the Arduino Nano ESP32 with cores 3.0.7 and 2.0.17. 3.0 has run correctly on the installed system. 3.1 adds languages only; 3.2 renames the app, adds the start-up animation and the Helvetica Bold screen font, and moves the buzzer to D1. Check H10–H12 on the real board.
+**Status on 30 Oct 2026:** every automated suite passes and the firmware builds for the Arduino Nano ESP32 with cores 3.0.7 and 2.0.17. 3.0 has run correctly on the installed system. 3.1 adds languages only; 3.2 renames the app, adds the start-up animation and the Helvetica Bold screen font, and moves the buzzer to D1. 3.3 pages the screen messages and makes phone alerts more reliable. Check H10–H13 on the real board.
 
 ## Automated (PC, no board)
 
@@ -10,8 +10,9 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 |---|---|---|---|
 | Flow meter, step gates, pump guard | `tests/test_flow.cpp` | 52 | Flow detection, noise, trickles, wrap-around, "machine is filled" guard, pump cut-off (since 2.4–2.6) |
 | Float switches | `tests/test_level.cpp` | 19 | Debouncing towards safety, bobbing float, failed low float, fault timing, wrap-around (3.0) |
-| Screen texts | `tools/check_screen_text.py` | 94 texts | Every screen text fits the OLED in both languages in Helvetica Bold 12 px, plain ASCII (3.1; font from 3.2) |
-| Translations | `tools/i18n_keys.py` | 377 texts | Every app text has a Spanish translation (3.1) |
+| Phone alerts | `tests/test_ntfy.cpp` | 24 | Topic rules, server address clean-up, JSON body (accents, quotes, `click`), UTF-8-safe cuts, which failures are retried (3.3) |
+| Screen texts | `tools/check_screen_text.py` | 147 texts and pages | Every screen text, and each page of a paged message, fits the OLED in both languages in Helvetica Bold 12 px, plain ASCII (3.1; font from 3.2; pages from 3.3) |
+| Translations | `tools/i18n_keys.py` | 383 texts | Every app text has a Spanish translation (3.1) |
 | Water history and settings storage | `tests/test_history.cpp` | 24 | Backup copy, unreadable records, migration, restore validation (since 2.8) |
 | Full-cycle simulation | `tests/sim/` | 13 scenarios | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |
 | Dashboard | `tests/app/test_dashboard.js` | 38 | The real page in headless Chromium against a mock controller; axe-core accessibility on all tabs (3.0) |
@@ -21,7 +22,7 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 
 | ID | Scenario | Key checks |
 |---|---|---|
-| F1 | Full cycle reusing tank water | Step times, pump only while drawing, cut-off ≤ 0.35 s, never pump + tap together, statistics, alerts, event log |
+| F1 | Full cycle reusing tank water | Step times, pump only while drawing, cut-off ≤ 0.35 s, never pump + tap together, statistics, alerts, event log; a second cycle shows *min left* (3.3) |
 | F2 | Drain pump at program start | Wash step does not end early |
 | F3 | STOP during the wash | Ready, outputs safe, alert |
 | F4 | Power cut during the rinse | Interruption detected after power-up, alert, screen, marker cleared |
@@ -70,6 +71,7 @@ Do these with the washing machine empty and someone at the controller. Note each
 | H10 | Spanish screen (3.1) | Run one wash in Spanish; read every screen | Every text readable, nothing scrolls or is cut off; alerts arrive with accents |
 | H9 | Setup page | Hold STOP 5 s at `READY`; join with the key shown; browse to `/update` | Key works; `/update` is not offered (setup page only) |
 | H11 | Start-up screen (3.2) | Power on, watch the screen; then power on again and press START during the dog | Border Collie chases the butterfly (about 4 s), then `REUSO DE AGUA` / *Sistema listo* for 2 s, then `LISTO`; START ends the animation at once. Messages are in Helvetica Bold and readable |
+| H13 | Screen pages (3.3) | Run one wash in Spanish; watch each step for 15 s | Pages change every 3 s and each is readable; header `LAVADO 1 DE 4` … `AHORRO 4 DE 4`; *Faltan n min* from the second wash and roughly right; `TERMINADO` shows *Lavado listo › Reusados n L › Guardados n L* |
 | H12 | Buzzer on D1 (3.2) | Settings → Buzzer on; run a short cycle, or the float fault in H3 | Two short beeps at the end, three long beeps on the alarm. A short chirp at power-on is expected (D1 is the TX0 pin) |
 
 Also: **a full real wash** (all four steps) with the tank half full, then check the *Water use* figures and the event log.
@@ -84,6 +86,8 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 |---|---|---|---|
 | 2026-10-30 | 3.2.0 | PC tests | All suites pass (browser tests skipped: no Node.js on this Mac) |
 | — | 3.2.0 | Hardware H11, H12 | Not done yet |
+| 2026-11-03 | 3.3.0 | PC tests, firmware build | All suites pass (browser tests skipped: Playwright not installed); 1,372,029 bytes flash, 95,916 bytes RAM with core 3.3.12 |
+| — | 3.3.0 | Hardware H13, test alert | Not done yet |
 | 2026-10-30 | 3.1.0 | PC tests | All suites pass (see `tests/test_results.txt`) |
 | — | 3.1.0 | Hardware H10 | Not done yet |
 | 2026-10-30 | 3.0.0 | Jose, installed system | Working as expected |

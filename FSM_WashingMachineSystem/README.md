@@ -1,4 +1,45 @@
-# Reuse Water System – Firmware 3.2 (Wi-Fi)
+# Reuse Water System – Firmware 3.3 (Wi-Fi)
+
+## What's new in 3.3: screen messages the whole household understands
+
+The wash cycle, the safety logic, the settings and the history formats are unchanged from 3.2 (no reset, no migration). The app shows the same sentences as before.
+
+The screen line holds only about 15 characters in the bold font, so until 3.2 a message was two or three words (*Not saving*, *Tank low: tap*, *Check machine*) and the header used codes (`2/4 SOAPY DRAIN`). From 3.3 a message has up to five short **pages that change every 3 s**: what is happening, what it means, and what to do or how long it takes.
+
+| When | Header (EN / ES) | Pages, English | Pages, Spanish |
+|---|---|---|---|
+| Ready | `READY` / `LISTO` | Start washer, › Press START › Tank: low/half/full | Inicie lavadora › y pulse START › Tanque: bajo/medio/lleno |
+| Start pressed | `STARTING` / `INICIANDO` | Getting ready... | Preparando... |
+| Step 1, not filling yet | `WASH 1 OF 4` / `LAVADO 1 DE 4` | Waiting for › washer to fill | Esperando que › llene la lavadora |
+| Step 1, from the tank / tap / tank low | `WASH 1 OF 4` | Reusing water › from the tank / Filling washer › with tap water / Tank is low › Using tap water | Reusando agua › del tanque / Llenando con › agua de la llave / Tanque bajo › Agua de la llave |
+| Step 1, washing | `WASH 1 OF 4` | Washing... | Lavando ropa |
+| Step 2 | `DRAIN 2 OF 4` / `DESAGUE 2 DE 4` | Soapy water › is not saved | Agua jabonosa › no se guarda |
+| Step 3, fill / rinsing | `RINSE 3 OF 4` / `ENJUAGUE 3 DE 4` | Rinsing with › tap water / Rinsing... | Enjuague con › agua de la llave / Enjuagando |
+| Steps 1–3, time | (same) | + 25 min left | + Faltan 25 min |
+| Step 4, saving / tank full | `SAVE 4 OF 4` / `AHORRO 4 DE 4` | Saving rinse › water in tank › Ends in 18:42 / Tank is full › Rest to drain › Ends in 18:42 | Ahorrando agua › en el tanque › Fin en 18:42 / Tanque lleno › Ya no se guarda › Fin en 18:42 |
+| No flow for too long | (step) | No water flow › Is washer on? › If so: STOP › Call installer | Sin flujo › Revise lavadora › Si funciona, › pulse STOP y › pida ayuda |
+| Cycle finished | `DONE` / `TERMINADO` | Wash finished › Reused 26 L › Saved 30 L | Lavado listo › Reusados 26 L › Guardados 30 L |
+| Cycle stopped | `STOPPED` / `DETENIDO` | Cycle stopped › No water saved | Ciclo detenido › Sin ahorro |
+| Power cut during a cycle | `INTERRUPTED` / `INTERRUMPIDO` | Wash cut short › Check washer › Start again | Ciclo cortado › Revise lavadora › Inicie de nuevo |
+| Tank wash | `TANK CLEANING` / `LIMPIEZA TANQUE` | Cleaning tank › Stops when full › or in 9:42 | Limpiando › Para al llenarse › o en 9:42 |
+| Tank wash ended | `TANK CLEANED` / `WASH STOPPED` | Tank is clean › and full / Stopped early › Tank not full / Check the tank › Call installer | Tanque limpio › y lleno / Detenido antes › Tanque no lleno / Revise tanque › Pida ayuda |
+| Wi-Fi, updates | IP / `ReuseWater-Setup` / `UPDATING` / `UPDATE FAILED` | Wi-Fi connected › App: this IP / Wi-Fi setup › Key … / Updating › Do not unplug / Not updated › Try again | Wi-Fi conectado › App: esta IP / Configurar Wi-Fi › gw-… / Actualizando › No desconecte / Sin cambios › Reintente |
+
+- **Pages** (`GreyWaterDisplay.cpp`): a message is `"page|page|page"`. Each page is measured once and shown in 14 px when it fits, else 12 px. A countdown in a later page (`Ends in 18:42`) does not restart the pages. A notice stays on long enough to show every page once (3 s each, `DISPLAY_PAGE_MS`).
+- **Minutes left:** once steps 1–3 have each been timed once (from the second wash), they add *25 min left*: the typical rest of the current step (at least 1 min), the typical later steps and the fixed step 4.
+- **Steps in words** in the header (`WASH 1 OF 4` instead of `1/4 WASH`); step 4's clock moved from the header into the last page (*Ends in 18:42*). The *check sensors* alert now says *Step 2 of 4* instead of quoting the screen header.
+- **Checks:** `tools/check_screen_text.py` measures every page (147 texts and pages, both languages, 76 in 14 px). Simulation F1 checks the *min left* page on a second cycle; F12 checks the paged Spanish end screen (*Reusados*, *Guardados*). `tests/sim/run_sim.sh` also finds the AgileStateMachine library in `~/Documents/Arduino` (macOS).
+- Build: 1.37 MB flash (43%), 96 KB RAM (29%) with Espressif core 3.3.12.
+
+### Phone alerts fixed and more reliable (also in 3.3)
+
+- **Fixed: wrong reason for a failed alert.** The controller marked "no Wi-Fi" as code −2 and "bad server address" as −3, but HTTPClient uses the same numbers for "could not send". A lost connection was shown in the app as *no Wi-Fi* or *bad server address*. The codes are now −100 (no Wi-Fi) and −101 (bad server address).
+- **Fixed: alerts lost on a network hiccup.** An alert was tried once. Now an alert with no answer, a timeout, HTTP 429 (too many requests) or a server error (5xx) is tried up to 3 times (after 5 s, then 10 s). An alert raised while Wi-Fi is down waits up to 5 minutes for it (was 60 s). TLS handshake, connect and answer each time out after 10 s (the handshake waited up to 120 s, holding every other alert).
+- **Fixed: topics the server refuses.** ntfy accepts only letters, numbers, `-` and `_` in a topic; a space or an accent made every alert fail with HTTP 400. Settings now refuses such a topic, in the app and on the controller.
+- **Fixed: subscribe link pasted as the server.** With `https://ntfy.sh/my-topic` in *Alert server*, alerts went to the wrong place as raw JSON. The controller now removes the topic, spaces and trailing slashes from the server address (also for settings saved before 3.3). An empty server means `https://ntfy.sh`.
+- **Tapping an alert opens the app** (ntfy `click`, using the controller's IP address).
+- **Clearer failures in the app:** *too many alerts, try again later* (429), *the server refused the topic* (400/404), *the server needs a login* (401/403). The event log says how many tries an alert took. The app waits 120 s for the test-alert result (was 75 s).
+- **Code:** the alert message, topic check, address clean-up and retry rule moved to `Ntfy.h` (no network code), checked on the PC by `tests/test_ntfy.cpp` (24 checks). `jsonEscape()` now never cuts a UTF-8 character or an escape in half.
 
 ## What's new in 3.2: new name, start-up animation, clearer screen, buzzer on D1
 

@@ -21,8 +21,12 @@
 #define CONFIG_PORTAL_TIMEOUT_S 180           // setup page closes after 3 minutes
 #define WIFI_RETRY_MS           60000         // try to reconnect every minute when offline
 #define WEB_USER                "admin"
-#define FIRMWARE_VERSION        "3.2.0"
+#define FIRMWARE_VERSION        "3.3.0"
 #define AUTH_SLOTS              6             // devices tracked for the wrong-password lockout
+#define ALERT_ATTEMPTS          3             // tries per alert when the server does not answer or is busy
+#define ALERT_RETRY_MS          5000          // wait before the 2nd try (doubled before the 3rd)
+#define ALERT_TIMEOUT_MS        10000         // connect, TLS handshake and answer, each
+#define ALERT_WIFI_WAIT_S       300           // an alert raised while offline waits this long for Wi-Fi
 
 void netBegin();               // call once in setup(), after settingsBegin()
 void netLoop();                // call on every loop() pass (non-blocking)

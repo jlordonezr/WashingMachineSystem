@@ -11,7 +11,7 @@ Run everything with one command from the sketch folder: `sh tests/run_all.sh`. S
 
 | Scenario | Checks |
 |---|---|
-| F1 full cycle reusing tank water | Each step starts at the right moment; pump starts when the machine draws; pump and tap valve never on together; pump stops within 0.35 s of the inlet closing; rinse water saved; every screen message shown; statistics and typical step times recorded; low-priority completion alert; event log; cycle marker cleared |
+| F1 full cycle reusing tank water | Each step starts at the right moment; pump starts when the machine draws; pump and tap valve never on together; pump stops within 0.35 s of the inlet closing; rinse water saved; every screen message shown; *min left* page on a second cycle (3.3); statistics and typical step times recorded; low-priority completion alert; event log; cycle marker cleared |
 | F2 drain pump at program start | Wash step does not end early |
 | F3 STOP during the wash | Ready again, outputs safe, minimum-priority alert, marker cleared |
 | F4 power cut during the rinse | Marker in flash during the cycle; after power-up: interruption detected, alert, event, INTERRUPTED on screen, outputs safe, marker cleared, notice cleared by the next Start |
@@ -47,6 +47,7 @@ g++ -std=c++17 -O1 -Wall -Istubs test_history.cpp stubs/GreyWaterSettings.cpp -o
 | `old_detector_repro.cpp` | The firmware 2.3 drain detector, copied unchanged. It reproduces the fault: stuck while a pulse arrives in every 250 ms window, advancing only after the sensor is unplugged and plugged back in |
 | `old_cycle_compare.cpp` | The firmware 2.3 step logic run through the same cycle scenarios as the new tests (-1 = stuck) |
 | `test_history.cpp` | Water history storage in `GreyWaterSettings.cpp` against a simulated flash store: survives restarts, recovers from the backup copy, keeps unreadable records, upgrades old records, restores from the app, refuses invalid backups (20 checks, including the upgrade from the 2.3–2.8 format) |
+| `test_ntfy.cpp` | `Ntfy.h`: alert topic rules, server address clean-up, JSON body, UTF-8-safe cuts, retry rule (3.3) |
 | `test_level.cpp` | `TankLevel.h`: debouncing towards the safe reading, bobbing float, failed low float, fault timing, millis() wrap (3.0) |
 | `app/test_dashboard.js` | The real `web/dashboard.html` against a mock controller: confirm-before-success, timeouts, float fault, alert results, Service tab, accessibility (3.0) |
 | `test_flow.cpp` | 12 unit tests (T01–T12), 9 cycle scenarios (S1–S8), 5 "machine is filled" guard tests (S9–S13) and 5 pump-protection tests (P1–P5), 52 checks in total |

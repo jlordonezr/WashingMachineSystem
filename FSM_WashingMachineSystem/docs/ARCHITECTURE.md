@@ -1,4 +1,4 @@
-# Architecture – firmware 3.2
+# Architecture – firmware 3.3
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -28,7 +28,7 @@ SSRs are on when their pin is HIGH (`ssrON`). Wiring details are in the Runbook.
 |---|---|---|---|---|
 | Safety (`GreyWaterTask.cpp`) | 1 | 3 | 20 ms | Float switches, pump cut-off, interlocks, SSR pins |
 | `loop()` (Arduino) | 1 | 1 | as fast as it runs | Cycle, buttons, flow meters, screen, statistics, web server, OTA, event log |
-| Alerts (`GreyWaterNet.cpp`) | 0 | 1 | on demand | HTTPS POSTs to ntfy, from a queue of 6 |
+| Alerts (`GreyWaterNet.cpp`) | 0 | 1 | on demand | HTTPS POSTs to ntfy (message built in `Ntfy.h`), from a queue of 6, up to 3 tries each |
 | Wi-Fi / lwIP (ESP-IDF) | 0 | high | — | Network stack |
 | Flow interrupts | — | ISR | per pulse | Pulse counters only (1 ms glitch filter) |
 
@@ -43,7 +43,7 @@ FSM_WashingMachineSystem.ino   setup(), loop(), state machine wiring (AgileState
 │    requests modes ──► GreyWaterOutputs   only writer of the SSR pins; interlocks; PumpGuard; TankLevel
 │                         ▲  safetyTick() every 20 ms from GreyWaterTask (FreeRTOS)
 ├─ GreyWaterSensors     flow interrupts + FlowMeter (rate, flowing, starts, litres)
-├─ GreyWaterDisplay     OLED: status / notices, frame-timed, only redraws on change
+├─ GreyWaterDisplay     OLED: status / notices in pages ("a|b|c", 3 s each), frame-timed, only redraws on change
 ├─ GreyWaterDiagnostics event log (50, RAM), loop timing, buzzer, restart reason
 ├─ GreyWaterSettings    settings + history in NVS (versioned structs, history twice + kept-aside copy)
 └─ GreyWaterNet         Wi-Fi (WiFiManager), web server + API, OTA, mDNS, NTP, alert task
