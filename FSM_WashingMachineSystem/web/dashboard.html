@@ -1128,7 +1128,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   });
   // Alerts: create a hard-to-guess topic and show how to subscribe.
   function topicHelp(){
-    var tp=$('f-ntfyTopic').value.trim(),sv=($('f-ntfyServer').value.trim()||'https://ntfy.sh').replace(/\/$/,''),h=$('topicHelp');h.textContent='';
+    var tp=$('f-ntfyTopic').value.trim(),sv=($('f-ntfyServer').value.trim()||'https://ntfy.sh').replace(/\/+$/,''),h=$('topicHelp');h.textContent='';
+    if(tp&&sv.slice(-tp.length-1)==='/'+tp&&sv.indexOf('://')+3<sv.length-tp.length-1)sv=sv.slice(0,-tp.length-1).replace(/\/+$/,'');   // a pasted subscribe link, as the controller does
     if(!tp){h.textContent=t('No topic: phone alerts are off.');return;}
     var url=sv+'/'+encodeURIComponent(tp),a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=url;
     h.appendChild(document.createTextNode(t('In the ntfy app, subscribe to this topic, or open')+' '));h.appendChild(a);

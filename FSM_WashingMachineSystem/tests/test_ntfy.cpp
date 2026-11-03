@@ -65,8 +65,25 @@ static void N5() {
   CHECK(NTFY_NO_WIFI < -11 && NTFY_BAD_URL < -11, "codes overlap HTTPClient's (-1..-11)");
 }
 
+// N6: an alert keeps trying through an outage, at growing intervals, then gives up (3.3.1).
+static void N6() {
+  CHECK(ntfyRetryDelayMs(1, 5000, 300000) == 5000 && ntfyRetryDelayMs(2, 5000, 300000) == 10000 &&
+        ntfyRetryDelayMs(3, 5000, 300000) == 20000, "delays are not 5 s, 10 s, 20 s");
+  CHECK(ntfyRetryDelayMs(7, 5000, 300000) == 300000 && ntfyRetryDelayMs(200, 5000, 300000) == 300000, "delay not capped at 5 min");
+  CHECK(ntfyRetryDelayMs(0, 5000, 300000) == 5000, "no tries yet (no Wi-Fi): not the first delay");
+  CHECK(ntfyKeepTrying(-1, 60000, 1800000) && ntfyKeepTrying(NTFY_NO_WIFI, 60000, 1800000) && ntfyKeepTrying(503, 0, 1800000),
+        "outage not tried again");
+  CHECK(!ntfyKeepTrying(-1, 1800000, 1800000), "still trying after the window");
+  CHECK(!ntfyKeepTrying(200, 0, 1800000) && !ntfyKeepTrying(400, 0, 1800000) && !ntfyKeepTrying(NTFY_BAD_URL, 0, 1800000),
+        "delivered or refused alert tried again");
+  // A 30 min outage: tries at 0, 5, 15, 35, 75, 155, 315, 615, 915 ... s, never more often than every 5 min after that.
+  unsigned long t = 0; int tries = 0;
+  for (uint8_t a = 1; ntfyKeepTrying(-1, t, 1800000); ++a) { ++tries; t += ntfyRetryDelayMs(a, 5000, 300000); }
+  CHECK(tries >= 10 && tries <= 14, "%d tries in a 30 min outage", tries);
+}
+
 int main() {
-  N1(); N2(); N3(); N4(); N5();
+  N1(); N2(); N3(); N4(); N5(); N6();
   printf("%d checks passed, %d failed\n", passes, failures);
   return failures ? 1 : 0;
 }

@@ -28,7 +28,7 @@ SSRs are on when their pin is HIGH (`ssrON`). Wiring details are in the Runbook.
 |---|---|---|---|---|
 | Safety (`GreyWaterTask.cpp`) | 1 | 3 | 20 ms | Float switches, pump cut-off, interlocks, SSR pins |
 | `loop()` (Arduino) | 1 | 1 | as fast as it runs | Cycle, buttons, flow meters, screen, statistics, web server, OTA, event log |
-| Alerts (`GreyWaterNet.cpp`) | 0 | 1 | on demand | HTTPS POSTs to ntfy (message built in `Ntfy.h`), from a queue of 6, up to 3 tries each |
+| Alerts (`GreyWaterNet.cpp`) | 0 | 1 | on demand | HTTPS POSTs to ntfy (message built in `Ntfy.h`), from a queue of 6; failed alerts wait in 6 slots and are tried again for up to 30 min (3.3.1) |
 | Wi-Fi / lwIP (ESP-IDF) | 0 | high | — | Network stack |
 | Flow interrupts | — | ISR | per pulse | Pulse counters only (1 ms glitch filter) |
 

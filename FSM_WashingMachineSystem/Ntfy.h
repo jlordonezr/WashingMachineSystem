@@ -21,7 +21,7 @@
 // -1 .. -11 for its own errors, so these stay clear of them (3.2.0 used -2 and
 // -3, which HTTPClient also uses for "send failed", and the app then said
 // "no Wi-Fi" or "bad server address" for a lost connection).
-#define NTFY_NO_WIFI  (-100)   // Wi-Fi did not come back within ALERT_WIFI_WAIT_S
+#define NTFY_NO_WIFI  (-100)   // Wi-Fi did not come back within the retry window
 #define NTFY_BAD_URL  (-101)   // the server address could not be used
 
 static inline bool ntfyTopicValid(const char* t) {
@@ -98,6 +98,21 @@ static inline bool ntfyBuildJson(char* out, size_t size, const char* topic, cons
 // server error. A 4xx (bad topic, access denied) will not fix itself.
 static inline bool ntfyRetryable(int code) {
   return (code < 0 && code != NTFY_BAD_URL) || code == 408 || code == 429 || code >= 500;
+}
+
+// Wait before try number attempts+1: base, 2 x base, 4 x base ... at most maxMs.
+static inline unsigned long ntfyRetryDelayMs(uint8_t attempts, unsigned long baseMs, unsigned long maxMs) {
+  unsigned long d = baseMs;
+  for (uint8_t i = 1; i < attempts && d < maxMs; ++i) d *= 2;
+  return d < maxMs ? d : maxMs;
+}
+
+// After a failed try: keep the alert for another one? No Wi-Fi counts as
+// "worth another try"; delivered or a permanent failure ends it, and so does
+// the end of the retry window.
+static inline bool ntfyKeepTrying(int code, unsigned long elapsedMs, unsigned long windowMs) {
+  if (code >= 200 && code < 300) return false;
+  return ntfyRetryable(code) && elapsedMs < windowMs;
 }
 
 #endif

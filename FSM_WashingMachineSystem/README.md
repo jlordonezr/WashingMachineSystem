@@ -1,5 +1,14 @@
 # Reuse Water System – Firmware 3.3 (Wi-Fi)
 
+## What's new in 3.3.1: alerts survive an alert-server outage
+
+Found on the installed system: the public ntfy.sh server was unreachable for hours (from the home network and from outside). The test alert correctly said *could not connect*, but 3.3.0 gave a real alert only 3 tries in about 15 s, so it would have been lost.
+
+- An alert that cannot be sent (no Wi-Fi, no answer, timeout, 408, 429, 5xx) is kept and tried again after 5 s, 10 s, 20 s … then every 5 min, for up to **30 min** (`ALERT_RETRY_WINDOW_S`). Up to 6 alerts wait at once (`ALERT_PENDING`), each on its own schedule, so a new alert (or the test alert) is never stuck behind one that is waiting. The event log says *Alert failed (code n), trying again for up to 30 min*, then *Alert delivered (try n)* or *Alert failed*.
+- The test alert gives up after 30 s (`ALERT_TEST_WINDOW_S`), so the app still answers within its 120 s wait.
+- App: the subscribe link under *Alert topic* no longer repeats a topic pasted into *Alert server* (`https://ntfy.sh/topic/topic`); it cleans the address the same way the controller does.
+- `Ntfy.h` gains `ntfyRetryDelayMs()` and `ntfyKeepTrying()`; `tests/test_ntfy.cpp` has 31 checks.
+
 ## What's new in 3.3: screen messages the whole household understands
 
 The wash cycle, the safety logic, the settings and the history formats are unchanged from 3.2 (no reset, no migration). The app shows the same sentences as before.
@@ -39,7 +48,7 @@ The screen line holds only about 15 characters in the bold font, so until 3.2 a 
 - **Fixed: subscribe link pasted as the server.** With `https://ntfy.sh/my-topic` in *Alert server*, alerts went to the wrong place as raw JSON. The controller now removes the topic, spaces and trailing slashes from the server address (also for settings saved before 3.3). An empty server means `https://ntfy.sh`.
 - **Tapping an alert opens the app** (ntfy `click`, using the controller's IP address).
 - **Clearer failures in the app:** *too many alerts, try again later* (429), *the server refused the topic* (400/404), *the server needs a login* (401/403). The event log says how many tries an alert took. The app waits 120 s for the test-alert result (was 75 s).
-- **Code:** the alert message, topic check, address clean-up and retry rule moved to `Ntfy.h` (no network code), checked on the PC by `tests/test_ntfy.cpp` (24 checks). `jsonEscape()` now never cuts a UTF-8 character or an escape in half.
+- **Code:** the alert message, topic check, address clean-up and retry rule moved to `Ntfy.h` (no network code), checked on the PC by `tests/test_ntfy.cpp` (24 checks in 3.3.0). `jsonEscape()` now never cuts a UTF-8 character or an escape in half.
 
 ## What's new in 3.2: new name, start-up animation, clearer screen, buzzer on D1
 

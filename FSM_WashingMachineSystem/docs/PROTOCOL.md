@@ -94,7 +94,7 @@ Fields are only added between versions, never renamed, so an older page keeps wo
 | App, confirmation of an action | 10 s |
 | App, test-alert result | 120 s (75 s until 3.2.0) |
 | Controller, Wi-Fi reconnect | every 60 s while disconnected (saved network) |
-| Controller, alert sending | waits up to 5 min for Wi-Fi; 10 s each for connect, TLS handshake and answer; up to 3 tries (5 s, then 10 s apart) when there is no answer, a timeout, 408, 429 or 5xx; queue of 6, extra alerts are dropped and logged (3.3) |
+| Controller, alert sending | 10 s each for connect, TLS handshake and answer. No Wi-Fi, no answer, a timeout, 408, 429 or 5xx: tried again after 5 s, 10 s, 20 s … at most every 5 min, for up to 30 min (test alert: 30 s); up to 6 alerts wait at once, each on its own schedule, the oldest is given up when a 7th arrives; queue of 6, extra alerts are dropped and logged (3.3.1) |
 | Controller, Wi-Fi setup page | closes after 3 min |
 
 ## Alerts (controller → ntfy)

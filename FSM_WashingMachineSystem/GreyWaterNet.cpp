@@ -30,9 +30,13 @@ static unsigned long lastRetry = 0;
 // intact; HTTP headers (used up to 3.0) only carry plain ASCII. The message
 // itself is built in Ntfy.h, which the PC tests check.
 //
-// From 3.3 an alert that gets no answer, a timeout, "too many requests" or
-// a server error is tried again (ALERT_ATTEMPTS in all), and an alert raised
-// while Wi-Fi is down waits up to ALERT_WIFI_WAIT_S for it to come back.
+// From 3.3 an alert that gets no answer, a timeout, "too many requests", a
+// server error or no Wi-Fi is kept and tried again, at growing intervals
+// (5 s, 10 s, 20 s ... at most every 5 min), for up to ALERT_RETRY_WINDOW_S
+// (30 min), so an outage of the alert server or the router does not lose it.
+// Each waiting alert has its own schedule, so new alerts are not held up
+// behind it. The test alert gives up after ALERT_TEST_WINDOW_S, so the app
+// gets an answer while the person is still looking.
 struct NotifyItem {
   char    url[72];       // server root, e.g. https://ntfy.sh/
   char    topic[64];
@@ -40,6 +44,7 @@ struct NotifyItem {
   char    body[360];
   char    tags[32];
   uint8_t priority;
+  bool    test;          // the Settings "Send test alert" button
 };
 
 // "Reuse Water: tank full" -> "tank full", for the event log.
@@ -53,25 +58,22 @@ static const char* shortTitle(const char* t) {
 static QueueHandle_t notifyQueue = nullptr;
 
 // Delivery results travel back to loop() through a second queue, because the
-// event log is only ever written from loop() (it has no lock).
-struct NotifyResult { char title[80]; int code; uint8_t attempts; };   // code: HTTP status, or <0 = not sent
+// event log is only ever written from loop() (it has no lock). A result that
+// is not final ("failed, will try again") is only logged.
+struct NotifyResult { char title[80]; int code; uint8_t attempts; bool final; };   // code: HTTP status, or <0 = not sent
 static QueueHandle_t resultQueue = nullptr;
-static uint32_t alertSeq = 0;      // results received so far (the app watches it change)
+static uint32_t alertSeq = 0;      // final results received so far (the app watches it change)
 static int      alertLastCode = 0;
 static bool     alertLastOk = false;
 
-static void reportResult(const NotifyItem& item, int code, uint8_t attempts) {
+static void reportResult(const NotifyItem& item, int code, uint8_t attempts, bool final = true) {
   if (!resultQueue) return;
   NotifyResult r;
   strlcpy(r.title, item.title, sizeof(r.title));
   r.code = code;
   r.attempts = attempts;
+  r.final = final;
   xQueueSend(resultQueue, &r, 0);
-}
-
-static bool waitForWiFi(uint32_t seconds) {
-  for (uint32_t i = 0; i < seconds && WiFi.status() != WL_CONNECTED; ++i) vTaskDelay(pdMS_TO_TICKS(1000));
-  return WiFi.status() == WL_CONNECTED;
 }
 
 // One HTTP POST. Returns the HTTP status, or a negative code (HTTPClient's own
@@ -103,27 +105,66 @@ static int postAlert(const NotifyItem& item) {
   return code;
 }
 
+// Alerts waiting for their next try (this task only).
+struct PendingAlert {
+  NotifyItem    item;
+  unsigned long firstMs, nextMs;
+  int           lastCode;
+  uint8_t       attempts;
+  bool          used;
+};
+static PendingAlert pendingAlerts[ALERT_PENDING];
+
 static void notifyTask(void*) {
   NotifyItem item;
   for (;;) {
-    if (xQueueReceive(notifyQueue, &item, portMAX_DELAY) != pdTRUE) continue;
-
-    int code = NTFY_NO_WIFI;
-    uint8_t attempt = 0;
-    while (attempt < ALERT_ATTEMPTS) {
-      if (!waitForWiFi(attempt == 0 ? ALERT_WIFI_WAIT_S : 30)) { code = NTFY_NO_WIFI; break; }
-      code = postAlert(item);
-      ++attempt;
-      DEBUG_PRINT("Alert sent, HTTP status: ");
-      DEBUG_PRINT(code);
-      if (!ntfyRetryable(code) || attempt >= ALERT_ATTEMPTS) break;
-      vTaskDelay(pdMS_TO_TICKS(ALERT_RETRY_MS * attempt));   // 5 s, then 10 s
+    // Sleep until a new alert arrives or the next try is due.
+    unsigned long now = millis();
+    TickType_t wait = portMAX_DELAY;
+    for (PendingAlert& p : pendingAlerts) {
+      if (!p.used) continue;
+      unsigned long due = (long)(p.nextMs - now) > 0 ? p.nextMs - now : 0;
+      if (pdMS_TO_TICKS(due) < wait) wait = pdMS_TO_TICKS(due);
     }
-    reportResult(item, code, attempt);                         // 200 = delivered
+    if (xQueueReceive(notifyQueue, &item, wait) == pdTRUE) {
+      PendingAlert* slot = nullptr;
+      for (PendingAlert& p : pendingAlerts) if (!p.used) { slot = &p; break; }
+      if (!slot) {                                 // all slots waiting: give up on the oldest
+        slot = &pendingAlerts[0];
+        for (PendingAlert& p : pendingAlerts) if ((long)(p.firstMs - slot->firstMs) < 0) slot = &p;
+        reportResult(slot->item, slot->lastCode, slot->attempts);
+      }
+      slot->item = item;
+      slot->firstMs = slot->nextMs = millis();
+      slot->lastCode = NTFY_NO_WIFI;
+      slot->attempts = 0;
+      slot->used = true;
+    }
+
+    // Try every alert that is due.
+    for (PendingAlert& p : pendingAlerts) {
+      if (!p.used || (long)(millis() - p.nextMs) < 0) continue;
+      int code = NTFY_NO_WIFI;
+      if (WiFi.status() == WL_CONNECTED) {
+        code = postAlert(p.item);
+        p.attempts++;
+        DEBUG_PRINT("Alert sent, HTTP status: ");
+        DEBUG_PRINT(code);
+      }
+      p.lastCode = code;
+      unsigned long windowMs = (p.item.test ? ALERT_TEST_WINDOW_S : ALERT_RETRY_WINDOW_S) * 1000UL;
+      if (ntfyKeepTrying(code, millis() - p.firstMs, windowMs)) {
+        if (p.attempts == 1 && !p.item.test) reportResult(p.item, code, p.attempts, false);   // logged once: "will try again"
+        p.nextMs = millis() + ntfyRetryDelayMs(p.attempts, ALERT_RETRY_MS, ALERT_RETRY_MAX_MS);
+      } else {
+        reportResult(p.item, code, p.attempts);                     // 200 = delivered
+        p.used = false;
+      }
+    }
   }
 }
 
-void notify(const char* title, const char* body, uint8_t priority, const char* tags) {
+static void queueAlert(const char* title, const char* body, uint8_t priority, const char* tags, bool test) {
   logEvent("Alert: %s", shortTitle(title));
   if (notifyQueue == nullptr || cfg.ntfyTopic[0] == '\0') return;
 
@@ -137,10 +178,15 @@ void notify(const char* title, const char* body, uint8_t priority, const char* t
   strlcpy(item.body,  body,  sizeof(item.body));
   strlcpy(item.tags,  tags ? tags : "", sizeof(item.tags));
   item.priority = (priority < 1) ? 1 : (priority > 5 ? 5 : priority);
+  item.test = test;
 
   if (xQueueSend(notifyQueue, &item, 0) != pdTRUE) {   // never block; drop the alert if the queue is full
     logEvent("Alert not sent: queue full");
   }
+}
+
+void notify(const char* title, const char* body, uint8_t priority, const char* tags) {
+  queueAlert(title, body, priority, tags, false);
 }
 
 // Called from netLoop(): logs what happened to each alert.
@@ -148,9 +194,15 @@ static void drainAlertResults() {
   NotifyResult r;
   while (resultQueue && xQueueReceive(resultQueue, &r, 0) == pdTRUE) {
     const char* t = shortTitle(r.title);
-    alertSeq++; alertLastCode = r.code; alertLastOk = (r.code >= 200 && r.code < 300);
-    if (alertLastOk && r.attempts > 1) logEvent("Alert delivered (try %u): %s", (unsigned)r.attempts, t);
-    else if (alertLastOk)              logEvent("Alert delivered: %s", t);
+    bool ok = (r.code >= 200 && r.code < 300);
+    if (!r.final) {
+      if (r.code == NTFY_NO_WIFI) logEvent("Alert waiting for Wi-Fi (up to %u min): %s", (unsigned)(ALERT_RETRY_WINDOW_S / 60), t);
+      else logEvent("Alert failed (code %d), trying again for up to %u min: %s", r.code, (unsigned)(ALERT_RETRY_WINDOW_S / 60), t);
+      continue;
+    }
+    alertSeq++; alertLastCode = r.code; alertLastOk = ok;
+    if (ok && r.attempts > 1)          logEvent("Alert delivered (try %u): %s", (unsigned)r.attempts, t);
+    else if (ok)                       logEvent("Alert delivered: %s", t);
     else if (r.code == NTFY_NO_WIFI)   logEvent("Alert not sent (no Wi-Fi): %s", t);
     else if (r.code == NTFY_BAD_URL)   logEvent("Alert not sent (bad server address): %s", t);
     else                               logEvent("Alert failed (code %d, %u tries): %s", r.code, (unsigned)r.attempts, t);
@@ -533,9 +585,9 @@ static void handleWashStop() {
 static void handleTestAlert() {
   if (!actionAllowed()) return;
   if (cfg.ntfyTopic[0] == '\0') { sendError(400, "Add an alert topic in Settings first."); return; }
-  notify(TR("Reuse Water: test alert", "Reúso de Agua: alerta de prueba"),
-         TR("Alerts from your Reuse Water System are working.",
-            "Las alertas de su Sistema de Reúso de Agua funcionan."), 3, "bell");
+  queueAlert(TR("Reuse Water: test alert", "Reúso de Agua: alerta de prueba"),
+             TR("Alerts from your Reuse Water System are working.",
+                "Las alertas de su Sistema de Reúso de Agua funcionan."), 3, "bell", true);
   sendJson(200, "{\"ok\":true}");
 }
 
