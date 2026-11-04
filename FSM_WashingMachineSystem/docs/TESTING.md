@@ -11,7 +11,7 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | Flow meter, step gates, pump guard | `tests/test_flow.cpp` | 52 | Flow detection, noise, trickles, wrap-around, "machine is filled" guard, pump cut-off (since 2.4–2.6) |
 | Float switches | `tests/test_level.cpp` | 19 | Debouncing towards safety, bobbing float, failed low float, fault timing, wrap-around (3.0) |
 | Phone alerts | `tests/test_ntfy.cpp` | 31 | Topic rules, server address clean-up, JSON body (accents, quotes, `click`), UTF-8-safe cuts, which failures are retried (3.3), retry intervals and the 30 min window (3.3.1) |
-| Screen texts | `tools/check_screen_text.py` | 147 texts and pages | Every screen text, and each page of a paged message, fits the OLED in both languages in Helvetica Bold 12 px, plain ASCII (3.1; font from 3.2; pages from 3.3) |
+| Screen texts | `tools/check_screen_text.py` | 127 texts and pages | Every screen text, and each page of a paged message, fits the OLED in both languages in Helvetica Bold 12 px, plain ASCII (3.1; font from 3.2; pages from 3.3) |
 | Translations | `tools/i18n_keys.py` | 392 texts | Every app text has a Spanish translation (3.1) |
 | Water history and settings storage | `tests/test_history.cpp` | 32 | Backup copy, unreadable records, migration, restore validation (since 2.8); settings version 7 → 8, the screen font and the minimum save flow (3.4) |
 | Full-cycle simulation | `tests/sim/` | 14 scenarios | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |

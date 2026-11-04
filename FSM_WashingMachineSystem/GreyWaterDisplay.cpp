@@ -77,6 +77,10 @@ static bool displayDirty = true;
 
 bool displayBegin() {
   displayOk = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (displayOk) {                        // full brightness (the library starts at 0xCF): easier to read from a distance
+    oled.ssd1306_command(SSD1306_SETCONTRAST);
+    oled.ssd1306_command(0xFF);
+  }
   return displayOk;
 }
 bool displayAvailable() { return displayOk; }

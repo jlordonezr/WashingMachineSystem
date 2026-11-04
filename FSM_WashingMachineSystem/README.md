@@ -4,17 +4,19 @@
 
 The safety interlocks and the water history are unchanged from 3.3.1. Step 4 now saves only while water really flows.
 
+- **Shorter screen messages**: each one says what is happening now and does not repeat the top line or the icons, in one or two parts. Ready: *Inicie lavadora › y pulse START* (the tank level part is gone, the icon shows it); step 1: *Esperando agua*, *Reusando agua*, *Agua de la llave*, *Lavando...*; step 2: *Desaguando › agua jabonosa*; step 3: *Agua de la llave*, *Enjuagando...*; step 4: *Agua al tanque › Fin en 18:42*, *Tanque lleno › Fin en 18:42*; `TERMINADO`: *Reusados 26 L › Guardados 30 L* (or *Ciclo completo*); `DETENIDO`: *Ciclo cancelado*; no flow: *Sin flujo › Revise lavadora › Pida ayuda* (the "if it runs, press STOP" advice stays in the Quick Card); `INTERRUMPIDO`: *Revise lavadora › Inicie de nuevo*; tank wash: *Hasta llenarse › Quedan 9:42*, *Tanque lleno*, *Tanque no lleno*; updates: *No desconecte*, *Reintente*. 127 texts and pages, all fit.
+- **Full screen brightness** (contrast 255 instead of the library's 207), set once at start-up.
 - **Minimum flow to save** (Settings → Cycle, *Flujo mínimo para guardar*, default 0.5 L/min, 0.5–10). In step 4 rinse water goes to the tank only while the drain flow is above it. At or below it the fill valve closes and the drain opens on the same pass, about 2 s after the flow drops (the drain meter's 2 s average), so the last trickle goes to the drain; if the machine pumps out again (a spin), saving resumes after 2 s above the limit (`SAVE_RESUME_MS`), so the valves do not chatter. The screen shows *Flujo bajo › Al desague*, the event log *Saving paused* / *Saving resumed*. The *tank full* alert now comes only from the tank being full (it used to fire whenever step 4 was not saving). Simulation F13 covers it.
 - **Settings → Screen → Screen font** (*Pantalla → Letra de la pantalla*): six letter styles for the messages on the controller screen. The screen changes as soon as the settings are saved, so each household can try them and keep the one they read best.
 
 | # | App label (ES) | Style | Made from | Message parts in its own letters |
 |---|---|---|---|---|
-| 0 | Original (*Original*) | Helvetica Bold 14 px, default | Adobe Helvetica Bold pixel font | 76 of 111 (the rest in 12 px) |
-| 1 | Narrow bold (*Angosta gruesa*) | 13 px, thick strokes | Fira Sans Condensed Bold | 111 of 111 |
-| 2 | Narrow light (*Angosta delgada*) | 13 px, thin strokes | PT Sans Narrow Bold | 111 of 111 |
-| 3 | Semi-narrow (*Semiangosta*) | 13 px, square | Barlow Semi Condensed Bold | 111 of 111 |
-| 4 | Round (*Redondeada*) | 13 px, open | Lato Bold | 108 of 111 |
-| 5 | Classic serif (*Clásica con serifa*) | 13 px, serif | Adobe Times Bold pixel font | 102 of 111 |
+| 0 | Original (*Original*) | Helvetica Bold 14 px, default | Adobe Helvetica Bold pixel font | 60 of 91 (the rest in 12 px) |
+| 1 | Narrow bold (*Angosta gruesa*) | 13 px, thick strokes | Fira Sans Condensed Bold | 91 of 91 |
+| 2 | Narrow light (*Angosta delgada*) | 13 px, thin strokes | PT Sans Narrow Bold | 91 of 91 |
+| 3 | Semi-narrow (*Semiangosta*) | 13 px, square | Barlow Semi Condensed Bold | 91 of 91 |
+| 4 | Round (*Redondeada*) | 13 px, open | Lato Bold | 88 of 91 |
+| 5 | Classic serif (*Clásica con serifa*) | 13 px, serif | Adobe Times Bold pixel font | 83 of 91 |
 
 - A part too wide for the chosen font is shown in Helvetica Bold 12 px, which every message fits; the top line keeps its built-in font. `tools/check_screen_text.py` reports the counts above.
 - The fonts are made by `tools/make_screen_fonts.py` (FreeType, 1 bit, capitals 13 px). The free fonts are under the SIL Open Font License; as converted copies they do not carry their Reserved Font Names, so files and labels describe the style (`FontNarrowBold13.h`, …). Licences in `licenses/`.

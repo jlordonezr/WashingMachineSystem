@@ -164,7 +164,7 @@ int main(int argc, char** argv) {
     CHECK(rec.worstDeadHeadMs <= 350, "pump ran %u ms against the closed inlet", rec.worstDeadHeadMs);
     CHECK(!rec.pumpWhileTap, "pump and tap valve were on together");
     CHECK(rec.savedWhileSaving, "rinse water was never saved to the tank");
-    const char* expected[] = {"Waiting for", "Reusing water", "Washing...", "Soapy water", "Rinsing...", "Saving rinse"};
+    const char* expected[] = {"Waiting to fill", "Reusing water", "Washing...", "Draining", "Rinsing...", "Filling tank"};
     for (const char* m : expected) CHECK(sawMsg(m), "screen never showed \"%s\"", m);
     CHECK(stats.totalCycles == 1 && stats.totalReusedL > 10 && stats.totalSavedL > 10, "stats: cycles %u, reused %.1f, saved %.1f",
           (unsigned)stats.totalCycles, stats.totalReusedL, stats.totalSavedL);
@@ -326,7 +326,7 @@ int main(int argc, char** argv) {
     runFor(0.5);
     bool doneShown = false; for (auto& t : oled.shown) if (t == "TERMINADO") doneShown = true;
     CHECK(doneShown, "end-of-cycle screen is not TERMINADO");
-    for (const char* m : {"Esperando que", "Reusando agua", "Lavando ropa", "Agua jabonosa", "Enjuagando", "Ahorrando agua"})
+    for (const char* m : {"Esperando agua", "Reusando agua", "Lavando...", "Desaguando", "Enjuagando...", "Agua al tanque"})
       CHECK(sawMsg(m), "screen never showed \"%s\"", m);
     CHECK(activeState == stIdle && stats.totalCycles == 1, "cycle did not complete");
     int prio = 0;

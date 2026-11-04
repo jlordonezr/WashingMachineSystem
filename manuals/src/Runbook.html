@@ -36,25 +36,25 @@
 <h2>Quick start</h2>
 <p>For everyday use you only need the two buttons and the screen. After the controller is switched on, the screen shows a dog chasing a butterfly for about 4 seconds, then <code>REUSE WATER</code> / System ready, then <code>READY</code>.</p>
 <ol>
-<li><b>Check the screen</b> shows <code>READY</code> and <i>Start washer, › Press START</i>.</li>
+<li><b>Check the screen</b> shows <code>READY</code> and <i>Start washer › Press START</i>.</li>
 <li><b>Load the washing machine</b> and start its program as usual.</li>
 <li><b>Press START</b> (the button labelled START). The screen changes to <code>WASH 1 OF 4</code>.</li>
-<li><b>Let it run.</b> The top line shows the current step, <code>WASH 1 OF 4</code> to <code>SAVE 4 OF 4</code>. The message below comes in short parts that change every 3 seconds, for example <i>Reusing water › from the tank › 25 min left</i>. In the last step it shows when the system finishes.</li>
-<li><b>Done.</b> The screen shows <code>DONE</code> with <i>Wash finished › Reused 26 L › Saved 30 L</i>, then returns to <code>READY</code>.</li>
+<li><b>Let it run.</b> The top line shows the current step, <code>WASH 1 OF 4</code> to <code>SAVE 4 OF 4</code>. The message below comes in short parts that change every 3 seconds, for example <i>Reusing water › 25 min left</i>. In the last step it shows when the system finishes.</li>
+<li><b>Done.</b> The screen shows <code>DONE</code> with <i>Reused 26 L › Saved 30 L</i>, then returns to <code>READY</code>.</li>
 </ol>
 <p>To cancel at any time, press <b>STOP</b> (the button labelled STOP). The screen shows <code>STOPPED</code> for 4 seconds.</p>
 <p>On a phone connected to the home Wi-Fi, open <code>http://reusewater.local</code> to see the same status, start or stop the cycle, and check how much water you have saved (section 11).</p>
 <table>
 <thead><tr><th>If the screen shows</th><th>It means</th><th>What to do</th></tr></thead>
 <tr><td>A dog chasing a butterfly</td><td>The controller has just been switched on (about 4 s)</td><td>Nothing; START skips it</td></tr>
-<tr><td>READY / Start washer, › Press START › Tank: half</td><td>Waiting for you; how full the tank is</td><td>Start the washing machine, then press START</td></tr>
+<tr><td>READY / Start washer › Press START</td><td>Waiting for you</td><td>Start the washing machine, then press START</td></tr>
 <tr><td>WASH 1 OF 4 … SAVE 4 OF 4</td><td>Cycle in progress</td><td>Nothing; wait</td></tr>
-<tr><td>Reusing water › from the tank</td><td>The machine is filling with water saved in the tank</td><td>Nothing</td></tr>
+<tr><td>Reusing water</td><td>The machine is filling with water saved in the tank</td><td>Nothing</td></tr>
 <tr><td>25 min left</td><td>About how long the cycle still needs, learnt from earlier washes (from the second wash)</td><td>Nothing</td></tr>
-<tr><td>Saving rinse › water in tank › Ends in 18:42</td><td>Rinse water is being stored in the tank for the next wash</td><td>Nothing</td></tr>
-<tr><td>DONE / Wash finished › Reused 26 L › Saved 30 L</td><td>Cycle finished; tank water used, and rinse water stored for next time</td><td>Nothing</td></tr>
-<tr><td>STOPPED / Cycle stopped › No water saved</td><td>You pressed STOP</td><td>Press START to begin again</td></tr>
-<tr><td>No water flow › Is washer on? › If so: STOP › Call installer</td><td>A step has waited too long for water</td><td>Check the washing machine is running; if it is, press STOP and call your installer (section 8)</td></tr>
+<tr><td>Filling tank › Ends in 18:42</td><td>Rinse water is being stored in the tank for the next wash</td><td>Nothing</td></tr>
+<tr><td>DONE / Reused 26 L › Saved 30 L</td><td>Cycle finished; tank water used, and rinse water stored for next time</td><td>Nothing</td></tr>
+<tr><td>STOPPED / Cycle cancelled</td><td>You pressed STOP</td><td>Press START to begin again</td></tr>
+<tr><td>No water flow › Check washer › Call installer</td><td>A step has waited too long for water</td><td>Check the washing machine is running; if it is, press STOP and call your installer (section 8)</td></tr>
 <tr><td>Blank screen</td><td>No power, or a display fault</td><td>Check power, then see section 8</td></tr>
 </table>
 <p>Button colors are a recommendation; label your buttons to match.</p>
@@ -345,7 +345,7 @@
 <tr><td>Message</td><td>Helvetica Bold pixel font (from 3.2): 14 px when a page fits the width, otherwise 12 px; pages change every 3 s (from 3.3)</td><td>What the system is doing now, what it means, what to do</td></tr>
 </table>
 <h3>Start-up animation (from firmware 3.2)</h3>
-<p>After power-on or a restart, a Border Collie chases a butterfly across the whole screen for about 4 seconds: it gallops in, crouches and stalks the butterfly, then sprints after it. Then <code>REUSE WATER</code> / System ready shows for 2 seconds, then <code>READY</code> / <i>Start washer, › Press START</i>.</p>
+<p>After power-on or a restart, a Border Collie chases a butterfly across the whole screen for about 4 seconds: it gallops in, crouches and stalks the butterfly, then sprints after it. Then <code>REUSE WATER</code> / System ready shows for 2 seconds, then <code>READY</code> / <i>Start washer › Press START</i>.</p>
 <ul>
 <li>The rest of the controller starts at the same time: Wi-Fi connects and the safety task runs; the animation does not delay anything.</li>
 <li>Notices that arrive during the animation (the IP address, the Wi-Fi setup key, <code>INTERRUPTED</code>) are kept and shown after System ready.</li>
@@ -356,49 +356,51 @@
 <p>In the app, <b>Settings → Screen → Screen font</b> chooses the letters of the screen messages. Save the settings and look at the controller screen; try each style from where the screen is usually read, and keep the clearest.</p>
 <table>
 <thead><tr><th>Choice (Spanish)</th><th>Style</th><th>Made from</th><th>Messages in its own letters</th></tr></thead>
-<tr><td>Original (Helvetica Bold) — <i>Original (Helvetica negrita)</i></td><td>Wide bold sans, 14 px; the font up to 3.3 and the default</td><td>Adobe Helvetica Bold pixel font</td><td>76 of 111; longer parts in 12 px</td></tr>
-<tr><td>Narrow bold — <i>Angosta gruesa</i></td><td>Narrow, thick strokes, 13 px</td><td>Fira Sans Condensed Bold</td><td>All 111</td></tr>
-<tr><td>Narrow light — <i>Angosta delgada</i></td><td>Narrow, thin strokes, 13 px</td><td>PT Sans Narrow Bold</td><td>All 111</td></tr>
-<tr><td>Semi-narrow — <i>Semiangosta</i></td><td>Square, condensed, 13 px</td><td>Barlow Semi Condensed Bold</td><td>All 111</td></tr>
-<tr><td>Round — <i>Redondeada</i></td><td>Round, open letters, 13 px</td><td>Lato Bold</td><td>108 of 111</td></tr>
-<tr><td>Classic serif — <i>Clásica con serifa</i></td><td>Serif, like print, 13 px</td><td>Adobe Times Bold pixel font</td><td>102 of 111</td></tr>
+<tr><td>Original (Helvetica Bold) — <i>Original (Helvetica negrita)</i></td><td>Wide bold sans, 14 px; the font up to 3.3 and the default</td><td>Adobe Helvetica Bold pixel font</td><td>60 of 91; longer parts in 12 px</td></tr>
+<tr><td>Narrow bold — <i>Angosta gruesa</i></td><td>Narrow, thick strokes, 13 px</td><td>Fira Sans Condensed Bold</td><td>All 91</td></tr>
+<tr><td>Narrow light — <i>Angosta delgada</i></td><td>Narrow, thin strokes, 13 px</td><td>PT Sans Narrow Bold</td><td>All 91</td></tr>
+<tr><td>Semi-narrow — <i>Semiangosta</i></td><td>Square, condensed, 13 px</td><td>Barlow Semi Condensed Bold</td><td>All 91</td></tr>
+<tr><td>Round — <i>Redondeada</i></td><td>Round, open letters, 13 px</td><td>Lato Bold</td><td>88 of 91</td></tr>
+<tr><td>Classic serif — <i>Clásica con serifa</i></td><td>Serif, like print, 13 px</td><td>Adobe Times Bold pixel font</td><td>83 of 91</td></tr>
 </table>
 <p>A part that does not fit the 128 px line in the chosen font is shown in Helvetica Bold 12 px, which every message fits. The top line keeps its small built-in font. The change shows on the screen as soon as the settings are saved, and it is kept after a restart. Font origins and licences: <code>licenses/README.md</code> in the firmware folder (free fonts under the SIL Open Font License, and the Adobe pixel fonts).</p>
 <h3>Messages</h3>
-<p>English, then Spanish. Pages are separated by ›; a page in brackets appears only when it applies.</p>
+<p>English, then Spanish. Pages are separated by ›; a page in brackets appears only when it applies. From 3.4 the top line says the step or the event and the message only adds what is new (for example <code>DONE</code> shows only the litres).</p>
 <table>
 <thead><tr><th>Top line</th><th>Message pages</th><th>What it means</th><th>Action needed</th></tr></thead>
 <tr><td colspan="2">Full screen: a dog chasing a butterfly</td><td>The controller has just switched on (about 4 s)</td><td>None; START skips it</td></tr>
 <tr><td><code>REUSE WATER</code><br><code>REUSO DE AGUA</code></td><td>System ready<br>Sistema listo</td><td>Start-up finished (2 s)</td><td>None</td></tr>
-<tr><td><code>READY</code><br><code>LISTO</code></td><td>Start washer, › Press START › Tank: low / half / full<br>Inicie lavadora › y pulse START › Tanque: bajo / medio / lleno</td><td>Waiting for a new cycle; the last page is the tank level</td><td>Start the machine’s program, then press START</td></tr>
+<tr><td><code>READY</code><br><code>LISTO</code></td><td>Start washer › Press START<br>Inicie lavadora › y pulse START</td><td>Waiting for a new cycle; the tank icon shows the tank level</td><td>Start the machine’s program, then press START</td></tr>
 <tr><td><code>STARTING</code><br><code>INICIANDO</code></td><td>Getting ready...<br>Preparando...</td><td>START was pressed</td><td>None</td></tr>
-<tr><td><code>WASH 1 OF 4</code><br><code>LAVADO 1 DE 4</code></td><td>Waiting for › washer to fill (› 25 min left)<br>Esperando que › llene la lavadora (› Faltan 25 min)</td><td>The machine has not started taking water yet</td><td>Start the machine’s program if it is not running</td></tr>
-<tr><td><code>WASH 1 OF 4</code></td><td>Reusing water › from the tank<br>Reusando agua › del tanque</td><td>The machine is filling with water saved in the tank; the tank is being cleaned (<code>W</code> lights every 10 s)</td><td>None</td></tr>
-<tr><td><code>WASH 1 OF 4</code></td><td>Filling washer › with tap water<br>Llenando con › agua de la llave</td><td>The machine is filling from the tap</td><td>None</td></tr>
-<tr><td><code>WASH 1 OF 4</code></td><td>Tank is low › Using tap water<br>Tanque bajo › Agua de la llave</td><td>The tank has too little water, so tap water is used</td><td>None</td></tr>
-<tr><td><code>WASH 1 OF 4</code></td><td>Washing... (› 25 min left)<br>Lavando ropa (› Faltan 25 min)</td><td>The machine has filled and is washing</td><td>None</td></tr>
-<tr><td><code>DRAIN 2 OF 4</code><br><code>DESAGUE 2 DE 4</code></td><td>Soapy water › is not saved<br>Agua jabonosa › no se guarda</td><td>Soapy wash water goes to the drain, not the tank</td><td>None</td></tr>
-<tr><td><code>RINSE 3 OF 4</code><br><code>ENJUAGUE 3 DE 4</code></td><td>Rinsing with › tap water<br>Enjuague con › agua de la llave</td><td>Rinse fill from the tap</td><td>None</td></tr>
-<tr><td><code>RINSE 3 OF 4</code></td><td>Rinsing...<br>Enjuagando</td><td>The machine has filled and is rinsing</td><td>None</td></tr>
-<tr><td>Steps 1, 2 or 3</td><td>No water flow › Is washer on? › If so: STOP › Call installer<br>Sin flujo › Revise lavadora › Si funciona, › pulse STOP y › pida ayuda</td><td>The step has waited longer than the step time limit for water flow</td><td>Check the washing machine; if it runs, press STOP and check the Service tab of the app</td></tr>
-<tr><td><code>SAVE 4 OF 4</code><br><code>AHORRO 4 DE 4</code></td><td>Saving rinse › water in tank › Ends in 18:42<br>Ahorrando agua › en el tanque › Fin en 18:42</td><td>Rinse water is stored; the clock shows when the cycle ends</td><td>None</td></tr>
+<tr><td><code>WASH 1 OF 4</code><br><code>LAVADO 1 DE 4</code></td><td>Waiting to fill (› 25 min left)<br>Esperando agua (› Faltan 25 min)</td><td>The machine has not started taking water yet</td><td>Start the machine’s program if it is not running</td></tr>
+<tr><td><code>WASH 1 OF 4</code></td><td>Reusing water<br>Reusando agua</td><td>The machine is filling with water saved in the tank; the tank is being cleaned (<code>W</code> lights every 10 s)</td><td>None</td></tr>
+<tr><td><code>WASH 1 OF 4</code></td><td>Using tap water<br>Agua de la llave</td><td>The machine is filling from the tap</td><td>None</td></tr>
+<tr><td><code>WASH 1 OF 4</code></td><td>Tank low › Using tap water<br>Tanque bajo › Agua de la llave</td><td>The tank has too little water, so tap water is used</td><td>None</td></tr>
+<tr><td><code>WASH 1 OF 4</code></td><td>Washing... (› 25 min left)<br>Lavando... (› Faltan 25 min)</td><td>The machine has filled and is washing</td><td>None</td></tr>
+<tr><td><code>DRAIN 2 OF 4</code><br><code>DESAGUE 2 DE 4</code></td><td>Draining › soapy water<br>Desaguando › agua jabonosa</td><td>Soapy wash water goes to the drain, not the tank</td><td>None</td></tr>
+<tr><td><code>RINSE 3 OF 4</code><br><code>ENJUAGUE 3 DE 4</code></td><td>Using tap water<br>Agua de la llave</td><td>Rinse fill from the tap</td><td>None</td></tr>
+<tr><td><code>RINSE 3 OF 4</code></td><td>Rinsing...<br>Enjuagando...</td><td>The machine has filled and is rinsing</td><td>None</td></tr>
+<tr><td>Steps 1, 2 or 3</td><td>No water flow › Check washer › Call installer<br>Sin flujo › Revise lavadora › Pida ayuda</td><td>The step has waited longer than the step time limit for water flow</td><td>Check the washing machine; if it runs, press STOP and check the Service tab of the app</td></tr>
+<tr><td><code>SAVE 4 OF 4</code><br><code>AHORRO 4 DE 4</code></td><td>Filling tank › Ends in 18:42<br>Agua al tanque › Fin en 18:42</td><td>Rinse water is stored; the clock shows when the cycle ends</td><td>None</td></tr>
 <tr><td><code>SAVE 4 OF 4</code></td><td>Low flow › To the drain › Ends in 18:42<br>Flujo bajo › Al desague › Fin en 18:42</td><td>The drain flow is at or below the minimum flow to save, so the fill valve is closed and the rest goes to the drain (from 3.4)</td><td>None; saving starts again if the machine pumps out again</td></tr>
-<tr><td><code>SAVE 4 OF 4</code></td><td>Tank is full › Rest to drain › Ends in 18:42<br>Tanque lleno › Ya no se guarda › Fin en 18:42</td><td>The tank is full; the rest goes to the drain</td><td>Use or empty the tank if this happens often</td></tr>
-<tr><td><code>TANK CLEANING</code><br><code>LIMPIEZA TANQUE</code></td><td>Cleaning tank › Stops when full › or in 9:42<br>Limpiando › Para al llenarse › o en 9:42</td><td>Manual tank wash; the clock shows the time left before the safety limit</td><td>None</td></tr>
-<tr><td><code>TANK CLEANED</code><br><code>TANQUE LIMPIO</code></td><td>Tank is clean › and full<br>Tanque limpio › y lleno</td><td>The manual wash filled the tank</td><td>None</td></tr>
-<tr><td><code>WASH STOPPED</code><br><code>LAVADO DETENIDO</code></td><td>Stopped early › Tank not full<br>Detenido antes › Tanque no lleno</td><td>Stopped from the app, the STOP button, or by a cycle starting</td><td>None</td></tr>
-<tr><td><code>WASH STOPPED</code></td><td>Check the tank › Call installer<br>Revise tanque › Pida ayuda</td><td>The time limit was reached, or the level switches disagree</td><td>Check both float switches and the wash water supply</td></tr>
-<tr><td><code>INTERRUPTED</code><br><code>INTERRUMPIDO</code></td><td>Wash cut short › Check washer › Start again<br>Ciclo cortado › Revise lavadora › Inicie de nuevo</td><td>The controller restarted during a cycle (15 s)</td><td>Check the washing machine; start again if needed</td></tr>
+<tr><td><code>SAVE 4 OF 4</code></td><td>Tank full › Ends in 18:42<br>Tanque lleno › Fin en 18:42</td><td>The tank is full; the rest goes to the drain</td><td>Use or empty the tank if this happens often</td></tr>
+<tr><td><code>TANK CLEANING</code><br><code>LIMPIEZA TANQUE</code></td><td>Until full › 9:42 left<br>Hasta llenarse › Quedan 9:42</td><td>Manual tank wash; the clock shows the time left before the safety limit</td><td>None</td></tr>
+<tr><td><code>TANK CLEANED</code><br><code>TANQUE LIMPIO</code></td><td>Tank full<br>Tanque lleno</td><td>The manual wash filled the tank</td><td>None</td></tr>
+<tr><td><code>WASH STOPPED</code><br><code>LAVADO DETENIDO</code></td><td>Tank not full<br>Tanque no lleno</td><td>Stopped from the app, the STOP button, or by a cycle starting</td><td>None</td></tr>
+<tr><td><code>WASH STOPPED</code></td><td>Check tank › Call installer<br>Revise tanque › Pida ayuda</td><td>The time limit was reached, or the level switches disagree</td><td>Check both float switches and the wash water supply</td></tr>
+<tr><td><code>INTERRUPTED</code><br><code>INTERRUMPIDO</code></td><td>Check washer › Start again<br>Revise lavadora › Inicie de nuevo</td><td>The controller restarted during a cycle (15 s)</td><td>Check the washing machine; start again if needed</td></tr>
 <tr><td><code>ReuseWater-Setup</code></td><td>Wi-Fi setup › Key gw-a1b2c3<br>Configurar Wi-Fi › gw-a1b2c3</td><td>The Wi-Fi setup page is open; the top line is the network to join and the key is its password</td><td>Join it on a phone with that key</td></tr>
 <tr><td>IP address</td><td>Wi-Fi connected › App: this IP<br>Wi-Fi conectado › App: esta IP</td><td>Connected to the home Wi-Fi; the top line is the app’s address (6 s)</td><td>Note it, or use <code>reusewater.local</code></td></tr>
-<tr><td><code>UPDATING</code><br><code>ACTUALIZANDO</code></td><td>Updating › Do not unplug<br>Actualizando › No desconecte</td><td>A wireless firmware update is running</td><td>Wait; do not switch off</td></tr>
-<tr><td><code>UPDATE FAILED</code><br><code>NO ACTUALIZADO</code></td><td>Not updated › Try again<br>Sin cambios › Reintente</td><td>The wireless update did not finish; the old firmware still runs</td><td>Try the upload again</td></tr>
-<tr><td><code>STOPPED</code><br><code>DETENIDO</code></td><td>Cycle stopped › No water saved<br>Ciclo detenido › Sin ahorro</td><td>STOP was pressed</td><td>Press START to run again</td></tr>
-<tr><td><code>DONE</code><br><code>TERMINADO</code></td><td>Wash finished (› Reused 26 L) (› Saved 30 L)<br>Lavado listo (› Reusados 26 L) (› Guardados 30 L)</td><td>The cycle finished: tank water used instead of tap water, and rinse water stored for the next wash</td><td>None</td></tr>
+<tr><td><code>UPDATING</code><br><code>ACTUALIZANDO</code></td><td>Do not unplug<br>No desconecte</td><td>A wireless firmware update is running</td><td>Wait; do not switch off</td></tr>
+<tr><td><code>UPDATED</code><br><code>ACTUALIZADO</code></td><td>Restarting<br>Reiniciando</td><td>The update finished; the controller restarts</td><td>None</td></tr>
+<tr><td><code>UPDATE FAILED</code><br><code>NO ACTUALIZADO</code></td><td>Try again<br>Reintente</td><td>The wireless update did not finish; the old firmware still runs</td><td>Try the upload again</td></tr>
+<tr><td><code>STOPPED</code><br><code>DETENIDO</code></td><td>Cycle cancelled<br>Ciclo cancelado</td><td>STOP was pressed</td><td>Press START to run again</td></tr>
+<tr><td><code>DONE</code><br><code>TERMINADO</code></td><td>Reused 26 L › Saved 30 L (or Cycle complete)<br>Reusados 26 L › Guardados 30 L (o Ciclo completo)</td><td>The cycle finished: tank water used instead of tap water, and rinse water stored for the next wash</td><td>None</td></tr>
 </table>
+<p><b>Brightness</b> (from 3.4): the screen runs at full brightness (contrast 255; the display library starts at 207), so the letters are sharper from a distance.</p>
 <p><b>Minutes left</b> (from 3.3): once every step has been timed at least once, steps 1–3 add a page <i>25 min left</i> / <i>Faltan 25 min</i>. It is the machine’s typical time for the rest of the current step (at least 1 minute), the typical times of the later steps, and the fixed length of step 4. Until then the page is left out.</p>
 <p>A notice (for example <code>DONE</code>) stays on long enough to show each of its pages once (3 s per page), and never less than its own time (4 s; 15 s for <code>INTERRUPTED</code>).</p>
-<p>Every page fits the screen without scrolling: each one is measured in the 12 px font by <code>tools/check_screen_text.py</code> (147 texts and pages in both languages), and short pages use the larger 14 px size. A countdown in a page does not restart the pages. The dashboard shows the same status as full sentences.</p>
+<p>Every page fits the screen without scrolling: each one is measured in the 12 px font by <code>tools/check_screen_text.py</code> (127 texts and pages in both languages), and short pages use the larger 14 px size. A countdown in a page does not restart the pages. The dashboard shows the same status as full sentences.</p>
 <p>Short pages are centred and still. A page wider than 128 px would pause for 1.5 s, then scroll at 50 px/s and repeat. The display only sends a new frame when something changes, when the page changes, while text scrolls, or during the start-up animation.</p>
 
 <h2>7. Configuration parameters</h2>
@@ -479,7 +481,7 @@
 </ul>
 <h3>Power-up and idle</h3>
 <ul class="check">
-<li>OLED shows the Border Collie chasing the butterfly (about 4 s), then <code>REUSE WATER</code> / System ready for 2 s, then <code>READY</code> / <i>Start washer, › Press START › Tank: …</i>, with no <code>DONE</code></li>
+<li>OLED shows the Border Collie chasing the butterfly (about 4 s), then <code>REUSE WATER</code> / System ready for 2 s, then <code>READY</code> / <i>Start washer › Press START</i>, with no <code>DONE</code></li>
 <li>Pressing START during the animation ends it at once</li>
 <li>Messages read clearly in the bold font at the normal viewing distance; each page stays about 3 s, long enough to read</li>
 <li>All SSRs are off for the first moment, then tap and drain SSRs turn on in Idle</li>
@@ -489,17 +491,17 @@
 <h3>Buttons</h3>
 <ul class="check">
 <li>Start in Idle changes the header to <code>STARTING</code>, then <code>WASH 1 OF 4</code></li>
-<li>Stop during each step shows <code>STOPPED</code> / <i>Cycle stopped › No water saved</i> for 6 s, then <code>READY</code></li>
+<li>Stop during each step shows <code>STOPPED</code> / <i>Cycle cancelled</i> for 4 s, then <code>READY</code></li>
 <li>Start during a running step has no effect</li>
 </ul>
 <h3>Full cycle</h3>
 <ul class="check">
 <li>Fill 1/4 with the tank low uses tap water; the <code>W</code> icon stays outlined</li>
 <li>Fill 1/4 with water in the tank switches to tank water once the machine draws water; the motor runs and <code>W</code> turns white for 2 s every 10 s</li>
-<li>Drain 2/4 shows <i>Soapy water › is not saved</i>; the fill valve stays off</li>
-<li>Rinse 3/4 uses tap water (<i>Rinsing with › tap water</i>); the wash valve stays closed</li>
+<li>Drain 2/4 shows <i>Draining › soapy water</i>; the fill valve stays off</li>
+<li>Rinse 3/4 uses tap water (<i>Using tap water</i>); the wash valve stays closed</li>
 <li>Drain 4/4 saves water (fill valve on, drain off) and the countdown decreases each second</li>
-<li>With the tank full, Drain 4/4 shows <i>Tank is full › Rest to drain</i></li>
+<li>With the tank full, Drain 4/4 shows <i>Tank full › Ends in …</i></li>
 <li>After 20 minutes the OLED shows <code>DONE</code> / Cycle complete, then <code>READY</code>; with the buzzer on, two short beeps</li>
 </ul>
 <h3>Faults</h3>
@@ -614,7 +616,7 @@
 <p>Use it to rinse the storage tank between washes. The wash valve opens and closes by itself as soon as the high-level switch reports that the tank is full.</p>
 <ol>
 <li>Check that the dashboard shows <b>Ready</b> and the tank is not full.</li>
-<li>In the <b>Storage tank</b> panel, press <b>Wash tank</b>. The screen on the controller shows <code>TANK CLEANING</code> with <i>Cleaning tank › Stops when full › or in 9:42</i>, the time left before the safety limit.</li>
+<li>In the <b>Storage tank</b> panel, press <b>Wash tank</b>. The screen on the controller shows <code>TANK CLEANING</code> with <i>Until full › 9:42 left</i>, the time left before the safety limit.</li>
 <li>Wait. When the high-level switch reports water, the valve closes and the dashboard shows Tank full: wash valve closed.</li>
 <li>To end it early, press <b>Stop washing</b> on the dashboard or <b>STOP</b> on the controller. Starting a cycle also ends it.</li>
 </ol>
@@ -709,7 +711,7 @@
 <h2>Appendix B. Revision history</h2>
 <table>
 <thead><tr><th>Version</th><th>Date</th><th>Description</th></tr></thead>
-<tr><td>3.4</td><td>2026-11-04</td><td>Minimum flow to save (default 0.5 L/min): in step 4 a drain flow at or below it closes the fill valve and opens the drain at once, and a new pump-out is saved again; screen <i>Low flow › To the drain</i>. Screen font chosen in Settings → Screen: original Helvetica Bold or five 13 px styles (narrow bold, narrow light, semi-narrow, round, classic serif), applied at once and kept after a restart; settings version 8 (3.3 settings are kept)</td></tr>
+<tr><td>3.4</td><td>2026-11-04</td><td>Shorter screen messages that do not repeat the top line (for example <i>Desaguando › agua jabonosa</i>, <code>TERMINADO</code> <i>Reusados 26 L › Guardados 30 L</i>); full screen brightness. Minimum flow to save (default 0.5 L/min): in step 4 a drain flow at or below it closes the fill valve and opens the drain at once, and a new pump-out is saved again; screen <i>Low flow › To the drain</i>. Screen font chosen in Settings → Screen: original Helvetica Bold or five 13 px styles (narrow bold, narrow light, semi-narrow, round, classic serif), applied at once and kept after a restart; settings version 8 (3.3 settings are kept)</td></tr>
 <tr><td>3.3.1</td><td>2026-11-03</td><td>Phone alerts that cannot be sent (alert server down, no internet or Wi-Fi) are tried again for up to 30 minutes, each on its own schedule; the test alert still answers within 30 s. The app’s subscribe link no longer repeats a topic pasted into Alert server</td></tr>
 <tr><td>3.3</td><td>2026-11-03</td><td>Screen messages explain themselves in short pages that change every 3 s (what is happening, what it means, what to do); steps named in words (<code>WASH 1 OF 4</code>); minutes left from the second wash; tank level on the Ready screen; litres reused and saved at the end. Phone alerts: correct failure reason in the app (codes no longer clash with HTTPClient's); up to 3 tries per alert and 5 min wait for Wi-Fi; 10 s network timeouts; topic checked (letters, numbers, - and _); pasted subscribe link removed from the server address; tapping an alert opens the app</td></tr>
 <tr><td>3.2</td><td>2026-10-30</td><td>New name Reuse Water System (<code>reusewater.local</code>, <code>ReuseWater-Setup</code>, update port <code>reusewater</code>, alert titles); Border Collie start-up animation; Helvetica Bold screen font (14 / 12 px); larger tank icon; optional buzzer moved from D12 to D1 (TX0); Runbook and Quick Card rebuilt from editable sources</td></tr>

@@ -7,11 +7,13 @@
 #define WHITE 1
 #define BLACK 0
 #define SSD1306_SWITCHCAPVCC 2
+#define SSD1306_SETCONTRAST 0x81
 extern bool oledFailBegin;   // tests: the screen does not answer
 struct Adafruit_SSD1306 {
   std::vector<std::string> frame, shown;
   Adafruit_SSD1306(int, int, TwoWire*, int) {}
   bool begin(int, int) { return !oledFailBegin; }
+  void ssd1306_command(uint8_t) {}
   void setFont(const GFXfont* = nullptr) {}
   void setTextSize(int) {}
   void setTextWrap(bool) {}
