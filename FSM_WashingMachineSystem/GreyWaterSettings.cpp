@@ -54,6 +54,8 @@ void settingsDefaults(Settings& s) {
   s.minFillLitres    = MIN_FILL_LITRES;
   s.buzzerOn         = 0;
   s.language         = LANG_ES;
+  s.screenFont       = 0;
+  s.saveMinLpm       = SAVE_MIN_LPM;
   s.allowRemoteStart = true;   // dashboard Start button; asks for confirmation
   strlcpy(s.ntfyServer,  DEFAULT_NTFY_SERVER,  sizeof(s.ntfyServer));
   strlcpy(s.ntfyTopic,   "",                   sizeof(s.ntfyTopic));
@@ -75,6 +77,7 @@ void settingsSanitize(Settings& s) {
   s.tankMaxAgeHours  = (uint16_t)clampU32(s.tankMaxAgeHours, 1, 240);    // 1 h .. 10 days
   if (!(s.flowOnLpm >= 0.2f && s.flowOnLpm <= 10.0f)) s.flowOnLpm = FLOW_ON_LPM;  // also catches NaN
   if (!(s.minFillLitres >= 0.5f && s.minFillLitres <= 50.0f)) s.minFillLitres = MIN_FILL_LITRES;
+  if (!(s.saveMinLpm >= 0.5f && s.saveMinLpm <= 10.0f)) s.saveMinLpm = SAVE_MIN_LPM;          // also catches NaN
   s.manualWashMs     = clampU32(s.manualWashMs, 60000, 1800000);         // 1 .. 30 min
   s.ntfyServer[sizeof(s.ntfyServer) - 1]   = '\0';
   s.ntfyTopic[sizeof(s.ntfyTopic) - 1]     = '\0';
@@ -85,6 +88,7 @@ void settingsSanitize(Settings& s) {
   if (s.webPassword[0] == '\0') strlcpy(s.webPassword, DEFAULT_WEB_PASSWORD, sizeof(s.webPassword));
   if (s.otaPassword[0] == '\0') strlcpy(s.otaPassword, DEFAULT_OTA_PASSWORD, sizeof(s.otaPassword));
   if (s.language != LANG_EN) s.language = LANG_ES;
+  if (s.screenFont >= SCREEN_FONT_COUNT) s.screenFont = 0;
 }
 
 void settingsBegin() {
@@ -96,12 +100,24 @@ void settingsBegin() {
       prefs.getBytes("cfg", &stored, sizeof(stored)) == sizeof(stored) &&
       stored.version == SETTINGS_VERSION) {
     cfg = stored;
-  } else if (prefs.getBytesLength("cfg") == sizeof(Settings) &&
-             prefs.getBytes("cfg", &stored, sizeof(stored)) == sizeof(stored) &&
+  } else if (prefs.getBytesLength("cfg") == offsetof(Settings, saveMinLpm) &&
+             prefs.getBytes("cfg", &stored, offsetof(Settings, saveMinLpm)) == offsetof(Settings, saveMinLpm) &&
+             stored.version == 7) {
+    // Version 7 stored everything up to language; screenFont sat in its padding.
+    stored.version    = SETTINGS_VERSION;
+    stored.screenFont = 0;
+    stored.saveMinLpm = SAVE_MIN_LPM;
+    cfg = stored;
+    settingsSanitize(cfg);
+    settingsSave();
+  } else if (prefs.getBytesLength("cfg") == offsetof(Settings, saveMinLpm) &&
+             prefs.getBytes("cfg", &stored, offsetof(Settings, saveMinLpm)) == offsetof(Settings, saveMinLpm) &&
              stored.version == 6) {
-    // Version 6 has the same layout up to buzzerOn; language sat in the padding.
-    stored.version  = SETTINGS_VERSION;
-    stored.language = LANG_ES;
+    // Version 6 stored everything up to buzzerOn; language sat in its padding.
+    stored.version    = SETTINGS_VERSION;
+    stored.language   = LANG_ES;
+    stored.screenFont = 0;
+    stored.saveMinLpm = SAVE_MIN_LPM;
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -110,8 +126,10 @@ void settingsBegin() {
              stored.version == 5) {
     // Version 5 stored the same fields up to minFillLitres: keep them, add the new default.
     stored.version  = SETTINGS_VERSION;
-    stored.buzzerOn = 0;
-    stored.language = LANG_ES;
+    stored.buzzerOn   = 0;
+    stored.language   = LANG_ES;
+    stored.screenFont = 0;
+    stored.saveMinLpm = SAVE_MIN_LPM;
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -123,6 +141,8 @@ void settingsBegin() {
     stored.minFillLitres = MIN_FILL_LITRES;
     stored.buzzerOn      = 0;
     stored.language      = LANG_ES;
+    stored.screenFont    = 0;
+    stored.saveMinLpm    = SAVE_MIN_LPM;
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();

@@ -134,19 +134,50 @@ const char* checkAndFillWashingMachine() {
 // Step 4: rinse water goes to the tank until the high float reports water.
 // Once full, saving stays off for the rest of the step, so a float bobbing at
 // the high mark cannot switch the fill valve on and off.
+//
+// From 3.4 the tank only takes water while the drain flow is above
+// cfg.saveMinLpm (Settings: Minimum flow to save). At or below it, the end of
+// a pump-out trickling, the fill valve closes and the drain opens on the same
+// pass. If the machine pumps again (a spin), saving resumes once the flow has
+// stayed above the limit for SAVE_RESUME_MS, so the valves do not chatter.
 static bool saveStoppedFull = false;   // reset when step 4 begins
+static bool saveLowFlow     = false;   // drain flow at or below cfg.saveMinLpm: draining
+static bool saveAbove       = false;   // ... flow back above the limit since saveAboveMs
+static unsigned long saveAboveMs = 0;
+
+static void resetSaveFlow() { saveLowFlow = false; saveAbove = false; }
 
 const char* checkAndFillWaterTank() {
   if (tankFull()) saveStoppedFull = true;
   DEBUG_PRINT(saveStoppedFull ? "Tank full." : "Tank has room.");
 
-  if (!saveStoppedFull) {
-    outputsRequest(modeSaveTank);      // the safety task closes it at once if the tank fills
-    return TR("Saving water to tank", "Guardando agua en el tanque");
-  } else {
+  float lpm = drainFlow().rateLpm();
+  if (!saveStoppedFull && !saveLowFlow && lpm <= cfg.saveMinLpm) {
+    saveLowFlow = true;
+    saveAbove = false;
+    logEvent("Saving paused: drain flow %.1f L/min (limit %.1f), to the drain", lpm, cfg.saveMinLpm);
+  } else if (!saveStoppedFull && saveLowFlow) {
+    if (lpm <= cfg.saveMinLpm) {
+      saveAbove = false;
+    } else if (!saveAbove) {
+      saveAbove = true;
+      saveAboveMs = millis();
+    } else if (millis() - saveAboveMs >= SAVE_RESUME_MS) {
+      saveLowFlow = false;
+      logEvent("Saving resumed: drain flow %.1f L/min", lpm);
+    }
+  }
+
+  if (saveStoppedFull) {
     noSavingWater();
     return TR("Tank full: not saving", "Tanque lleno: no se guarda agua");
   }
+  if (saveLowFlow) {
+    noSavingWater();                   // fill valve closed, drain open
+    return TR("Low flow: to the drain", "Flujo bajo: va al desagüe");
+  }
+  outputsRequest(modeSaveTank);        // the safety task closes it at once if the tank fills
+  return TR("Saving water to tank", "Guardando agua en el tanque");
 }
 
 // ── Flow rate readings ─────────────────────────────────────────────────────
@@ -356,6 +387,7 @@ void handleDrain2StateEntry() {
   drain2StartTime = millis();
   drain2Done = false;
   saveStoppedFull = false;
+  resetSaveFlow();
 }
 
 // ── State logic ────────────────────────────────────────────────────────────
@@ -581,7 +613,7 @@ void drain2StateLogic() {
     const char* tankMsg = checkAndFillWaterTank();
     DEBUG_PRINT(tankMsg);
 
-    if (outputsMode() != modeSaveTank && !tankFullAlertSent) {
+    if ((saveStoppedFull || tankFull()) && !tankFullAlertSent) {   // not when only the flow is low
       tankFullAlertSent = true;
       notify(TR("Reuse Water: tank full", "Reúso de Agua: tanque lleno"),
              TR("The storage tank is full. The rest of the rinse water is going to the drain.",
@@ -596,6 +628,9 @@ void drain2StateLogic() {
     char msg[64];
     if (outputsMode() == modeSaveTank)
       snprintf(msg, sizeof(msg), TRS("Saving rinse|water in tank|Ends in %lu:%02lu", "Ahorrando agua|en el tanque|Fin en %lu:%02lu"),
+               left / 60UL, left % 60UL);
+    else if (saveLowFlow && !saveStoppedFull && !tankFull())
+      snprintf(msg, sizeof(msg), TRS("Low flow|To the drain|Ends in %lu:%02lu", "Flujo bajo|Al desague|Fin en %lu:%02lu"),
                left / 60UL, left % 60UL);
     else
       snprintf(msg, sizeof(msg), TRS("Tank is full|Rest to drain|Ends in %lu:%02lu", "Tanque lleno|Ya no se guarda|Fin en %lu:%02lu"),

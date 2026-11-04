@@ -381,5 +381,18 @@
  "the server needs a login": "el servidor pide usuario y contraseña",
  "Use only letters, numbers, - and _.": "Use solo letras, números, - y _.",
  "Start with https:// or http://.": "Empiece por https:// o http://.",
- "The alert topic may use only letters, numbers, - and _ (up to 63).": "El tema de alertas solo puede tener letras, números, - y _ (hasta 63)."
+ "The alert topic may use only letters, numbers, - and _ (up to 63).": "El tema de alertas solo puede tener letras, números, - y _ (hasta 63).",
+ "Screen font": "Letra de la pantalla",
+ "Letters of the messages on the controller screen. Save settings, then look at the screen; choose the one that is easiest to read from where you stand.": "Letra de los mensajes en la pantalla del controlador. Guarde la configuración y mire la pantalla; elija la que se lea mejor desde donde usted está.",
+ "Original (Helvetica Bold)": "Original (Helvetica negrita)",
+ "Narrow bold": "Angosta gruesa",
+ "Narrow light": "Angosta delgada",
+ "Semi-narrow": "Semiangosta",
+ "Round": "Redondeada",
+ "Classic serif": "Clásica con serifa",
+ "Choose one of the screen fonts.": "Elija una de las letras de pantalla.",
+ "Minimum flow to save": "Flujo mínimo para guardar",
+ "In step 4, rinse water goes to the tank only while the drain flow is above this. At or below it the fill valve closes and the drain opens at once; saving starts again when the flow stays above it for 2 s (in litres per minute)": "En el paso 4, el agua de enjuague va al tanque solo mientras el flujo de desagüe esté por encima de este valor. Si es igual o menor, la válvula de llenado se cierra y el desagüe se abre de inmediato; vuelve a guardar cuando el flujo se mantiene por encima durante 2 s (en litros por minuto)",
+ "Low drain flow, so the rest goes to the drain": "Flujo de desagüe bajo: el resto va al desagüe",
+ "Minimum flow to save: use 0.5 to 10 L/min.": "Flujo mínimo para guardar: use de 0,5 a 10 L/min."
 }

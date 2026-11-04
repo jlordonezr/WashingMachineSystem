@@ -21,6 +21,7 @@ Run everything with one command from the sketch folder: `sh tests/run_all.sh`. S
 | F8 high float bobbing at the mark (3.0) | Fill valve switches at most twice; tank stops below 39 L |
 | F9 screen missing (3.0) | Runs without it, alert, cycle completes |
 | F10 loop() blocked 3 s while pumping (3.0) | Safety task still stops the pump within 0.35 s (2.9.3: 3.2 s) |
+| F13 trickle and second pump-out in step 4 (3.4) | Below the minimum save flow the fill valve closes and the drain opens within 3 s; a new pump-out is saved again; no tank-full alert |
 | F11 loop() blocked 3 s while saving (3.0) | Safety task closes the fill valve; no overfill (2.9.3 overfills) |
 
 The simulation found a real bug before release: Ready-entry at power-up cleared the cycle marker before the interruption check could read it.

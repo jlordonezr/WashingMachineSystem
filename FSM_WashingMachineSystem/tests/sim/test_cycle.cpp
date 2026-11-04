@@ -64,7 +64,8 @@ bool netIsConnected() { return false; }
 void notify(const char* title, const char* body, uint8_t prio, const char*) { (void)body; alerts.push_back({title, prio}); logEvent("Alert: %s", title); }
 
 // ── washing machine program (seconds after START) ──
-struct Program { std::vector<std::pair<double,double>> draws, drains; };
+struct DrainRate { double from, to, lpm; };   // drain flow other than 18 L/min in [from, to) (F13)
+struct Program { std::vector<std::pair<double,double>> draws, drains; std::vector<DrainRate> rates; };
 static Program prog;
 static double startAt = -1;
 static bool in(const std::vector<std::pair<double,double>>& w, double t) { for (auto& p : w) if (t >= p.first && t < p.second) return true; return false; }
@@ -93,7 +94,8 @@ static void stepWorld(uint32_t dtMs) {
   double tapFlow = (draw && (tapOpen || pumpDelivers)) ? 8.0 : 0.0;
   if (draw && pumpDelivers && !tapOpen) tankL -= 8.0 * dtMs / 60000.0;
   double drainFlow = drain ? 18.0 : 0.0;
-  if (drain && pinOut[OUT_FILL_EV] == HIGH && pinOut[OUT_DRAIN_EV] == LOW) { tankL = std::min(45.0, tankL + 18.0 * dtMs / 60000.0); rec.savedWhileSaving = true; }
+  for (auto& r : prog.rates) if (t >= r.from && t < r.to) drainFlow = r.lpm;
+  if (drainFlow > 0 && pinOut[OUT_FILL_EV] == HIGH && pinOut[OUT_DRAIN_EV] == LOW) { tankL = std::min(45.0, tankL + drainFlow * dtMs / 60000.0); rec.savedWhileSaving = true; }
   if (pumpOn && tapOpen) rec.pumpWhileTap = true;
   static int lastFill = LOW;
   if (pinOut[OUT_FILL_EV] != lastFill) { lastFill = pinOut[OUT_FILL_EV]; rec.fillSwitches++; }
@@ -221,6 +223,15 @@ int main(int argc, char** argv) {
     boot(); int st; uint32_t ep;
     CHECK(!interruptedInfo(st, ep) && alerts.empty(), "false interruption alert at a normal power-up");
     CHECK(eventSeen("Controller started (Switched on or power cut)"), "start-up not in the event log");
+    // Every screen font from Settings redraws the Ready screen at once, with the same text (3.4).
+    runFor(8);                                             // past the start-up animation and notice
+    auto shownText = []() { return oled.shown.empty() ? std::string() : oled.shown.back(); };
+    std::string before = shownText();
+    for (int f = 1; f < SCREEN_FONT_COUNT; ++f) {
+      cfg.screenFont = f; oled.shown.clear(); runFor(0.1);
+      CHECK(!oled.shown.empty() && shownText() == before, "screen font %d: screen not redrawn with the same text", f);
+    }
+    cfg.screenFont = 0;
   }
   else if (sc == "F7") {
     printf("F7 low float failed dry, tank full (high float wet)\n");
@@ -277,6 +288,33 @@ int main(int argc, char** argv) {
     CHECK(tankL < 40.4, "tank overfilled to %.2f L", tankL);
     runFor(200);
     CHECK(activeState == stIdle, "cycle did not complete");
+  }
+  else if (sc == "F13") {
+    printf("F13 step 4: a trickle below the minimum save flow goes to the drain, a new pump-out is saved again (3.4)\n");
+    tankL = 5.0; typicalProgram(); boot(); cfg.drain2DurationMs = 600000;        // step 4 lasts 10 min here
+    // Rinse pump-out from 1500 s at 18 L/min, 0.3 L/min from 1560 s, a spin pump-out 1640-1670 s at 12 L/min, then 0.3 L/min.
+    prog.drains = {{600,720},{1500,1800}};
+    prog.rates = {{1560,1640,0.3},{1640,1670,12.0},{1670,1800,0.3}};
+    auto saving   = []() { return pinOut[OUT_FILL_EV] == HIGH && pinOut[OUT_DRAIN_EV] == LOW; };
+    auto draining = []() { return pinOut[OUT_FILL_EV] == LOW && pinOut[OUT_DRAIN_EV] == HIGH; };
+    pressStart(); runFor(1540);
+    CHECK(activeState == stDrain2 && saving(), "not saving during the 18 L/min pump-out (state %d)", activeState);
+    double tLow = -1; while (progT() < 1580 && tLow < 0) { runFor(0.05); if (draining()) tLow = progT(); }
+    printf("    trickle starts at 1560 s; fill closed and drain open at %.2f s\n", tLow);
+    CHECK(tLow >= 1560 && tLow <= 1563, "fill valve not closed / drain not opened within 3 s of the trickle (%.2f s)", tLow);
+    double savedAtLow = tankL; runFor(1640 - progT());
+    CHECK(draining() && tankL == savedAtLow, "the 0.3 L/min trickle went to the tank");
+    double tBack = -1; while (progT() < 1660 && tBack < 0) { runFor(0.05); if (saving()) tBack = progT(); }
+    printf("    spin pump-out at 1640 s; saving again at %.2f s\n", tBack);
+    CHECK(tBack >= 1642 && tBack <= 1646, "saving did not resume 2-6 s into the new pump-out (%.2f s)", tBack);
+    runFor(1669 - progT());
+    CHECK(saving(), "stopped saving during the 12 L/min pump-out");
+    double tLow2 = -1; while (progT() < 1680 && tLow2 < 0) { runFor(0.05); if (draining()) tLow2 = progT(); }
+    CHECK(tLow2 >= 1670 && tLow2 <= 1673, "second trickle not sent to the drain (%.2f s)", tLow2);
+    CHECK(eventSeen("Saving paused") && eventSeen("Saving resumed"), "pause / resume missing from the event log");
+    CHECK(sawMsg("Low flow"), "screen never showed \"Low flow\"");
+    CHECK(!alertSeen("Reuse Water: tank full") && !tankFull(), "a low flow raised the tank-full alert");
+    printf("    tank %.1f L; fill valve switched %d times\n", tankL, rec.fillSwitches);
   }
   else if (sc == "F12") {
     printf("F12 full cycle in Spanish (factory default language)\n");

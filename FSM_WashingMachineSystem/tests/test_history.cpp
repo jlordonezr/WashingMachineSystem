@@ -56,7 +56,7 @@ int main(){
   st.clear(); { Settings v6; settingsDefaults(v6); v6.version=6; v6.drain2DurationMs=1800000; v6.buzzerOn=1;
     strlcpy(v6.ntfyTopic,"gw-private-topic",sizeof(v6.ntfyTopic)); strlcpy(v6.webPassword,"my-new-pass",sizeof(v6.webPassword));
     v6.language=0xAB;                                     // whatever was in the padding byte
-    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v6,(uint8_t*)&v6+sizeof(v6)); }
+    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v6,(uint8_t*)&v6+offsetof(Settings,saveMinLpm)); }   // 3.0 stored 288 bytes
   boot();
   CHECK(cfg.version==SETTINGS_VERSION && cfg.language==LANG_ES, "version 6 settings not migrated to Spanish");
   CHECK(cfg.drain2DurationMs==1800000 && cfg.buzzerOn==1 && !strcmp(cfg.ntfyTopic,"gw-private-topic") && !strcmp(cfg.webPassword,"my-new-pass"),
@@ -65,6 +65,26 @@ int main(){
   printf("S2 a chosen language survives a restart\n");
   cfg.language=LANG_EN; settingsSave(); cfg.language=LANG_ES; boot();
   CHECK(cfg.language==LANG_EN, "English not kept after a restart");
+
+  printf("S3 settings from 3.3 (version 7) keep every value and start with the original screen font (3.4)\n");
+  st.clear(); { Settings v7; settingsDefaults(v7); v7.version=7; v7.language=LANG_EN; v7.drain2DurationMs=1500000;
+    strlcpy(v7.ntfyServer,"https://ntfy.envs.net",sizeof(v7.ntfyServer));
+    v7.screenFont=0xCD;                                   // whatever was in the padding byte
+    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v7,(uint8_t*)&v7+offsetof(Settings,saveMinLpm)); }   // 3.3 stored 288 bytes
+  boot();
+  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==0, "version 7 settings not migrated to the original screen font");
+  CHECK(cfg.language==LANG_EN && cfg.drain2DurationMs==1500000 && !strcmp(cfg.ntfyServer,"https://ntfy.envs.net"), "version 7 values lost in the migration");
+  printf("S4 a chosen screen font survives a restart; a bad value falls back to the original\n");
+  cfg.screenFont=4; settingsSave(); cfg.screenFont=0; boot();
+  CHECK(cfg.screenFont==4, "screen font not kept after a restart");
+  cfg.screenFont=9; settingsSanitize(cfg);
+  CHECK(cfg.screenFont==0, "screen font 9 accepted");
+  printf("S5 minimum save flow: 0.5 L/min after the upgrade, kept after a restart, limited to 0.5-10 (3.4)\n");
+  CHECK(cfg.saveMinLpm==0.5f, "upgraded settings do not save above 0.5 L/min");
+  cfg.saveMinLpm=1.5f; settingsSave(); cfg.saveMinLpm=0.5f; boot();
+  CHECK(cfg.saveMinLpm==1.5f, "minimum save flow not kept after a restart");
+  cfg.saveMinLpm=0.2f; settingsSanitize(cfg); CHECK(cfg.saveMinLpm==0.5f, "0.2 L/min accepted (minimum 0.5)");
+  cfg.saveMinLpm=0.0f/0.0f; settingsSanitize(cfg); CHECK(cfg.saveMinLpm==0.5f, "NaN accepted");
 
   printf("\n%d checks passed, %d failed\n", pass, fail);
   return fail?1:0;

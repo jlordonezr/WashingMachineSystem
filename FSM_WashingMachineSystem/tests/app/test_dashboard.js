@@ -33,9 +33,9 @@ function baseStatus() {
 let status = baseStatus();
 let onStart = () => {};        // what the mock does when /api/start arrives
 let onTestAlert = () => {};
-let settings = { language: 'en', buzzerOn: false, minFillLitres: 3, flowOnLpm: 1, washPeriodS: 10, washOpenS: 2,
+let settings = { language: 'en', buzzerOn: false, minFillLitres: 3, saveMinLpm: 0.5, flowOnLpm: 1, washPeriodS: 10, washOpenS: 2,
     drain2Min: 20, edgeS: 4, stepAlertMin: 90, tankMaxAgeH: 48, manualWashMaxMin: 10, allowRemoteStart: true,
-    ntfyServer: 'https://ntfy.sh', ntfyTopic: 'x', timeZone: '<-05>5' };
+    ntfyServer: 'https://ntfy.sh', ntfyTopic: 'x', screenFont: 0, timeZone: '<-05>5' };
 let lastSettingsPost = null;
 const server = http.createServer((req, res) => {
   const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };

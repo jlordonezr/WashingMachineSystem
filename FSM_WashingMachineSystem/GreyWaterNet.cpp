@@ -366,10 +366,10 @@ static void buildSettingsJson(char* buf, size_t size) {
   jsonEscape(topic,   sizeof(topic),   cfg.ntfyTopic);
   jsonEscape(tz,      sizeof(tz),      cfg.timeZone);
   snprintf(buf, size,
-    "{\"language\":\"%s\",\"buzzerOn\":%s,\"minFillLitres\":%.1f,\"flowOnLpm\":%.1f,\"washPeriodS\":%.2f,\"washOpenS\":%.2f,\"drain2Min\":%lu,\"edgeS\":%.1f,"
+    "{\"language\":\"%s\",\"screenFont\":%u,\"buzzerOn\":%s,\"minFillLitres\":%.1f,\"saveMinLpm\":%.1f,\"flowOnLpm\":%.1f,\"washPeriodS\":%.2f,\"washOpenS\":%.2f,\"drain2Min\":%lu,\"edgeS\":%.1f,"
     "\"stepAlertMin\":%lu,\"tankMaxAgeH\":%u,\"manualWashMaxMin\":%lu,\"allowRemoteStart\":%s,"
     "\"ntfyServer\":\"%s\",\"ntfyTopic\":\"%s\",\"timeZone\":\"%s\"}",
-    cfg.language == LANG_EN ? "en" : "es", cfg.buzzerOn ? "true" : "false", cfg.minFillLitres, cfg.flowOnLpm, cfg.washPeriodMs / 1000.0f, cfg.washOpenMs / 1000.0f,
+    cfg.language == LANG_EN ? "en" : "es", (unsigned)cfg.screenFont, cfg.buzzerOn ? "true" : "false", cfg.minFillLitres, cfg.saveMinLpm, cfg.flowOnLpm, cfg.washPeriodMs / 1000.0f, cfg.washOpenMs / 1000.0f,
     (unsigned long)(cfg.drain2DurationMs / 60000UL), cfg.edgeDetectMs / 1000.0f,
     (unsigned long)(cfg.stepAlertMs / 60000UL), (unsigned)cfg.tankMaxAgeHours,
     (unsigned long)(cfg.manualWashMs / 60000UL), cfg.allowRemoteStart ? "true" : "false", server_, topic, tz);
@@ -413,10 +413,20 @@ static void handleSettingsPost() {
   }
   if (server.hasArg("minFillLitres") && server.arg("minFillLitres").toFloat() > 0)
     next.minFillLitres = server.arg("minFillLitres").toFloat();
+  if (server.hasArg("saveMinLpm") && server.arg("saveMinLpm").length() > 0) {
+    float v = server.arg("saveMinLpm").toFloat();
+    if (!(v >= 0.5f && v <= 10.0f)) { sendError(400, "Minimum flow to save: use 0.5 to 10 L/min."); return; }
+    next.saveMinLpm = v;
+  }
   if (server.hasArg("flowOnLpm") && server.arg("flowOnLpm").toFloat() > 0)
     next.flowOnLpm = server.arg("flowOnLpm").toFloat();
   if (server.hasArg("language")) next.language = (server.arg("language") == "en") ? LANG_EN : LANG_ES;
   if (server.hasArg("buzzerOn")) next.buzzerOn = (server.arg("buzzerOn") == "1") ? 1 : 0;
+  if (server.hasArg("screenFont")) {
+    long f = server.arg("screenFont").toInt();
+    if (f < 0 || f >= SCREEN_FONT_COUNT || server.arg("screenFont").length() == 0) { sendError(400, "Choose one of the screen fonts."); return; }
+    next.screenFont = (uint8_t)f;
+  }
   if (server.hasArg("allowRemoteStart")) next.allowRemoteStart = (server.arg("allowRemoteStart") == "1");
 
   if (next.washOpenMs >= next.washPeriodMs) {

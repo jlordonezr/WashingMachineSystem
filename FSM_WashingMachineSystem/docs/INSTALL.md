@@ -77,7 +77,7 @@ then upload the firmware.
 | 2.9.3 | Upload `v2.9.3/FSM_WashingMachineSystem` | 3.0's safety task misbehaves on the hardware. 2.9.3 has all other 3.0 fixes |
 | 2.9 | Upload the original `v2.9` folder | Anything else |
 
-History is the same in every version. Going back from 3.1 to 3.0 or earlier resets the settings to their defaults once (those versions do not read settings version 7); note them first, or restore them from a downloaded history file.
+History is the same in every version. Going back from 3.4 to 3.3 or earlier resets the settings to their defaults once (those versions do not read settings version 8); note them first, or restore them from a downloaded history file.
 
 ## 8. Running the PC tests
 

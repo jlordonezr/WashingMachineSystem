@@ -1,4 +1,26 @@
-# Reuse Water System – Firmware 3.3 (Wi-Fi)
+# Reuse Water System – Firmware 3.4 (Wi-Fi)
+
+## What's new in 3.4: minimum flow to save, and the household chooses the screen font
+
+The safety interlocks and the water history are unchanged from 3.3.1. Step 4 now saves only while water really flows.
+
+- **Minimum flow to save** (Settings → Cycle, *Flujo mínimo para guardar*, default 0.5 L/min, 0.5–10). In step 4 rinse water goes to the tank only while the drain flow is above it. At or below it the fill valve closes and the drain opens on the same pass, about 2 s after the flow drops (the drain meter's 2 s average), so the last trickle goes to the drain; if the machine pumps out again (a spin), saving resumes after 2 s above the limit (`SAVE_RESUME_MS`), so the valves do not chatter. The screen shows *Flujo bajo › Al desague*, the event log *Saving paused* / *Saving resumed*. The *tank full* alert now comes only from the tank being full (it used to fire whenever step 4 was not saving). Simulation F13 covers it.
+- **Settings → Screen → Screen font** (*Pantalla → Letra de la pantalla*): six letter styles for the messages on the controller screen. The screen changes as soon as the settings are saved, so each household can try them and keep the one they read best.
+
+| # | App label (ES) | Style | Made from | Message parts in its own letters |
+|---|---|---|---|---|
+| 0 | Original (*Original*) | Helvetica Bold 14 px, default | Adobe Helvetica Bold pixel font | 76 of 111 (the rest in 12 px) |
+| 1 | Narrow bold (*Angosta gruesa*) | 13 px, thick strokes | Fira Sans Condensed Bold | 111 of 111 |
+| 2 | Narrow light (*Angosta delgada*) | 13 px, thin strokes | PT Sans Narrow Bold | 111 of 111 |
+| 3 | Semi-narrow (*Semiangosta*) | 13 px, square | Barlow Semi Condensed Bold | 111 of 111 |
+| 4 | Round (*Redondeada*) | 13 px, open | Lato Bold | 108 of 111 |
+| 5 | Classic serif (*Clásica con serifa*) | 13 px, serif | Adobe Times Bold pixel font | 102 of 111 |
+
+- A part too wide for the chosen font is shown in Helvetica Bold 12 px, which every message fits; the top line keeps its built-in font. `tools/check_screen_text.py` reports the counts above.
+- The fonts are made by `tools/make_screen_fonts.py` (FreeType, 1 bit, capitals 13 px). The free fonts are under the SIL Open Font License; as converted copies they do not carry their Reserved Font Names, so files and labels describe the style (`FontNarrowBold13.h`, …). Licences in `licenses/`.
+- **Settings version 8** adds `screenFont` (in what was padding) and `saveMinLpm` (the size grows from 288 to 292 bytes); 3.0–3.3 settings are kept, with the original font and 0.5 L/min. `GET/POST /api/settings` and the history backup carry both.
+- Tests: history S3–S5 (migration, restart, bad values); simulation F5 redraws the Ready screen in every font; F13 the minimum save flow.
+- Build: 1.38 MB flash (44%), 97 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.3.1: alerts survive an alert-server outage
 
@@ -71,7 +93,7 @@ The controller screen, the app and the phone alerts are now in **Spanish (Colomb
 - **Alerts:** titles and messages in the chosen language. They are now sent as JSON to the ntfy server's root URL (ntfy "publish as JSON"), so accents arrive intact; plain HTTP headers cannot carry them.
 - **Stays in English:** the event log on the Service tab (for service and support), and the Wi-Fi setup page (it comes from the WiFiManager library).
 - **Setup key on the screen:** in Spanish the screen shows only the key (`gw-a1b2c3`), because *Clave gw-…* does not fit.
-- **Settings version 7** adds the language; version 6 settings from 3.0 are kept and start in Spanish. Water history is unchanged.
+- **Settings version 7** (3.1) adds the language; version 6 settings from 3.0 are kept and start in Spanish. Water history is unchanged.
 - **Tests:** simulation F12 runs a full cycle in Spanish; history test S1–S2 checks the settings upgrade; dashboard tests A8 (no English left on any tab in Spanish) and A9 (switching language), and axe-core in both languages; screen-text and translation checks in `tests/run_all.sh`.
 - Build: 1.31 MB flash (41%) with core 3.0.7, 1.13 MB with core 2.0.17.
 

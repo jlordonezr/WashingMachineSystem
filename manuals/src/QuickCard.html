@@ -42,6 +42,7 @@
 <tr><td>Soapy water › is not saved</td><td>Agua jabonosa › no se guarda</td><td>Soapy water goes down the drain, not into the tank</td></tr>
 <tr><td>Saving rinse › water in tank › Ends in 18:42</td><td>Ahorrando agua › en el tanque › Fin en 18:42</td><td>Rinse water is stored for your next wash; the clock shows when the system finishes</td></tr>
 <tr><td>Tank is full › Rest to drain</td><td>Tanque lleno › Ya no se guarda</td><td>The tank is full; the rest goes down the drain</td></tr>
+<tr><td>Low flow › To the drain</td><td>Flujo bajo › Al desague</td><td>Only a trickle is left, so it goes down the drain; saving starts again if the machine pumps out again</td></tr>
 <tr><td>Wash finished › Reused 26 L › Saved 30 L</td><td>Lavado listo › Reusados 26 L › Guardados 30 L</td><td>Done: tank water used this wash, and rinse water stored for the next one</td></tr>
 </table>
 <p>The small box at the top right of the screen shows how full the tank is: empty, half or full.</p>
@@ -63,11 +64,12 @@
 <li><b>Water use:</b> how much water you have reused this month.</li>
 <li><b>Refresh:</b> use it if the page looks stuck.</li>
 <li><b>Settings → Language:</b> Español or English, for the app, the screen and the alerts.</li>
+<li><b>Settings → Screen font:</b> six letter styles for the controller screen. Save, look at the screen, and keep the one you read best.</li>
 </ul>
 <p>Phone alerts start with <i>Reuse Water:</i> (Spanish: <i>Reúso de Agua:</i>).</p>
 <p>Technician: <span class="blank"></span> Phone: <span class="blank"></span></p>
 
-<h2 class="page-break">Installer commissioning checklist (firmware 3.3)</h2>
+<h2 class="page-break">Installer commissioning checklist (firmware 3.4)</h2>
 <p>Firmware 3.0 has run correctly on the installed system. Firmware 3.1 adds the Spanish texts and the language setting. Firmware 3.2 renames the app to Reuse Water System, adds the start-up animation and a clearer screen font, and moves the optional buzzer from D12 to D1, on the same control logic. Firmware 3.3 makes the screen messages explain themselves in short pages and makes phone alerts more reliable. Complete these checks when installing or replacing a controller.</p>
 <h3>Hardware</h3>
 <ul class="check">
@@ -83,17 +85,17 @@
 <ul class="check">
 <li><b>Start-up screen:</b> the dog chases the butterfly (about 4 s), then <code>REUSO DE AGUA</code> / Sistema listo for 2 s, then <code>LISTO</code>. START during the dog skips it.</li>
 <li><b>Readability:</b> the bold messages can be read from where the household stands.</li>
-<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.3.1.</li>
+<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.4.0.</li>
 </ul>
 <h3>First cycle (watch the Service tab)</h3>
 <ul class="check">
 <li>Screen shows <code>WASH 1 OF 4</code> with <i>Waiting for › washer to fill</i>, then <i>Reusing water › from the tank</i> or <i>Filling washer › with tap water</i>, then <i>Washing...</i>.</li>
 <li>The pump turns on when the machine draws water and off within about 0.3 s after it stops (<i>Recent events</i>: “Pump stopped: machine closed its inlet”).</li>
 <li>Step 1 ends only when the wash drain starts, not before (<i>Machine filled</i> appears first).</li>
-<li>Step 4 saves water (<i>Saving rinse › water in tank › Ends in …</i>); the fill valve is on and the drain valve off in <i>Valves and pump</i>.</li>
+<li>Step 4 saves water (<i>Saving rinse › water in tank › Ends in …</i>); the fill valve is on and the drain valve off in <i>Valves and pump</i>. When the pump-out ends, the screen shows <i>Low flow › To the drain</i> and the fill valve turns off within about 3 s.</li>
 <li><code>DONE</code> shows <i>Wash finished</i> and the litres reused and saved; <i>Water use</i> shows the wash. With the buzzer on: two short beeps.</li>
 </ul>
-<h3>Firmware features (3.0 to 3.3)</h3>
+<h3>Firmware features (3.0 to 3.4)</h3>
 <ul class="check">
 <li><b>Passwords:</b> the app asked for new passwords on first use, and both were changed.</li>
 <li><b>Power cut:</b> switch the controller off during step 1 and on again. Expect the start-up animation, then <code>INTERRUPTED</code> on the screen, an alert, and the notice on Overview.</li>
@@ -104,6 +106,7 @@
 <li><b>Wi-Fi setup key:</b> hold STOP for 5 s at <code>READY</code>. The screen shows <code>ReuseWater-Setup</code> and a key like <code>gw-a1b2c3</code>, unique to this board; it is also printed over USB. Join the network with that key. The old shared password <code>greywater</code> works only if the screen is missing.</li>
 <li><b>Screen messages:</b> during a wash the message changes every 3 seconds (for example <i>Reusing water › from the tank</i>); every part is readable and nothing is cut off. From the second wash a <i>min left</i> part appears.</li>
 <li><b>Float switches:</b> with the low float down, hold the high float up for 5 s. Expect the alert <i>check level switches</i> and <i>Check float switches</i> in the app (and three long beeps with the buzzer on).</li>
+<li><b>Screen font:</b> each style in Settings → Screen font changes the screen after Save; the household’s choice is set before handover.</li>
 <li><b>Language:</b> Settings → Language switches the app, the screen and the alerts; the household’s language is set before handover.</li>
 <li><b>Test alert:</b> the app reports <i>Test alert delivered</i> (or the reason it failed).</li>
 </ul>

@@ -17,8 +17,8 @@
 <table>
 <thead><tr><th>Item</th><th>Detail</th></tr></thead>
 <tr><td>Document</td><td>Reuse Water System – Runbook</td></tr>
-<tr><td>Version</td><td>3.3.1</td></tr>
-<tr><td>Applies to firmware</td><td><code>FSM_WashingMachineSystem.ino</code> and the <code>GreyWater*</code> files, firmware 3.3.1 (3.3.1: alerts tried again for 30 min during an outage; 3.3: screen messages in short pages that explain what is happening and what to do, minutes left, more reliable phone alerts; 3.2: new name Reuse Water System, start-up animation, Helvetica Bold screen font, larger tank icon, buzzer on D1; 3.1: Spanish and English, chosen in Settings; 3.0: safety task, float-switch rules, code split into modules)</td></tr>
+<tr><td>Version</td><td>3.4</td></tr>
+<tr><td>Applies to firmware</td><td><code>FSM_WashingMachineSystem.ino</code> and the <code>GreyWater*</code> files, firmware 3.4.0 (3.4: screen font chosen in Settings; 3.3.1: alerts tried again for 30 min during an outage; 3.3: screen messages in short pages that explain what is happening and what to do, minutes left, more reliable phone alerts; 3.2: new name Reuse Water System, start-up animation, Helvetica Bold screen font, larger tank icon, buzzer on D1; 3.1: Spanish and English, chosen in Settings; 3.0: safety task, float-switch rules, code split into modules)</td></tr>
 <tr><td>Intended audience</td><td>Installers, operators and maintenance personnel</td></tr>
 <tr><td>Related documents</td><td><code>README.md</code> (firmware change summary); Reuse Water System – Quick Card</td></tr>
 </table>
@@ -84,7 +84,7 @@
 <li><b>Fill (1/4):</b> the machine fills with tap water, or with tank water when the tank has water and the machine is demanding water. The tank-wash valve pulses every 10 s while tank water is used.</li>
 <li><b>Drain (2/4):</b> soapy water is drained, not saved.</li>
 <li><b>Rinse (3/4):</b> the machine fills with tap water.</li>
-<li><b>Drain (4/4):</b> rinse water is saved to the tank until it is full. This step lasts 20 minutes, then the system returns to Idle.</li>
+<li><b>Drain (4/4):</b> rinse water is saved to the tank until it is full, but only while the drain flow is above the <i>Minimum flow to save</i> (default 0.5 L/min, from 3.4). When the flow drops to that value or below, the fill valve closes and the drain opens at once, so the last trickle goes to the drain; a new pump-out (a spin) is saved again once it has flowed above the limit for 2 s. This step lasts 20 minutes, then the system returns to Idle.</li>
 </ol>
 <p>Source files (from firmware 3.0): <code>FSM_WashingMachineSystem.ino</code> (setup and loop), <code>GreyWaterSystem</code> (wash cycle), <code>GreyWaterOutputs</code> and <code>GreyWaterTask</code> (outputs, float switches, safety task), <code>GreyWaterSensors</code>, <code>GreyWaterDisplay</code>, <code>GreyWaterDiagnostics</code>, <code>GreyWaterSettings</code>, <code>GreyWaterNet</code>, <code>Ntfy.h</code> (phone alert message, from 3.3), <code>FlowMeter.h</code>, <code>TankLevel.h</code>, the screen files <code>BootAnimation.h</code>, <code>FontHelvBold12.h</code> and <code>FontHelvBold14.h</code> (from 3.2), and the app page <code>web/dashboard.html</code> with its Spanish texts <code>web/es.json</code>. Libraries: Adafruit GFX, Adafruit SSD1306, AgileStateMachine, WiFiManager.</p>
 
@@ -259,7 +259,7 @@
 <tr><td>Filling with tap water</td><td>Step 1 (tap), step 3</td><td>On</td><td>On</td><td>Off</td><td>Off</td><td>Off</td><td><code>fillWashingMachineWithTapWater()</code></td></tr>
 <tr><td>Filling with tank water</td><td>Step 1 (tank), while the machine draws water</td><td>Off</td><td>On</td><td>Off</td><td>On; off within 0.3 s of the machine closing its inlet</td><td>Pulsed: 2 s every 10 s</td><td><code>fillWashingMachineWithTankWater()</code></td></tr>
 <tr><td>Draining soapy water</td><td>Step 2</td><td>On</td><td>On</td><td>Off</td><td>Off</td><td>Off</td><td><code>drainSoapyWater()</code></td></tr>
-<tr><td>Saving water to the tank</td><td>Step 4, tank not full</td><td>On</td><td>Off</td><td>On</td><td>Off</td><td>Off</td><td><code>checkAndFillWaterTank()</code></td></tr>
+<tr><td>Saving water to the tank</td><td>Step 4, tank not full, drain flow above the minimum flow to save</td><td>On</td><td>Off</td><td>On</td><td>Off</td><td>Off</td><td><code>checkAndFillWaterTank()</code></td></tr>
 </table>
 <p><b>Pump protection (from firmware 2.5):</b> the pump runs only while water is actually flowing.</p>
 <ul>
@@ -352,6 +352,18 @@
 <li>START, or Wash tank in the app, ends the animation at once. Without a working screen it is skipped.</li>
 <li>The drawings are in <code>BootAnimation.h</code> (about 1.6 KB).</li>
 </ul>
+<h3>Screen font (from firmware 3.4)</h3>
+<p>In the app, <b>Settings → Screen → Screen font</b> chooses the letters of the screen messages. Save the settings and look at the controller screen; try each style from where the screen is usually read, and keep the clearest.</p>
+<table>
+<thead><tr><th>Choice (Spanish)</th><th>Style</th><th>Made from</th><th>Messages in its own letters</th></tr></thead>
+<tr><td>Original (Helvetica Bold) — <i>Original (Helvetica negrita)</i></td><td>Wide bold sans, 14 px; the font up to 3.3 and the default</td><td>Adobe Helvetica Bold pixel font</td><td>76 of 111; longer parts in 12 px</td></tr>
+<tr><td>Narrow bold — <i>Angosta gruesa</i></td><td>Narrow, thick strokes, 13 px</td><td>Fira Sans Condensed Bold</td><td>All 111</td></tr>
+<tr><td>Narrow light — <i>Angosta delgada</i></td><td>Narrow, thin strokes, 13 px</td><td>PT Sans Narrow Bold</td><td>All 111</td></tr>
+<tr><td>Semi-narrow — <i>Semiangosta</i></td><td>Square, condensed, 13 px</td><td>Barlow Semi Condensed Bold</td><td>All 111</td></tr>
+<tr><td>Round — <i>Redondeada</i></td><td>Round, open letters, 13 px</td><td>Lato Bold</td><td>108 of 111</td></tr>
+<tr><td>Classic serif — <i>Clásica con serifa</i></td><td>Serif, like print, 13 px</td><td>Adobe Times Bold pixel font</td><td>102 of 111</td></tr>
+</table>
+<p>A part that does not fit the 128 px line in the chosen font is shown in Helvetica Bold 12 px, which every message fits. The top line keeps its small built-in font. The change shows on the screen as soon as the settings are saved, and it is kept after a restart. Font origins and licences: <code>licenses/README.md</code> in the firmware folder (free fonts under the SIL Open Font License, and the Adobe pixel fonts).</p>
 <h3>Messages</h3>
 <p>English, then Spanish. Pages are separated by ›; a page in brackets appears only when it applies.</p>
 <table>
@@ -370,6 +382,7 @@
 <tr><td><code>RINSE 3 OF 4</code></td><td>Rinsing...<br>Enjuagando</td><td>The machine has filled and is rinsing</td><td>None</td></tr>
 <tr><td>Steps 1, 2 or 3</td><td>No water flow › Is washer on? › If so: STOP › Call installer<br>Sin flujo › Revise lavadora › Si funciona, › pulse STOP y › pida ayuda</td><td>The step has waited longer than the step time limit for water flow</td><td>Check the washing machine; if it runs, press STOP and check the Service tab of the app</td></tr>
 <tr><td><code>SAVE 4 OF 4</code><br><code>AHORRO 4 DE 4</code></td><td>Saving rinse › water in tank › Ends in 18:42<br>Ahorrando agua › en el tanque › Fin en 18:42</td><td>Rinse water is stored; the clock shows when the cycle ends</td><td>None</td></tr>
+<tr><td><code>SAVE 4 OF 4</code></td><td>Low flow › To the drain › Ends in 18:42<br>Flujo bajo › Al desague › Fin en 18:42</td><td>The drain flow is at or below the minimum flow to save, so the fill valve is closed and the rest goes to the drain (from 3.4)</td><td>None; saving starts again if the machine pumps out again</td></tr>
 <tr><td><code>SAVE 4 OF 4</code></td><td>Tank is full › Rest to drain › Ends in 18:42<br>Tanque lleno › Ya no se guarda › Fin en 18:42</td><td>The tank is full; the rest goes to the drain</td><td>Use or empty the tank if this happens often</td></tr>
 <tr><td><code>TANK CLEANING</code><br><code>LIMPIEZA TANQUE</code></td><td>Cleaning tank › Stops when full › or in 9:42<br>Limpiando › Para al llenarse › o en 9:42</td><td>Manual tank wash; the clock shows the time left before the safety limit</td><td>None</td></tr>
 <tr><td><code>TANK CLEANED</code><br><code>TANQUE LIMPIO</code></td><td>Tank is clean › and full<br>Tanque limpio › y lleno</td><td>The manual wash filled the tank</td><td>None</td></tr>
@@ -420,6 +433,7 @@
 <thead><tr><th>Condition</th><th>Detected by</th><th>Automatic response</th><th>OLED</th></tr></thead>
 <tr><td>Tank low during Fill 1/4</td><td>Level switches</td><td>Fills from the tap instead of the tank</td><td>Tank low: tap</td></tr>
 <tr><td>No tap demand yet in Fill 1/4</td><td>Tap flow sensor</td><td>Stays on tap water until flow is confirmed</td><td>Using tap water</td></tr>
+<tr><td>Drain flow at or below the minimum flow to save during Drain 4/4 (from 3.4)</td><td>Drain flow sensor (2 s average)</td><td>Fill valve closes and drain opens on the same 250 ms pass, about 2 s after the flow drops (the measuring time); saving resumes after 2 s above the limit. Logged as <i>Saving paused</i> / <i>Saving resumed</i>; no phone alert</td><td>Low flow</td></tr>
 <tr><td>Tank full during Drain 4/4</td><td>High-level switch</td><td>Stops saving; water goes to the normal drain path</td><td>Tank full: drain</td></tr>
 <tr><td>High float wet, low float dry for 3 s (from 3.0)</td><td>Both level switches</td><td>Tank treated as full: no saving, no tank wash, no pump; tap water used. High-priority alert, alarm beeps, event logged</td><td>App: Check float switches</td></tr>
 <tr><td>Stop pressed</td><td>Stop button</td><td>Returns to Idle, clears all flags and timers</td><td>Cycle stopped</td></tr>
@@ -589,6 +603,7 @@
 <tr><td>Confirmed actions (3.0)</td><td>The app shows Cycle started, Cycle stopped or Tank wash started only after the controller confirms; Send a test alert reports whether the alert was delivered</td><td>App messages; Service → Last alert</td></tr>
 <tr><td>Loop time and memory (3.0)</td><td>The slowest program pass and the free memory, to spot problems early</td><td>Service → Slowest loop pass, Memory</td></tr>
 <tr><td>Language (3.1)</td><td>Settings → Language: Español (default) or English, for the app, the screen and the phone alerts. The event log stays in English for service</td><td>Settings</td></tr>
+<tr><td>Screen font (3.4)</td><td>Settings → Screen → Screen font: six letter styles for the messages on the controller screen, so each household can pick the easiest to read</td><td>Settings; the controller screen</td></tr>
 <tr><td>New name (3.2)</td><td>Reuse Water System (<i>Sistema de Reúso de Agua</i>): app title, screen, alert titles (<i>Reuse Water: …</i> / <i>Reúso de Agua: …</i>), <code>reusewater.local</code>, <code>ReuseWater-Setup</code>, update port <code>reusewater</code>. Settings, history, backups and passwords are kept</td><td>App, screen, alerts</td></tr>
 <tr><td>Start-up animation (3.2)</td><td>A Border Collie chases a butterfly across the screen for about 4 s after power-on, then System ready; START ends it</td><td>Screen</td></tr>
 <tr><td>Clearer screen font (3.2)</td><td>Messages in Helvetica Bold, 14 px when they fit and 12 px otherwise; larger tank icon in the header</td><td>Screen</td></tr>
@@ -646,6 +661,7 @@
 <tr><td>Flow detection time</td><td>4 s</td><td>1–30 s</td></tr>
 <tr><td>Flow threshold</td><td>1 L/min</td><td>0.2–10 L/min; water counts as flowing above it and as stopped below it for 2 s</td></tr>
 <tr><td>Minimum fill</td><td>3 L</td><td>0.5–50 L; water the machine must take before a drain can end Fill 1/4 or Rinse 3/4</td></tr>
+<tr><td>Minimum flow to save</td><td>0.5 L/min</td><td>0.5–10 L/min; in Drain 4/4 rinse water goes to the tank only while the drain flow is above this; at or below it the fill valve closes and the drain opens (from 3.4)</td></tr>
 <tr><td>Start from the dashboard</td><td>On</td><td>On / off</td></tr>
 <tr><td>Buzzer</td><td>Off</td><td>On / off; needs an active buzzer module on D1 (TX0)</td></tr>
 <tr><td>Warn when a step takes longer than</td><td>90 min</td><td>10–600 min</td></tr>
@@ -653,6 +669,7 @@
 <tr><td>Alert server / topic</td><td>https://ntfy.sh / empty (alerts off)</td><td>Create a private topic fills in a random topic and shows the subscribe link</td></tr>
 <tr><td>Time zone</td><td>UTC−5 (<code>&lt;-05&gt;5</code>)</td><td>Chosen from a list of common zones; Other accepts a POSIX code</td></tr>
 <tr><td>Language</td><td>Español</td><td>Español / English, for the app, the screen and the alerts (from 3.1)</td></tr>
+<tr><td>Screen font</td><td>Original (Helvetica Bold)</td><td>Six letter styles for the screen messages, see <i>Screen font</i> in section 6 (from 3.4)</td></tr>
 <tr><td>Dashboard and update passwords</td><td><code>greywater</code> (the app asks you to change it)</td><td>8–32 characters; the default cannot be chosen again; both take effect at once (from 3.0)</td></tr>
 </table>
 <h3>Wi-Fi troubleshooting</h3>
@@ -692,6 +709,7 @@
 <h2>Appendix B. Revision history</h2>
 <table>
 <thead><tr><th>Version</th><th>Date</th><th>Description</th></tr></thead>
+<tr><td>3.4</td><td>2026-11-04</td><td>Minimum flow to save (default 0.5 L/min): in step 4 a drain flow at or below it closes the fill valve and opens the drain at once, and a new pump-out is saved again; screen <i>Low flow › To the drain</i>. Screen font chosen in Settings → Screen: original Helvetica Bold or five 13 px styles (narrow bold, narrow light, semi-narrow, round, classic serif), applied at once and kept after a restart; settings version 8 (3.3 settings are kept)</td></tr>
 <tr><td>3.3.1</td><td>2026-11-03</td><td>Phone alerts that cannot be sent (alert server down, no internet or Wi-Fi) are tried again for up to 30 minutes, each on its own schedule; the test alert still answers within 30 s. The app’s subscribe link no longer repeats a topic pasted into Alert server</td></tr>
 <tr><td>3.3</td><td>2026-11-03</td><td>Screen messages explain themselves in short pages that change every 3 s (what is happening, what it means, what to do); steps named in words (<code>WASH 1 OF 4</code>); minutes left from the second wash; tank level on the Ready screen; litres reused and saved at the end. Phone alerts: correct failure reason in the app (codes no longer clash with HTTPClient's); up to 3 tries per alert and 5 min wait for Wi-Fi; 10 s network timeouts; topic checked (letters, numbers, - and _); pasted subscribe link removed from the server address; tapping an alert opens the app</td></tr>
 <tr><td>3.2</td><td>2026-10-30</td><td>New name Reuse Water System (<code>reusewater.local</code>, <code>ReuseWater-Setup</code>, update port <code>reusewater</code>, alert titles); Border Collie start-up animation; Helvetica Bold screen font (14 / 12 px); larger tank icon; optional buzzer moved from D12 to D1 (TX0); Runbook and Quick Card rebuilt from editable sources</td></tr>

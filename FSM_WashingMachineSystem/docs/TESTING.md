@@ -1,4 +1,4 @@
-# Testing – firmware 3.3
+# Testing – firmware 3.4
 
 **Status on 30 Oct 2026:** every automated suite passes and the firmware builds for the Arduino Nano ESP32 with cores 3.0.7 and 2.0.17. 3.0 has run correctly on the installed system. 3.1 adds languages only; 3.2 renames the app, adds the start-up animation and the Helvetica Bold screen font, and moves the buzzer to D1. 3.3 pages the screen messages and makes phone alerts more reliable. Check H10–H13 on the real board.
 
@@ -12,9 +12,9 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | Float switches | `tests/test_level.cpp` | 19 | Debouncing towards safety, bobbing float, failed low float, fault timing, wrap-around (3.0) |
 | Phone alerts | `tests/test_ntfy.cpp` | 31 | Topic rules, server address clean-up, JSON body (accents, quotes, `click`), UTF-8-safe cuts, which failures are retried (3.3), retry intervals and the 30 min window (3.3.1) |
 | Screen texts | `tools/check_screen_text.py` | 147 texts and pages | Every screen text, and each page of a paged message, fits the OLED in both languages in Helvetica Bold 12 px, plain ASCII (3.1; font from 3.2; pages from 3.3) |
-| Translations | `tools/i18n_keys.py` | 383 texts | Every app text has a Spanish translation (3.1) |
-| Water history and settings storage | `tests/test_history.cpp` | 24 | Backup copy, unreadable records, migration, restore validation (since 2.8) |
-| Full-cycle simulation | `tests/sim/` | 13 scenarios | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |
+| Translations | `tools/i18n_keys.py` | 392 texts | Every app text has a Spanish translation (3.1) |
+| Water history and settings storage | `tests/test_history.cpp` | 32 | Backup copy, unreadable records, migration, restore validation (since 2.8); settings version 7 → 8, the screen font and the minimum save flow (3.4) |
+| Full-cycle simulation | `tests/sim/` | 14 scenarios | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |
 | Dashboard | `tests/app/test_dashboard.js` | 38 | The real page in headless Chromium against a mock controller; axe-core accessibility on all tabs (3.0) |
 | Build | `arduino-cli compile --fqbn esp32:esp32:nano_nora` | — | 3.2.0: 1,368,305 bytes flash, 95,156 bytes RAM with core 3.3.12 (3.0.0: 1,301,277 / 72,624 with core 3.0.7) |
 
@@ -31,6 +31,7 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | F8 | High float bobbing at the mark (3.0) | Fill valve switches at most twice; tank stops below 39 L |
 | F9 | No screen (3.0) | Runs, alerts, completes a cycle |
 | F10 | `loop()` blocked 3 s as the machine closes its inlet (3.0) | Pump stops within 0.35 s anyway (measured 302 ms; **2.9.3: 3,200 ms**) |
+| F13 | Step 4 with a trickle and a second pump-out (3.4) | 0.3 L/min goes to the drain (fill closed, drain open within 3 s), none of it into the tank; a 12 L/min pump-out is saved again 2–6 s after it starts; events logged; *Low flow* on the screen; no tank-full alert |
 | F12 | Full cycle in Spanish (3.1) | Spanish screen texts in every step, `TERMINADO` / *Reusados n L*, Spanish alert title, event log stays English |
 | F11 | `loop()` blocked 3 s while the tank fills in step 4 (3.0) | Fill valve closes; tank 40.06 L (**2.9.3: overfilled to 40.57 L**) |
 
@@ -71,6 +72,8 @@ Do these with the washing machine empty and someone at the controller. Note each
 | H10 | Spanish screen (3.1) | Run one wash in Spanish; read every screen | Every text readable, nothing scrolls or is cut off; alerts arrive with accents |
 | H9 | Setup page | Hold STOP 5 s at `READY`; join with the key shown; browse to `/update` | Key works; `/update` is not offered (setup page only) |
 | H11 | Start-up screen (3.2) | Power on, watch the screen; then power on again and press START during the dog | Border Collie chases the butterfly (about 4 s), then `REUSO DE AGUA` / *Sistema listo* for 2 s, then `LISTO`; START ends the animation at once. Messages are in Helvetica Bold and readable |
+| H15 | Minimum flow to save (3.4) | In step 4, watch Service → Valves and pump as the rinse pump-out ends | Fill valve turns off and drain on within about 3 s of the flow dropping below the limit; screen *Flujo bajo › Al desague*; a spin pump-out turns the fill valve on again |
+| H14 | Screen font (3.4) | Settings → Screen font: choose each of the six styles, Save, look at the screen | The screen changes at once; every style is readable; the choice is kept after Restart controller |
 | H13 | Screen pages (3.3) | Run one wash in Spanish; watch each step for 15 s | Pages change every 3 s and each is readable; header `LAVADO 1 DE 4` … `AHORRO 4 DE 4`; *Faltan n min* from the second wash and roughly right; `TERMINADO` shows *Lavado listo › Reusados n L › Guardados n L* |
 | H12 | Buzzer on D1 (3.2) | Settings → Buzzer on; run a short cycle, or the float fault in H3 | Two short beeps at the end, three long beeps on the alarm. A short chirp at power-on is expected (D1 is the TX0 pin) |
 

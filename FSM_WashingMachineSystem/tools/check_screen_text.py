@@ -10,6 +10,8 @@ Screen texts are the TRS("English", "Español") pairs in the firmware
     after the other) at most 128 px wide in the 12 px size, measured with the
     real glyph widths from FontHelvBold12.h. The screen uses 14 px when a page
     fits, else 12 px; wider pages would scroll.
+  - for each screen font in Settings (3.4), how many pages show in that font;
+    the others are shown in Helvetica Bold 12 px (information, not an error).
 
 Usage: python3 tools/check_screen_text.py
 Exit code 1 if anything does not fit.
@@ -23,6 +25,10 @@ def advances(name):
     src = open(os.path.join(here, name), encoding='utf-8').read()
     return [int(a) for a in re.findall(r'\{\s*\d+,\s*\d+,\s*\d+,\s*(\d+),\s*-?\d+,\s*-?\d+\s*\}', src)]
 adv12, adv14 = advances('FontHelvBold12.h'), advances('FontHelvBold14.h')
+SCREEN_FONTS = [('Original (Helvetica Bold)', adv14), ('Narrow bold', advances('FontNarrowBold13.h')),
+                ('Narrow light', advances('FontNarrowLight13.h')), ('Semi-narrow', advances('FontSemiNarrow13.h')),
+                ('Round', advances('FontRound13.h')), ('Classic serif', advances('FontSerifBold13.h'))]
+messages = []
 def width(text, adv=adv12):
     return sum(adv[ord(c) - 0x20] for c in text)
 
@@ -46,12 +52,17 @@ for en, es in pairs:
             if page.upper() == page and any(c.isalpha() for c in page):
                 if len(page) > 16:
                     bad.append(f'{lang} header "{page}": {len(page)} characters (max 16)')
-            elif width(page) > 128:
+                continue
+            messages.append(page)
+            if width(page) > 128:
                 bad.append(f'{lang} message page "{page}": {width(page)} px (max 128)')
             elif width(page, adv14) <= 128:
                 large += 1
 
 for b in bad:
     print('  FAIL ' + b)
+for name, adv in SCREEN_FONTS:
+    own = sum(1 for m in messages if width(m, adv) <= 128)
+    print(f'  screen font {name}: {own} of {len(messages)} message pages in its own letters')
 print(f'{checked} screen texts and pages checked, {len(bad)} do not fit ({large} messages shown in 14 px)')
 sys.exit(1 if bad else 0)

@@ -45,6 +45,8 @@ extern volatile uint32_t drainPulseCount;
 #define FLOW_STOP_MS    2000   // flow must stay below the stop level this long to count as stopped
 #define FLOW_GLITCH_US  1000   // pulses closer than this are electrical noise and ignored
 #define MIN_FILL_LITRES 3.0f   // default: a fill must take this much water before a drain can end the step
+#define SAVE_MIN_LPM    0.5f   // default: step 4 saves to the tank only while the drain flow is above this (L/min)
+#define SAVE_RESUME_MS  2000   // ... and starts saving again after the flow has been above it this long
 #define LEVEL_FAST_MS   200    // float switch: time to accept the SAFE reading (high wet, low dry)
 #define LEVEL_SLOW_MS   2000   // float switch: time to accept the other reading (see TankLevel.h)
 #define LEVEL_FAULT_MS  3000   // switches must disagree this long before it is reported

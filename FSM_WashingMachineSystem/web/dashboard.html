@@ -506,6 +506,11 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           <span class="inp"><select id="f-language" name="language" aria-describedby="h-language"><option value="es" lang="es">Español</option><option value="en" lang="en">English</option></select></span></div>
       </fieldset>
       <fieldset>
+        <legend>Screen</legend>
+        <div class="field"><span><label for="f-screenFont">Screen font</label><small id="h-screenFont">Letters of the messages on the controller screen. Save settings, then look at the screen; choose the one that is easiest to read from where you stand.</small></span>
+          <span class="inp"><select id="f-screenFont" name="screenFont" aria-describedby="h-screenFont"><option value="0">Original (Helvetica Bold)</option><option value="1">Narrow bold</option><option value="2">Narrow light</option><option value="3">Semi-narrow</option><option value="4">Round</option><option value="5">Classic serif</option></select></span></div>
+      </fieldset>
+      <fieldset>
         <legend>Tank wash</legend>
         <div class="field"><span><label for="f-washPeriodS">Wash interval</label><small id="h-washPeriodS">Time between valve openings during the tank-water fill (in seconds)</small></span>
           <span class="inp"><input id="f-washPeriodS" aria-describedby="h-washPeriodS e-washPeriodS" type="number" name="washPeriodS" min="1" max="600" step="0.25" required><em aria-hidden="true">s</em></span><p class="ferr" id="e-washPeriodS" hidden></p></div>
@@ -524,6 +529,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           <span class="inp"><input id="f-flowOnLpm" aria-describedby="h-flowOnLpm e-flowOnLpm" type="number" name="flowOnLpm" min="0.2" max="10" step="0.1" required><em aria-hidden="true">L/min</em></span><p class="ferr" id="e-flowOnLpm" hidden></p></div>
         <div class="field"><span><label for="f-minFillLitres">Minimum fill</label><small id="h-minFillLitres">Water the machine must take before a drain can end a fill step; stops an early drain or a splash from skipping the wash (in litres)</small></span>
           <span class="inp"><input id="f-minFillLitres" aria-describedby="h-minFillLitres e-minFillLitres" type="number" name="minFillLitres" min="0.5" max="50" step="0.5" required><em aria-hidden="true">L</em></span><p class="ferr" id="e-minFillLitres" hidden></p></div>
+        <div class="field"><span><label for="f-saveMinLpm">Minimum flow to save</label><small id="h-saveMinLpm">In step 4, rinse water goes to the tank only while the drain flow is above this. At or below it the fill valve closes and the drain opens at once; saving starts again when the flow stays above it for 2 s (in litres per minute)</small></span>
+          <span class="inp"><input id="f-saveMinLpm" aria-describedby="h-saveMinLpm e-saveMinLpm" type="number" name="saveMinLpm" min="0.5" max="10" step="0.1" required><em aria-hidden="true">L/min</em></span><p class="ferr" id="e-saveMinLpm" hidden></p></div>
         <div class="field"><span><label for="f-allowRemoteStart">Start from the dashboard</label><small id="h-allowRemoteStart">Shows a confirmation before every start</small></span>
           <span class="switch"><input type="checkbox" id="f-allowRemoteStart" aria-describedby="h-allowRemoteStart" name="allowRemoteStart" role="switch"><i></i></span></div>
         <div class="field"><span><label for="f-buzzerOn">Buzzer</label><small id="h-buzzerOn">Beeps when a cycle ends and on alarms; needs a buzzer wired to D1 (TX0)</small></span>
@@ -876,6 +883,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   var PLAIN={'Using tank water':'Reusing water from the tank','Using tap water':'Using tap water',
     'Tank low: using tap water':'Tank low, so using tap water','Draining soapy water':'Draining soapy water (not saved)',
     'Saving water to tank':'Saving rinse water to the tank','Tank full: not saving':'Tank full, so rinse water goes to the drain',
+    'Low flow: to the drain':'Low drain flow, so the rest goes to the drain',
     'The machine is washing':'The machine is washing','The machine is rinsing':'The machine is rinsing',
     'Waiting for the machine to take water':'Waiting for the machine to fill','Rinsing with tap water':'Rinsing with tap water',
     'No flow seen: check sensors':'No water flow detected'};
@@ -1175,7 +1183,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           restoreHistory(h,replacing).then(function(){
             if(!h.settings)return;
             var c=h.settings,b=new URLSearchParams();
-            ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','language']
+            ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','saveMinLpm','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','language','screenFont']
               .forEach(function(k){if(c[k]!==undefined)b.append(k,c[k])});
             b.append('allowRemoteStart',c.allowRemoteStart?'1':'0');b.append('buzzerOn',c.buzzerOn?'1':'0');
             return api('/api/settings',{method:'POST',body:b}).then(function(nc){fill(nc);toast(t('Water history and settings restored'))});
@@ -1216,10 +1224,11 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   var form=$('settingsForm');
   function fill(c){
     form.washPeriodS.value=c.washPeriodS;form.washOpenS.value=c.washOpenS;form.drain2Min.value=c.drain2Min;
-    form.edgeS.value=c.edgeS;form.flowOnLpm.value=c.flowOnLpm;form.minFillLitres.value=c.minFillLitres;form.stepAlertMin.value=c.stepAlertMin;form.tankMaxAgeH.value=c.tankMaxAgeH;form.manualWashMaxMin.value=c.manualWashMaxMin;
+    form.edgeS.value=c.edgeS;form.flowOnLpm.value=c.flowOnLpm;form.minFillLitres.value=c.minFillLitres;form.saveMinLpm.value=c.saveMinLpm!==undefined?c.saveMinLpm:0.5;form.stepAlertMin.value=c.stepAlertMin;form.tankMaxAgeH.value=c.tankMaxAgeH;form.manualWashMaxMin.value=c.manualWashMaxMin;
     form.allowRemoteStart.checked=!!c.allowRemoteStart;form.ntfyServer.value=c.ntfyServer;
     form.ntfyTopic.value=c.ntfyTopic;form.timeZone.value=c.timeZone;form.buzzerOn.checked=!!c.buzzerOn;
     form.language.value=c.language==='en'?'en':'es';setLang(form.language.value);
+    form.screenFont.value=String(c.screenFont>=0&&c.screenFont<=5?c.screenFont:0);
     var sel=$('f-tzSel'),found=false;
     for(var i=0;i<sel.options.length;i++)if(sel.options[i].value===c.timeZone){sel.selectedIndex=i;found=true;}
     if(!found)sel.value='custom';$('tzCustomRow').hidden=found;topicHelp();form.webPassword.value='';form.otaPassword.value='';
@@ -1250,7 +1259,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     if(bad){var c=form.querySelectorAll('[aria-invalid=true]').length;
       toast(c===1?t('One setting needs attention. Nothing was saved.'):t('Some settings need attention. Nothing was saved.'),true);bad.focus();return;}
     var body=new URLSearchParams();
-    ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','webPassword','otaPassword','language']
+    ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','saveMinLpm','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','webPassword','otaPassword','language','screenFont']
       .forEach(function(k){body.append(k,form[k].value)});
     body.append('allowRemoteStart',form.allowRemoteStart.checked?'1':'0');
     body.append('buzzerOn',form.buzzerOn.checked?'1':'0');

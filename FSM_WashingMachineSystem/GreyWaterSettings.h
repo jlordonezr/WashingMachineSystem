@@ -10,12 +10,16 @@
 // Bump SETTINGS_VERSION / STATS_VERSION whenever a field is added, removed or
 // reordered: stored data with a different version is ignored and replaced by
 // defaults instead of being read into the wrong fields.
-#define SETTINGS_VERSION 7   // 7: adds language (versions 4, 5 and 6 are migrated)
+#define SETTINGS_VERSION 8   // 8: adds screenFont and saveMinLpm (versions 4 to 7 are migrated)
 
 // Language of the screen, the app and the alerts (Settings: Idioma / Language).
 // Spanish is 0 so that settings migrated from older versions start in Spanish.
 #define LANG_ES 0
 #define LANG_EN 1
+
+// Font of the screen messages (Settings: Screen font). 0 is the font used up to
+// 3.3, so migrated settings look the same. See GreyWaterDisplay.cpp and licenses/.
+#define SCREEN_FONT_COUNT 6
 #define STATS_VERSION    3   // 3: adds typical step times (1 and 2 are migrated)
 
 struct Settings {
@@ -40,6 +44,9 @@ struct Settings {
   uint8_t  buzzerOn;          // 1 = sound the buzzer on BUZZER_PIN at cycle end and on alarms
   // ── added in SETTINGS_VERSION 7; must stay last so version 6 data migrates ──
   uint8_t  language;          // LANG_ES or LANG_EN
+  // ── added in SETTINGS_VERSION 8 ──
+  uint8_t  screenFont;        // 0 .. SCREEN_FONT_COUNT-1 (sits in what was padding)
+  float    saveMinLpm;        // step 4 saves to the tank only while the drain flow is above this (L/min)
 };
 
 extern Settings   cfg;
