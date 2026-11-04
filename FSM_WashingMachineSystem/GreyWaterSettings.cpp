@@ -106,11 +106,23 @@ void settingsBegin() {
       prefs.getBytes("cfg", &stored, sizeof(stored)) == sizeof(stored) &&
       stored.version == SETTINGS_VERSION) {
     cfg = stored;
+  } else if (prefs.getBytesLength("cfg") == sizeof(Settings) &&
+             prefs.getBytes("cfg", &stored, sizeof(stored)) == sizeof(stored) &&
+             stored.version == 9) {
+    // Version 9 has the same fields; its screen font numbers named the fonts
+    // removed in 3.6, so the screen starts in the new default font.
+    stored.version    = SETTINGS_VERSION;
+    stored.screenFont = 0;
+    cfg = stored;
+    settingsSanitize(cfg);
+    settingsSave();
   } else if (prefs.getBytesLength("cfg") == offsetof(Settings, viewerPassword) &&
              prefs.getBytes("cfg", &stored, offsetof(Settings, viewerPassword)) == offsetof(Settings, viewerPassword) &&
              stored.version == 8) {
-    // Version 8 stored everything up to saveMinLpm: keep it, the view-only user starts off.
+    // Version 8 stored everything up to saveMinLpm: keep it, the view-only user starts off;
+    // the screen font numbers named the fonts removed in 3.6.
     stored.version           = SETTINGS_VERSION;
+    stored.screenFont        = 0;
     stored.viewerPassword[0] = '\0';
     cfg = stored;
     settingsSanitize(cfg);

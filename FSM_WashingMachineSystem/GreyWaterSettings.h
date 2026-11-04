@@ -10,16 +10,18 @@
 // Bump SETTINGS_VERSION / STATS_VERSION whenever a field is added, removed or
 // reordered: stored data with a different version is ignored and replaced by
 // defaults instead of being read into the wrong fields.
-#define SETTINGS_VERSION 9   // 9: adds viewerPassword (versions 4 to 8 are migrated)
+#define SETTINGS_VERSION 10  // 10: new screen fonts, screenFont restarts at 0 (versions 4 to 9 are migrated)
 
 // Language of the screen, the app and the alerts (Settings: Idioma / Language).
 // Spanish is 0 so that settings migrated from older versions start in Spanish.
 #define LANG_ES 0
 #define LANG_EN 1
 
-// Font of the screen messages (Settings: Screen font). 0 is the font used up to
-// 3.3, so migrated settings look the same. See GreyWaterDisplay.cpp and licenses/.
-#define SCREEN_FONT_COUNT 6
+// Font of the screen messages (Settings: Screen font), 3.6: 0 Hyperlegible
+// (default), 1 Plain sans, 2 Terminal bold, 3 Schoolbook bold. The numbers of
+// 3.4-3.5 named other fonts, so migrated settings start at 0.
+// See GreyWaterDisplay.cpp and licenses/.
+#define SCREEN_FONT_COUNT 4
 #define STATS_VERSION    3   // 3: adds typical step times (1 and 2 are migrated)
 
 struct Settings {
@@ -58,7 +60,7 @@ extern Settings   cfg;
 // texts for the app and alerts may use UTF-8.
 inline const char* TR(const char* en, const char* es) { return cfg.language == LANG_EN ? en : es; }
 // The same, for text shown on the OLED: plain ASCII, headers up to 16 characters,
-// messages up to 128 px in Helvetica Bold 12 px. tools/check_screen_text.py checks every TRS().
+// messages up to 128 px in the smaller size of every screen font. tools/check_screen_text.py checks every TRS().
 inline const char* TRS(const char* en, const char* es) { return TR(en, es); }
 
 struct WaterStats {

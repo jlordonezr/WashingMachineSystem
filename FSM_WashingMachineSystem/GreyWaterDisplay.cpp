@@ -1,13 +1,14 @@
 #include "GreyWaterSystem.h"
 #include "GreyWaterOutputs.h"
 #include "BootAnimation.h"
-#include "FontHelvBold12.h"
-#include "FontHelvBold14.h"
-#include "FontNarrowBold13.h"
-#include "FontNarrowLight13.h"
-#include "FontSemiNarrow13.h"
-#include "FontRound13.h"
-#include "FontSerifBold13.h"
+#include "FontHyperlegible13.h"
+#include "FontHyperlegible12.h"
+#include "FontPlainSans14.h"
+#include "FontPlainSans13.h"
+#include "FontTerminal20.h"
+#include "FontTerminal16.h"
+#include "FontSchoolbook14.h"
+#include "FontSchoolbook10.h"
 #include <math.h>
 
 // OLED display. State logic only sets the text (displaySetStatus /
@@ -22,8 +23,8 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 //
 //   y  0-9   header : step/title (built-in 6x8 font, x 0-95) | tank level (x 98-114) | wash valve (x 117-127)
 //   y 10     separator line
-//   y 12-31  message: Helvetica Bold pixel font, 14 px when the message fits,
-//            else 12 px; centred when it fits, scrolled when not
+//   y 12-31  message: the font chosen in Settings (Screen font) when the page
+//            fits, else the smaller size of the same font; centred
 //
 // A message may have several pages separated by '|', for example
 // "Reusing water|from the tank|25 min left". One line holds only about 15
@@ -45,20 +46,19 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 #define DISP_MSG_LEN     96    // all pages of a message
 #define HEADER_TEXT_Y    1
 #define SEPARATOR_Y      10
-#define MSG_BASELINE_14  28    // 14 px capitals on rows 14-27, descenders to row 31
-#define MSG_BASELINE_12  27    // 12 px capitals on rows 15-26, descenders to row 30
-// Message fonts, chosen in Settings -> Screen font (cfg.screenFont). Index 0
-// is the font used up to 3.3. A page wider than the screen in the chosen
-// font is shown in Helvetica Bold 12 px, which every screen text fits
-// (tools/check_screen_text.py). Origins and licences: licenses/README.md.
-struct ScreenFont { const GFXfont* font; int16_t baseline; };
+#define MSG_BASELINE     28    // main sizes: capitals end on row 27, descenders reach row 31
+#define MSG_BASELINE_SM  27    // smaller sizes: one row higher, so they sit centred
+// Message fonts, chosen in Settings -> Screen font (cfg.screenFont), 3.6. A
+// page wider than the screen in the main size is shown in the smaller size of
+// the same font, which every screen text fits (tools/check_screen_text.py),
+// so the letters keep their style. Glyphs stay on rows 12-31, under the
+// separator. Origins and licences: licenses/README.md.
+struct ScreenFont { const GFXfont* font; const GFXfont* small; };
 static const ScreenFont SCREEN_FONTS[SCREEN_FONT_COUNT] = {
-  { &HelvBold14,    MSG_BASELINE_14 },   // 0 original (Helvetica Bold 14)
-  { &NarrowBold13,  MSG_BASELINE_14 },   // 1 narrow bold
-  { &NarrowLight13, MSG_BASELINE_14 },   // 2 narrow light
-  { &SemiNarrow13,  MSG_BASELINE_14 },   // 3 semi-narrow
-  { &Round13,       MSG_BASELINE_14 },   // 4 round
-  { &SerifBold13,   MSG_BASELINE_14 },   // 5 classic serif
+  { &Hyperlegible13, &Hyperlegible12 },   // 0 hyperlegible (default)
+  { &PlainSans14,    &PlainSans13 },      // 1 plain sans
+  { &Terminal20,     &Terminal16 },       // 2 terminal bold
+  { &Schoolbook14,   &Schoolbook10 },     // 3 schoolbook bold
 };
 #define TANK_ICON_X      98    // titles are at most 16 characters (96 px), see tools/check_screen_text.py
 #define TANK_ICON_W      17
@@ -270,8 +270,8 @@ void displayUpdate(bool force) {
   static bool shownWash        = false;
   static int16_t msgWidth      = 0;
   static int16_t msgOffsetX    = 0;
-  static const GFXfont* msgFont = &HelvBold14;
-  static int16_t msgBaseline   = MSG_BASELINE_14;
+  static const GFXfont* msgFont = &Hyperlegible13;
+  static int16_t msgBaseline   = MSG_BASELINE;
   static int16_t scrollX       = 0;
   static unsigned long scrollStart = 0;
 
@@ -319,7 +319,7 @@ void displayUpdate(bool force) {
 
   // New page or a new font from Settings: pick the font and measure the page
   // once, restart the scroll from the left. The chosen font when the page fits
-  // the width, else Helvetica Bold 12 px (every screen text fits in it).
+  // the width, else its smaller size (every screen text fits in it).
   uint8_t fontIndex = cfg.screenFont < SCREEN_FONT_COUNT ? cfg.screenFont : 0;
   bool fontChanged = fontIndex != shownFont;
   shownFont = fontIndex;
@@ -329,11 +329,11 @@ void displayUpdate(bool force) {
     oled.setTextWrap(false);
     int16_t x1, y1;
     uint16_t w, h;
-    msgFont = SCREEN_FONTS[shownFont].font;  msgBaseline = SCREEN_FONTS[shownFont].baseline;
+    msgFont = SCREEN_FONTS[shownFont].font;  msgBaseline = MSG_BASELINE;
     oled.setFont(msgFont);
     oled.getTextBounds(message, 0, msgBaseline, &x1, &y1, &w, &h);
     if (w > OLED_WIDTH) {
-      msgFont = &HelvBold12;  msgBaseline = MSG_BASELINE_12;
+      msgFont = SCREEN_FONTS[shownFont].small;  msgBaseline = MSG_BASELINE_SM;
       oled.setFont(msgFont);
       oled.getTextBounds(message, 0, msgBaseline, &x1, &y1, &w, &h);
     }

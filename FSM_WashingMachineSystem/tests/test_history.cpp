@@ -66,19 +66,19 @@ int main(){
   cfg.language=LANG_EN; settingsSave(); cfg.language=LANG_ES; boot();
   CHECK(cfg.language==LANG_EN, "English not kept after a restart");
 
-  printf("S3 settings from 3.3 (version 7) keep every value and start with the original screen font (3.4)\n");
+  printf("S3 settings from 3.3 (version 7) keep every value and start with the default screen font\n");
   st.clear(); { Settings v7; settingsDefaults(v7); v7.version=7; v7.language=LANG_EN; v7.drain2DurationMs=1500000;
     strlcpy(v7.ntfyServer,"https://ntfy.envs.net",sizeof(v7.ntfyServer));
     v7.screenFont=0xCD;                                   // whatever was in the padding byte
     st["cfg"]=std::vector<uint8_t>((uint8_t*)&v7,(uint8_t*)&v7+offsetof(Settings,saveMinLpm)); }   // 3.3 stored 288 bytes
   boot();
-  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==0, "version 7 settings not migrated to the original screen font");
+  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==0, "version 7 settings not migrated to the default screen font");
   CHECK(cfg.language==LANG_EN && cfg.drain2DurationMs==1500000 && !strcmp(cfg.ntfyServer,"https://ntfy.envs.net"), "version 7 values lost in the migration");
-  printf("S4 a chosen screen font survives a restart; a bad value falls back to the original\n");
-  cfg.screenFont=4; settingsSave(); cfg.screenFont=0; boot();
-  CHECK(cfg.screenFont==4, "screen font not kept after a restart");
-  cfg.screenFont=9; settingsSanitize(cfg);
-  CHECK(cfg.screenFont==0, "screen font 9 accepted");
+  printf("S4 a chosen screen font survives a restart; a bad value falls back to the default\n");
+  cfg.screenFont=3; settingsSave(); cfg.screenFont=0; boot();
+  CHECK(cfg.screenFont==3, "screen font not kept after a restart");
+  cfg.screenFont=4; settingsSanitize(cfg);
+  CHECK(cfg.screenFont==0, "screen font 4 accepted (3.6 has fonts 0-3)");
   printf("S5 minimum save flow: 0.5 L/min after the upgrade, kept after a restart, limited to 0.5-10 (3.4)\n");
   CHECK(cfg.saveMinLpm==0.5f, "upgraded settings do not save above 0.5 L/min");
   cfg.saveMinLpm=1.5f; settingsSave(); cfg.saveMinLpm=0.5f; boot();
@@ -86,13 +86,14 @@ int main(){
   cfg.saveMinLpm=0.2f; settingsSanitize(cfg); CHECK(cfg.saveMinLpm==0.5f, "0.2 L/min accepted (minimum 0.5)");
   cfg.saveMinLpm=0.0f/0.0f; settingsSanitize(cfg); CHECK(cfg.saveMinLpm==0.5f, "NaN accepted");
 
-  printf("S6 settings from 3.4 (version 8) keep every value; the viewer user starts off (3.5)\n");
+  printf("S6 settings from 3.4 (version 8) keep every value; the viewer user starts off (3.5), the screen font is the new default (3.6)\n");
   st.clear(); { Settings v8; settingsDefaults(v8); v8.version=8; v8.screenFont=3; v8.saveMinLpm=2.0f;
     strlcpy(v8.webPassword,"owner-pass-1",sizeof(v8.webPassword));
     st["cfg"]=std::vector<uint8_t>((uint8_t*)&v8,(uint8_t*)&v8+offsetof(Settings,viewerPassword)); }   // 3.4 stored up to saveMinLpm
   boot();
   CHECK(cfg.version==SETTINGS_VERSION && cfg.viewerPassword[0]=='\0', "version 8 settings not migrated with the viewer off");
-  CHECK(cfg.screenFont==3 && cfg.saveMinLpm==2.0f && !strcmp(cfg.webPassword,"owner-pass-1"), "version 8 values lost in the migration");
+  CHECK(cfg.screenFont==0, "version 8 screen font kept: its number named a font removed in 3.6");
+  CHECK(cfg.saveMinLpm==2.0f && !strcmp(cfg.webPassword,"owner-pass-1"), "version 8 values lost in the migration");
   printf("S7 a viewer password survives a restart\n");
   strlcpy(cfg.viewerPassword,"family-view-1",sizeof(cfg.viewerPassword)); settingsSave(); cfg.viewerPassword[0]='\0'; boot();
   CHECK(!strcmp(cfg.viewerPassword,"family-view-1"), "viewer password not kept after a restart");
@@ -102,6 +103,15 @@ int main(){
     st["cfg"]=std::vector<uint8_t>((uint8_t*)&v6,(uint8_t*)&v6+offsetof(Settings,saveMinLpm)); }
   boot();
   CHECK(cfg.viewerPassword[0]=='\0', "version 6 settings migrated with a viewer password");
+
+  printf("S9 settings from 3.5 (version 9) keep every value; the screen font is the new default (3.6)\n");
+  st.clear(); { Settings v9; settingsDefaults(v9); v9.version=9; v9.screenFont=2; v9.saveMinLpm=1.5f; v9.language=LANG_EN;
+    strlcpy(v9.viewerPassword,"family-view-2",sizeof(v9.viewerPassword));
+    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v9,(uint8_t*)&v9+sizeof(Settings)); }   // same size as version 10
+  boot();
+  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==0, "version 9 settings not migrated to the default screen font");
+  CHECK(cfg.saveMinLpm==1.5f && cfg.language==LANG_EN && !strcmp(cfg.viewerPassword,"family-view-2"), "version 9 values lost in the migration");
+  { Settings saved; memcpy(&saved, st["cfg"].data(), sizeof(saved)); CHECK(saved.version==SETTINGS_VERSION, "version 9 migration not saved"); }
 
   printf("\n%d checks passed, %d failed\n", pass, fail);
   return fail?1:0;

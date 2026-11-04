@@ -391,10 +391,10 @@ static void buildSettingsJson(char* buf, size_t size) {
   jsonEscape(topic,   sizeof(topic),   cfg.ntfyTopic);
   jsonEscape(tz,      sizeof(tz),      cfg.timeZone);
   snprintf(buf, size,
-    "{\"language\":\"%s\",\"screenFont\":%u,\"buzzerOn\":%s,\"minFillLitres\":%.1f,\"saveMinLpm\":%.1f,\"flowOnLpm\":%.1f,\"washPeriodS\":%.2f,\"washOpenS\":%.2f,\"drain2Min\":%lu,\"edgeS\":%.1f,"
+    "{\"language\":\"%s\",\"screenFont\":%u,\"screenFontCount\":%u,\"buzzerOn\":%s,\"minFillLitres\":%.1f,\"saveMinLpm\":%.1f,\"flowOnLpm\":%.1f,\"washPeriodS\":%.2f,\"washOpenS\":%.2f,\"drain2Min\":%lu,\"edgeS\":%.1f,"
     "\"stepAlertMin\":%lu,\"tankMaxAgeH\":%u,\"manualWashMaxMin\":%lu,\"allowRemoteStart\":%s,"
     "\"ntfyServer\":\"%s\",\"ntfyTopic\":\"%s\",\"timeZone\":\"%s\",\"viewerOn\":%s}",
-    cfg.language == LANG_EN ? "en" : "es", (unsigned)cfg.screenFont, cfg.buzzerOn ? "true" : "false", cfg.minFillLitres, cfg.saveMinLpm, cfg.flowOnLpm, cfg.washPeriodMs / 1000.0f, cfg.washOpenMs / 1000.0f,
+    cfg.language == LANG_EN ? "en" : "es", (unsigned)cfg.screenFont, (unsigned)SCREEN_FONT_COUNT, cfg.buzzerOn ? "true" : "false", cfg.minFillLitres, cfg.saveMinLpm, cfg.flowOnLpm, cfg.washPeriodMs / 1000.0f, cfg.washOpenMs / 1000.0f,
     (unsigned long)(cfg.drain2DurationMs / 60000UL), cfg.edgeDetectMs / 1000.0f,
     (unsigned long)(cfg.stepAlertMs / 60000UL), (unsigned)cfg.tankMaxAgeHours,
     (unsigned long)(cfg.manualWashMs / 60000UL), cfg.allowRemoteStart ? "true" : "false", server_, topic, tz,

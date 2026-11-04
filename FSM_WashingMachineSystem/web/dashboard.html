@@ -512,7 +512,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       <fieldset>
         <legend>Screen</legend>
         <div class="field"><span><label for="f-screenFont">Screen font</label><small id="h-screenFont">Letters of the messages on the controller screen. Save settings, then look at the screen; choose the one that is easiest to read from where you stand.</small></span>
-          <span class="inp"><select id="f-screenFont" name="screenFont" aria-describedby="h-screenFont"><option value="0">Original (Helvetica Bold)</option><option value="1">Narrow bold</option><option value="2">Narrow light</option><option value="3">Semi-narrow</option><option value="4">Round</option><option value="5">Classic serif</option></select></span></div>
+          <span class="inp"><select id="f-screenFont" name="screenFont" aria-describedby="h-screenFont"><option value="0">Hyperlegible</option><option value="1">Plain sans</option><option value="2">Terminal bold</option><option value="3">Schoolbook bold</option></select></span></div>
       </fieldset>
       <fieldset>
         <legend>Tank wash</legend>
@@ -1204,8 +1204,10 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           restoreHistory(h,replacing).then(function(){
             if(!h.settings)return;
             var c=h.settings,b=new URLSearchParams();
-            ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','saveMinLpm','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','language','screenFont']
+            ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','saveMinLpm','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','language']
               .forEach(function(k){if(c[k]!==undefined)b.append(k,c[k])});
+            // Files from before 3.6 number other screen fonts: keep the current one.
+            if(c.screenFont!==undefined&&c.screenFontCount===4)b.append('screenFont',c.screenFont);
             b.append('allowRemoteStart',c.allowRemoteStart?'1':'0');b.append('buzzerOn',c.buzzerOn?'1':'0');
             return api('/api/settings',{method:'POST',body:b}).then(function(nc){fill(nc);toast(t('Water history and settings restored'))});
           }).catch(function(e){toast(e.message,true)});
@@ -1249,7 +1251,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     form.allowRemoteStart.checked=!!c.allowRemoteStart;form.ntfyServer.value=c.ntfyServer;
     form.ntfyTopic.value=c.ntfyTopic;form.timeZone.value=c.timeZone;form.buzzerOn.checked=!!c.buzzerOn;
     form.language.value=c.language==='en'?'en':'es';setLang(form.language.value);
-    form.screenFont.value=String(c.screenFont>=0&&c.screenFont<=5?c.screenFont:0);
+    form.screenFont.value=String(c.screenFont>=0&&c.screenFont<=3?c.screenFont:0);
     var sel=$('f-tzSel'),found=false;
     for(var i=0;i<sel.options.length;i++)if(sel.options[i].value===c.timeZone){sel.selectedIndex=i;found=true;}
     if(!found)sel.value='custom';$('tzCustomRow').hidden=found;topicHelp();form.webPassword.value='';form.otaPassword.value='';

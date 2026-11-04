@@ -1,4 +1,21 @@
-# Reuse Water System – Firmware 3.5 (Wi-Fi)
+# Reuse Water System – Firmware 3.6 (Wi-Fi)
+
+## What's new in 3.6: four new screen fonts, the old ones removed
+
+The household compared letter styles on a real-size preview of the 128x32 screen and picked four. They replace all earlier screen fonts (the six of 3.4, Helvetica Bold included). The cycle, the safety logic and the water history are unchanged from 3.5.
+
+| # | App label (ES) | Main size | Smaller size | Made from | Message parts in the main size |
+|---|---|---|---|---|---|
+| 0 | Hyperlegible (*Hiperlegible*), default | 13 px | 12 px | Atkinson Hyperlegible Bold (Braille Institute, for low vision) | 61 of 91 |
+| 1 | Plain sans (*Sencilla*) | 14 px | 13 px | PT Sans Bold | 84 of 91 |
+| 2 | Terminal bold (*Terminal gruesa*) | 16 px, pixel font | 12 px | Terminus Font Bold 10x20 / 8x16 | 45 of 91 |
+| 3 | Schoolbook bold (*Escolar gruesa*) | 14 px, serif pixel font | 11 px | Adobe New Century Schoolbook Bold | 49 of 91 |
+
+- **A part too wide for the main size is shown in the smaller size of the same font**, not in Helvetica 12 px as before, so the letters keep their style from page to page. Every screen text fits the smaller size of every font (`tools/check_screen_text.py`, which now measures as the firmware's `getTextBounds` does). In Hyperlegible 12 px the word space is 1 px narrower so *Wi-Fi connected* fits.
+- **Removed:** `FontHelvBold14.h`, `FontHelvBold12.h`, `FontNarrowBold13.h`, `FontNarrowLight13.h`, `FontSemiNarrow13.h`, `FontRound13.h`, `FontSerifBold13.h` and their licence files. New: `FontHyperlegible13/12.h`, `FontPlainSans14/13.h`, `FontTerminal20/16.h`, `FontSchoolbook14/10.h`, made by `tools/make_screen_fonts.py`; licences in `licenses/`.
+- **Settings version 10** (same 328 bytes): the font numbers of 3.4–3.5 named the removed fonts, so settings from 3.4 and 3.5 are kept but the screen starts in **Hyperlegible**; choose again in Settings → Screen → Screen font if wanted. `screenFont` is now 0–3. The settings JSON has `screenFontCount` (4); restoring a history file made before 3.6 restores the settings except the screen font.
+- Tests: history S4, S6 and S9 (fonts 0–3, versions 8 and 9 start in the default font); simulation F5 redraws the Ready screen in all four fonts.
+- Build: 1.39 MB flash (44%), 97 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.5: a view-only user
 
@@ -661,7 +678,7 @@ The 128x32 screen is split into a header and a message area:
 - **Header (small built-in font):** the current step and the cycle progress (for example `1/4 FILL`). In Drain2 it also shows the time left before the cycle finishes, for example `4/4 DRAIN 18:42`.
 - **Tank icon:** empty when the tank is low, half filled at medium, full at high. It reads the level sensors directly, so it is always live.
 - **Wash icon `W`:** outlined when the tank-wash valve is closed, inverted (white box) when it is open. During the tank-water fill you will see it light up every 10 seconds.
-- **Message (Helvetica Bold pixel font, `FontHelvBold14.h` / `FontHelvBold12.h`):** a bitmap font drawn for screens, so every stroke sits on whole pixels and stays sharp. Each message uses 14 px when it fits the 128 px width, otherwise 12 px; every screen text fits in 12 px (`tools/check_screen_text.py`). Messages are centred and stay still; a longer one would pause for 1.5 s, then scroll smoothly and loop with a gap.
+- **Message (the font chosen in Settings → Screen font, 3.6):** Hyperlegible (default), Plain sans, Terminal bold or Schoolbook bold, 1-bit bitmaps, so every stroke sits on whole pixels and stays sharp. Each message uses the main size when it fits the 128 px width, otherwise the smaller size of the same font; every screen text fits the smaller size (`tools/check_screen_text.py`). Messages are centred and stay still; a longer one would pause for 1.5 s, then scroll smoothly and loop with a gap.
 
 ### Messages
 
