@@ -10,7 +10,7 @@
 // Bump SETTINGS_VERSION / STATS_VERSION whenever a field is added, removed or
 // reordered: stored data with a different version is ignored and replaced by
 // defaults instead of being read into the wrong fields.
-#define SETTINGS_VERSION 8   // 8: adds screenFont and saveMinLpm (versions 4 to 7 are migrated)
+#define SETTINGS_VERSION 9   // 9: adds viewerPassword (versions 4 to 8 are migrated)
 
 // Language of the screen, the app and the alerts (Settings: Idioma / Language).
 // Spanish is 0 so that settings migrated from older versions start in Spanish.
@@ -47,6 +47,8 @@ struct Settings {
   // ── added in SETTINGS_VERSION 8 ──
   uint8_t  screenFont;        // 0 .. SCREEN_FONT_COUNT-1 (sits in what was padding)
   float    saveMinLpm;        // step 4 saves to the tank only while the drain flow is above this (L/min)
+  // ── added in SETTINGS_VERSION 9; must stay last so version 8 data migrates ──
+  char     viewerPassword[33]; // view-only dashboard user "viewer" (Overview and Water use); empty = off
 };
 
 extern Settings   cfg;

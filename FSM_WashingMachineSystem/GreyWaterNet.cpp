@@ -229,13 +229,21 @@ static void sendError(int code, const char* message) {
 }
 
 // ── Access control ─────────────────────────────────────────────────────────
-// Every page needs the dashboard password (HTTP Basic, user "admin").
+// Every page needs a password (HTTP Basic). Two users:
+//  - "admin" (password webPassword): everything.
+//  - "viewer" (password viewerPassword, off while empty): the Overview and
+//    Water use tabs only. It can read the status and the water history, and
+//    the controller refuses every action and setting from it (3.5), so the
+//    limit does not depend on what the page shows.
 // Actions also need the X-GW header, which a form on another website cannot
 // send, so a malicious page cannot press Stop or change settings using the
 // password the browser remembers.
 // After 5 wrong passwords within a minute from one device (IP address), that
 // device is refused for a minute. Other devices are not affected, so nobody on
 // the network can lock the owner out (2.9 locked everyone out).
+enum WebRole { roleNone, roleViewer, roleAdmin };
+static WebRole currentRole = roleNone;   // who sent the request being handled
+
 struct AuthSlot { uint32_t ip; uint8_t fails; bool locked; unsigned long windowStart, lockStart, lastSeen; };
 static AuthSlot authSlots[AUTH_SLOTS];
 
@@ -250,7 +258,9 @@ static AuthSlot& authSlotFor(uint32_t ip) {
   return *oldest;
 }
 
+// Any signed-in user (admin or viewer). Use for pages the viewer may see.
 static bool authorized() {
+  currentRole = roleNone;
   uint32_t ip = (uint32_t)server.client().remoteIP();
   AuthSlot& a = authSlotFor(ip);
   a.lastSeen = millis();
@@ -259,7 +269,10 @@ static bool authorized() {
     return false;
   }
   a.locked = false;
-  if (server.authenticate(WEB_USER, cfg.webPassword)) { a.fails = 0; return true; }
+  if (server.authenticate(WEB_USER, cfg.webPassword)) { a.fails = 0; currentRole = roleAdmin; return true; }
+  if (cfg.viewerPassword[0] && server.authenticate(WEB_VIEWER_USER, cfg.viewerPassword)) {
+    a.fails = 0; currentRole = roleViewer; return true;
+  }
   if (server.hasHeader("Authorization")) {                // a password was given, and it was wrong
     if (millis() - a.windowStart > 60000UL) { a.windowStart = millis(); a.fails = 0; }
     if (++a.fails >= 5) {
@@ -273,8 +286,18 @@ static bool authorized() {
   return false;
 }
 
-static bool actionAllowed() {
+// Admin only: settings, the event log and every action.
+static bool adminOnly() {
   if (!authorized()) return false;
+  if (currentRole != roleAdmin) {
+    sendError(403, "The viewer user can only look. Sign in as admin to make changes.");
+    return false;
+  }
+  return true;
+}
+
+static bool actionAllowed() {
+  if (!adminOnly()) return false;
   if (server.header("X-GW") != "1") { sendError(403, "Request blocked: use the dashboard page."); return false; }
   return true;
 }
@@ -307,7 +330,7 @@ static void handleStatus() {
   jsonEscape(title,   sizeof(title),   s.title);
   jsonEscape(message, sizeof(message), s.message);
 
-  char buf[2700];
+  char buf[2760];
   snprintf(buf, sizeof(buf),
     "{\"fw\":\"%s\",\"state\":%d,\"stateName\":\"%s\",\"title\":\"%s\",\"message\":\"%s\","
     "\"tank\":\"%s\",\"wash\":%s,\"tapLpm\":%.2f,\"drainLpm\":%.2f,"
@@ -326,7 +349,7 @@ static void handleStatus() {
     "\"outputs\":%u,\"typicalS\":[%lu,%lu,%lu],\"interrupted\":{\"active\":%s,\"step\":%d,\"epoch\":%lu},"
     "\"boot\":\"%s\",\"updatesAllowed\":%s,\"defaultPasswords\":%s,"
     "\"lang\":\"%s\",\"tankFault\":%s,\"screen\":%s,\"loop\":{\"maxMs\":%lu,\"lastMinMaxMs\":%lu},"
-    "\"heap\":{\"free\":%lu,\"min\":%lu},\"alert\":{\"seq\":%lu,\"ok\":%s,\"code\":%d}}",
+    "\"heap\":{\"free\":%lu,\"min\":%lu},\"alert\":{\"seq\":%lu,\"ok\":%s,\"code\":%d},\"role\":\"%s\"}",
     FIRMWARE_VERSION, s.state, s.stateName, title, message,
     levelName(s.tankLevel), s.washValveOpen ? "true" : "false", s.tapLpm, s.drainLpm,
     (unsigned long)s.stepElapsedS, (unsigned long)s.drain2LeftS, s.stuck ? "true" : "false",
@@ -352,11 +375,13 @@ static void handleStatus() {
     (unsigned long)(stats.stepSamples[2] ? stats.stepAvgS[2] : 0),
     intrActive ? "true" : "false", intrStep >= stFill1 ? intrStep - 1 : 0, (unsigned long)intrEpoch,
     resetReasonTextLocal(), systemBusy() ? "false" : "true",
-    (strcmp(cfg.webPassword, DEFAULT_WEB_PASSWORD) == 0 || strcmp(cfg.otaPassword, DEFAULT_OTA_PASSWORD) == 0) ? "true" : "false",
+    (currentRole == roleAdmin &&    // only the admin can change them, so only the admin is asked
+     (strcmp(cfg.webPassword, DEFAULT_WEB_PASSWORD) == 0 || strcmp(cfg.otaPassword, DEFAULT_OTA_PASSWORD) == 0)) ? "true" : "false",
     cfg.language == LANG_EN ? "en" : "es", s.tankFault ? "true" : "false", displayAvailable() ? "true" : "false",
     (unsigned long)loopMaxMs(), (unsigned long)loopMaxLastMinuteMs(),
     (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getMinFreeHeap(),
-    (unsigned long)alertSeq, alertLastOk ? "true" : "false", alertLastCode);
+    (unsigned long)alertSeq, alertLastOk ? "true" : "false", alertLastCode,
+    currentRole == roleAdmin ? "admin" : "viewer");
   sendJson(200, buf);
 }
 
@@ -368,21 +393,22 @@ static void buildSettingsJson(char* buf, size_t size) {
   snprintf(buf, size,
     "{\"language\":\"%s\",\"screenFont\":%u,\"buzzerOn\":%s,\"minFillLitres\":%.1f,\"saveMinLpm\":%.1f,\"flowOnLpm\":%.1f,\"washPeriodS\":%.2f,\"washOpenS\":%.2f,\"drain2Min\":%lu,\"edgeS\":%.1f,"
     "\"stepAlertMin\":%lu,\"tankMaxAgeH\":%u,\"manualWashMaxMin\":%lu,\"allowRemoteStart\":%s,"
-    "\"ntfyServer\":\"%s\",\"ntfyTopic\":\"%s\",\"timeZone\":\"%s\"}",
+    "\"ntfyServer\":\"%s\",\"ntfyTopic\":\"%s\",\"timeZone\":\"%s\",\"viewerOn\":%s}",
     cfg.language == LANG_EN ? "en" : "es", (unsigned)cfg.screenFont, cfg.buzzerOn ? "true" : "false", cfg.minFillLitres, cfg.saveMinLpm, cfg.flowOnLpm, cfg.washPeriodMs / 1000.0f, cfg.washOpenMs / 1000.0f,
     (unsigned long)(cfg.drain2DurationMs / 60000UL), cfg.edgeDetectMs / 1000.0f,
     (unsigned long)(cfg.stepAlertMs / 60000UL), (unsigned)cfg.tankMaxAgeHours,
-    (unsigned long)(cfg.manualWashMs / 60000UL), cfg.allowRemoteStart ? "true" : "false", server_, topic, tz);
+    (unsigned long)(cfg.manualWashMs / 60000UL), cfg.allowRemoteStart ? "true" : "false", server_, topic, tz,
+    cfg.viewerPassword[0] ? "true" : "false");
 }
 
 static void sendSettings() {
-  char buf[760];
+  char buf[800];
   buildSettingsJson(buf, sizeof(buf));
   sendJson(200, buf);
 }
 
 static void handleSettingsGet() {
-  if (!authorized()) return;
+  if (!adminOnly()) return;
   sendSettings();
 }
 
@@ -453,9 +479,9 @@ static void handleSettingsPost() {
     return;
   }
 
-  const char* pwFields[2] = { "webPassword", "otaPassword" };
-  char*       pwTargets[2] = { next.webPassword, next.otaPassword };
-  for (int i = 0; i < 2; ++i) {
+  const char* pwFields[3] = { "webPassword", "otaPassword", "viewerPassword" };
+  char*       pwTargets[3] = { next.webPassword, next.otaPassword, next.viewerPassword };
+  for (int i = 0; i < 3; ++i) {
     String pw = server.hasArg(pwFields[i]) ? server.arg(pwFields[i]) : String();
     if (pw.length() == 0) continue;               // empty = keep the current password
     if (pw.length() < 8 || pw.length() > 32) { sendError(400, "Passwords need 8 to 32 characters."); return; }
@@ -463,9 +489,21 @@ static void handleSettingsPost() {
     strlcpy(pwTargets[i], pw.c_str(), 33);
   }
 
+  // View-only user: viewerOn=0 turns it off (forgets its password); on needs a password.
+  if (server.hasArg("viewerOn") && server.arg("viewerOn") != "1") next.viewerPassword[0] = '\0';
+  else if (server.arg("viewerOn") == "1" && next.viewerPassword[0] == '\0') {
+    sendError(400, "Enter a password for the viewer user.");
+    return;
+  }
+  if (next.viewerPassword[0] && strcmp(next.viewerPassword, next.webPassword) == 0) {
+    sendError(400, "The viewer password must differ from the dashboard password.");
+    return;
+  }
+
   bool tzChanged  = strcmp(next.timeZone, cfg.timeZone) != 0;
   bool otaChanged = strcmp(next.otaPassword, cfg.otaPassword) != 0;
   bool webChanged = strcmp(next.webPassword, cfg.webPassword) != 0;
+  bool viewerChanged = strcmp(next.viewerPassword, cfg.viewerPassword) != 0;
   cfg = next;
   if (!settingsSave()) { sendError(500, "Could not save the settings to flash."); return; }
   if (tzChanged && servicesStarted) configTzTime(cfg.timeZone, "pool.ntp.org", "time.google.com");
@@ -474,6 +512,7 @@ static void handleSettingsPost() {
     logEvent("Update password changed");
   }
   if (webChanged) logEvent("App password changed");
+  if (viewerChanged) logEvent(next.viewerPassword[0] ? "Viewer user password set" : "Viewer user turned off");
   sendSettings();
 }
 
@@ -497,9 +536,11 @@ static void handleHistoryGet() {
     stats.lastSavedL, (unsigned)stats.lastCompleted, (unsigned)stats.lastValid,
     (unsigned long)stats.stepAvgS[0], (unsigned long)stats.stepAvgS[1], (unsigned long)stats.stepAvgS[2],
     (unsigned)stats.stepSamples[0], (unsigned)stats.stepSamples[1], (unsigned)stats.stepSamples[2]);
-  if (n > 0 && n < (int)sizeof(buf) - 800) {
+  if (currentRole == roleAdmin && n > 0 && n < (int)sizeof(buf) - 800) {
     buildSettingsJson(buf + n, sizeof(buf) - n - 2);   // settings travel with the history (no passwords)
     strlcat(buf, "}", sizeof(buf));
+  } else if (n > 0 && n < (int)sizeof(buf) - 8) {
+    strlcat(buf, "null}", sizeof(buf));                // the viewer gets no settings (alert topic)
   }
   sendJson(200, buf);
 }
@@ -540,7 +581,7 @@ static void handleHistoryRestore() {
 }
 
 static void handleEvents() {
-  if (!authorized()) return;
+  if (!adminOnly()) return;
   String out; out.reserve(5200); out = "[";
   for (int i = 0; i < eventCount(); ++i) {
     uint32_t ep, up; const char* text;
@@ -611,7 +652,7 @@ static void handleRestart() {
 }
 
 static void handleNotFound() {
-  if (!authorized()) return;
+  if (!authorized()) return;   // any user: a wrong address says "Not found."
   sendError(404, "Not found.");
 }
 

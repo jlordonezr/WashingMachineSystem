@@ -168,6 +168,9 @@ table.svc td:not(:first-child),table.svc th:not(:first-child){text-align:left}
 .svc-facts{margin:0}
 .state-on{font-weight:600;color:var(--primary-ink)}
 
+/* View-only user (3.5): no buttons that change the controller */
+body.viewer .admin-only{display:none!important}
+.view-note{font-size:0.8125rem;color:var(--muted);margin:14px 0 0}
 .restore{border-color:var(--primary);background:var(--primary-soft);margin-bottom:16px}
 .restore p{margin:0 0 14px}
 .backup-text{margin:0 0 14px;color:var(--muted);font-size:0.875rem}
@@ -282,8 +285,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true" tabindex="0">Overview</button>
     <button role="tab" id="tab-water" aria-controls="view-water" aria-selected="false" tabindex="-1">Water use</button>
-    <button role="tab" id="tab-service" aria-controls="view-service" aria-selected="false" tabindex="-1">Service</button>
-    <button role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Settings</button>
+    <button role="tab" class="admin-only" id="tab-service" aria-controls="view-service" aria-selected="false" tabindex="-1">Service</button>
+    <button role="tab" class="admin-only" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Settings</button>
   </nav>
 </header>
 
@@ -292,7 +295,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     <section class="panel intr" id="intrPanel" aria-labelledby="h-intr" hidden>
       <h2 id="h-intr">The last cycle was interrupted</h2>
       <p id="intrText"></p>
-      <div class="actions"><button type="button" class="btn" id="btnIntrOk">OK, I checked the machine</button></div>
+      <div class="actions admin-only"><button type="button" class="btn" id="btnIntrOk">OK, I checked the machine</button></div>
     </section>
     <div class="grid">
       <section class="panel" aria-labelledby="headline">
@@ -312,7 +315,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
         <ol class="steps" id="steps" aria-label="Cycle progress">
           <li>Wash<span class="sr-only"></span></li><li>Soapy drain<span class="sr-only"></span></li><li>Rinse<span class="sr-only"></span></li><li>Save<span class="sr-only"></span></li>
         </ol>
-        <div class="controls">
+        <div class="controls admin-only">
           <button class="btn primary" id="btnStart" type="button" aria-describedby="ctlHint">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
             <span>Start cycle</span>
@@ -322,7 +325,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
             <span>Stop cycle</span>
           </button>
         </div>
-        <p id="ctlHint"></p>
+        <p id="ctlHint" class="admin-only"></p>
+        <p class="view-note" id="viewNote" hidden>View only. Starting, stopping, the tank wash and the settings need the admin sign-in.</p>
       </section>
 
       <section class="panel" aria-label="Storage tank">
@@ -344,7 +348,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
             <dt>Wash valve</dt><dd id="washState">Closed</dd>
           </dl>
         </div>
-        <div class="tank-actions">
+        <div class="tank-actions admin-only">
           <button class="btn" id="btnWash" type="button" aria-describedby="washHint">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5c2.6 3.2 4 5.5 4 7.4a4 4 0 0 1-8 0c0-1.9 1.4-4.2 4-7.4z" fill="currentColor"/></svg>
             <span>Wash tank</span>
@@ -363,7 +367,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     <section class="panel restore" id="restorePanel" aria-labelledby="h-restore" hidden>
       <h2 id="h-restore">Water history saved on this phone</h2>
       <p id="restoreText"></p>
-      <div class="actions"><button type="button" class="btn primary" id="btnRestore">Restore to controller</button></div>
+      <div class="actions admin-only"><button type="button" class="btn primary" id="btnRestore">Restore to controller</button></div>
     </section>
     <section class="panel" aria-labelledby="h-last">
       <h2 id="h-last">Last wash</h2>
@@ -420,7 +424,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       <p class="backup-text" id="backupText">This phone keeps a copy of the water history and updates it automatically.</p>
       <div class="actions">
         <button type="button" class="btn" id="btnDownload">Download history file</button>
-        <button type="button" class="btn" id="btnUpload">Restore from file</button>
+        <button type="button" class="btn admin-only" id="btnUpload">Restore from file</button>
         <input type="file" id="fileHistory" accept=".json,application/json" hidden>
       </div>
       <p class="backup-text">The file keeps the history safe even if the controller is replaced or its memory is fully erased.</p>
@@ -562,6 +566,10 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           <span class="inp"><input id="f-webPassword" aria-describedby="h-webPassword e-webPassword" type="password" name="webPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-webPassword" hidden></p></div>
         <div class="field wide-in"><span><label for="f-otaPassword">New firmware update password</label><small id="h-otaPassword">8 to 32 characters. Leave empty to keep the current password. Takes effect at once.</small></span>
           <span class="inp"><input id="f-otaPassword" aria-describedby="h-otaPassword e-otaPassword" type="password" name="otaPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-otaPassword" hidden></p></div>
+        <div class="field"><span><label for="f-viewerOn">View-only user</label><small id="h-viewerOn">Someone who signs in with the user name viewer sees only Overview and Water use, and cannot start, stop or change anything</small></span>
+          <span class="switch"><input type="checkbox" id="f-viewerOn" aria-describedby="h-viewerOn" name="viewerOn" role="switch"><i></i></span></div>
+        <div class="field wide-in"><span><label for="f-viewerPassword">New viewer password</label><small id="h-viewerPassword">8 to 32 characters, not the dashboard password. Leave empty to keep the current one.</small></span>
+          <span class="inp"><input id="f-viewerPassword" aria-describedby="h-viewerPassword e-viewerPassword" type="password" name="viewerPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-viewerPassword" hidden></p></div>
       </fieldset>
       <div class="actions">
         <button type="submit" class="btn primary" id="btnSave">Save settings</button>
@@ -601,6 +609,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
 <script>
 (function(){
   var $=function(id){return document.getElementById(id)};
+  var TABS=['overview','water','service','settings'];
   var last=null,failures=0,formLoaded=false,pending=null,pendingWash=false,toastTimer=null,offline=false,connShown='';
   // Actions are reported as done only when the controller's status shows them (3.0).
   var pendingSince=0,washSince=0,alertWait=null,CONFIRM_MS=10000,ALERT_WAIT_MS=120000;
@@ -965,15 +974,27 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   // Default passwords: ask for new ones once per visit.
   var pwAsked=false;
   function checkPasswords(s){
-    if(!s.defaultPasswords||pwAsked)return;
+    if(!s.defaultPasswords||pwAsked||role!=='admin')return;
     var d=$('pwDlg');if(typeof d.showModal!=='function')return;
     pwAsked=true;$('pwStop').hidden=(s.state===0);
     d.oncancel=function(e){e.preventDefault()};
     d.showModal();$('pwWeb').focus();
   }
 
+  // View-only user (3.5): the controller refuses its changes; the page hides
+  // the buttons and the Service and Settings tabs.
+  var role='admin';
+  function setRole(r){
+    r=r==='viewer'?'viewer':'admin';if(r===role)return;
+    role=r;document.body.classList.toggle('viewer',r==='viewer');$('viewNote').hidden=(r!=='viewer');
+    TABS=r==='viewer'?['overview','water']:['overview','water','service','settings'];
+    var cur=TABS.filter(function(n){return $('tab-'+n).getAttribute('aria-selected')==='true'})[0];
+    if(!cur)showTab('overview');
+  }
+
   function render(s){
     if(s.lang)setLang(s.lang);
+    setRole(s.role);
     announceChanges(s);
     if(last&&last.manualWash&&!s.manualWash){var r=WASH_END[s.manualWashResult];if(r)toast(t(r[0]),r[1]);}
     if(last&&last.manualWash!==s.manualWash){if(pendingWash&&s.manualWash)toast(t('Tank wash started'));pendingWash=false;}
@@ -1200,9 +1221,9 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       .catch(function(e){pendingWash=false;setWash(last);toast(e.message,true)});
   });
 
-  var TABS=['overview','water','service','settings'];
   function showTab(name,focus){
-    TABS.forEach(function(n){
+    if(TABS.indexOf(name)<0)return;                  // the viewer has no Service or Settings tab
+    ['overview','water','service','settings'].forEach(function(n){
       var tb=$('tab-'+n);tb.setAttribute('aria-selected',n===name?'true':'false');
       tb.setAttribute('tabindex',n===name?'0':'-1');$('view-'+n).hidden=(n!==name);
     });
@@ -1221,7 +1242,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     if(n!==null){e.preventDefault();showTab(TABS[n],true);}
   });
 
-  var form=$('settingsForm');
+  var form=$('settingsForm'),viewerSet=false;
   function fill(c){
     form.washPeriodS.value=c.washPeriodS;form.washOpenS.value=c.washOpenS;form.drain2Min.value=c.drain2Min;
     form.edgeS.value=c.edgeS;form.flowOnLpm.value=c.flowOnLpm;form.minFillLitres.value=c.minFillLitres;form.saveMinLpm.value=c.saveMinLpm!==undefined?c.saveMinLpm:0.5;form.stepAlertMin.value=c.stepAlertMin;form.tankMaxAgeH.value=c.tankMaxAgeH;form.manualWashMaxMin.value=c.manualWashMaxMin;
@@ -1232,6 +1253,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     var sel=$('f-tzSel'),found=false;
     for(var i=0;i<sel.options.length;i++)if(sel.options[i].value===c.timeZone){sel.selectedIndex=i;found=true;}
     if(!found)sel.value='custom';$('tzCustomRow').hidden=found;topicHelp();form.webPassword.value='';form.otaPassword.value='';
+    viewerSet=!!c.viewerOn;form.viewerOn.checked=viewerSet;form.viewerPassword.value='';
   }
   function clearErrors(){
     form.querySelectorAll('[aria-invalid]').forEach(function(i){i.removeAttribute('aria-invalid')});
@@ -1252,16 +1274,19 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       if(i.value===''||!i.checkValidity())fieldError(i.name,t('Enter a number from {0} to {1}.',i.min,i.max));
     });
     if(Number(form.washOpenS.value)>=Number(form.washPeriodS.value))fieldError('washOpenS',t('Must be shorter than the wash interval.'));
-    ['webPassword','otaPassword'].forEach(function(n){var v=form[n].value;if(v&&(v.length<8||v.length>32))fieldError(n,t('Use 8 to 32 characters.'));});
+    ['webPassword','otaPassword','viewerPassword'].forEach(function(n){var v=form[n].value;if(v&&(v.length<8||v.length>32))fieldError(n,t('Use 8 to 32 characters.'));});
+    if(form.viewerOn.checked&&!viewerSet&&!form.viewerPassword.value)fieldError('viewerPassword',t('Enter a password for the viewer user.'));
+    if(form.viewerPassword.value&&form.viewerPassword.value===form.webPassword.value)fieldError('viewerPassword',t('The viewer password must differ from the dashboard password.'));
     var tpv=form.ntfyTopic.value.trim();if(tpv&&!/^[A-Za-z0-9_-]{1,63}$/.test(tpv))fieldError('ntfyTopic',t('Use only letters, numbers, - and _.'));
     var svv=form.ntfyServer.value.trim();if(svv&&!/^https?:\/\/[^\s\/]+/.test(svv))fieldError('ntfyServer',t('Start with https:// or http://.'));
     var bad=form.querySelector('[aria-invalid=true]');
     if(bad){var c=form.querySelectorAll('[aria-invalid=true]').length;
       toast(c===1?t('One setting needs attention. Nothing was saved.'):t('Some settings need attention. Nothing was saved.'),true);bad.focus();return;}
     var body=new URLSearchParams();
-    ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','saveMinLpm','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','webPassword','otaPassword','language','screenFont']
+    ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','saveMinLpm','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','webPassword','otaPassword','viewerPassword','language','screenFont']
       .forEach(function(k){body.append(k,form[k].value)});
     body.append('allowRemoteStart',form.allowRemoteStart.checked?'1':'0');
+    body.append('viewerOn',form.viewerOn.checked?'1':'0');
     body.append('buzzerOn',form.buzzerOn.checked?'1':'0');
     setDis($('btnSave'),true);
     api('/api/settings',{method:'POST',body:body}).then(function(c){fill(c);toast(t('Settings saved'))})

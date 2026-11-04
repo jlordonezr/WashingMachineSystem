@@ -34,7 +34,7 @@ Settings and water history are kept. 3.1 upgrades settings version 6 to 7 by add
 
 1. On first boot the screen shows `ReuseWater-Setup` and `Key gw-xxxxxx`. The key is unique to the board; it is also printed on the USB serial monitor (9600 baud). Without a working screen the key is `greywater`.
 2. Join **ReuseWater-Setup** with that key on a phone. The setup page opens (or browse to `192.168.4.1`). Choose the home network.
-3. The screen shows the controller's IP address for 6 s. Open `http://reusewater.local` or that address; sign in as `admin` / `greywater`.
+3. The screen shows the controller's IP address for 6 s. Open `http://reusewater.local` or that address; sign in as `admin` / `greywater`. (People who should only look can later get the `viewer` sign-in: Settings → Security → *View-only user*.)
 4. The app asks for two new passwords (app and wireless updates). Both take effect at once.
 5. **Settings → Language:** Español (default) or English, for the app, the screen and the alerts.
 6. **Settings → Alerts:** *Create a private topic*, subscribe to it in the ntfy app, press **Send a test alert**. The app now reports whether it was delivered.

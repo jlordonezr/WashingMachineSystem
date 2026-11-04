@@ -27,7 +27,7 @@ function baseStatus() {
     wifi: { rssi: -60, ip: '192.168.1.50' }, time: '2026-10-30 10:00', uptimeS: 600, outputs: 3, typicalS: [0, 0, 0],
     interrupted: { active: false, step: 0, epoch: 0 }, boot: 'Switched on or power cut', updatesAllowed: true,
     defaultPasswords: false, tankFault: false, screen: true, loop: { maxMs: 12, lastMinMaxMs: 8 },
-    heap: { free: 180000, min: 150000 }, alert: { seq: 0, ok: false, code: 0 },
+    heap: { free: 180000, min: 150000 }, alert: { seq: 0, ok: false, code: 0 }, role: 'admin',
   };
 }
 let status = baseStatus();
@@ -178,6 +178,46 @@ async function fresh(browser, base) {
     settings.language = 'en';
   }
 
+  // A10 View-only user (3.5): only Overview and Water use, no buttons that change anything.
+  {
+    status = baseStatus(); status.role = 'viewer';
+    const { ctx, page } = await fresh(browser, base);
+    check(!(await page.isVisible('#tab-service')) && !(await page.isVisible('#tab-settings')), 'A10 viewer sees the Service or Settings tab');
+    check(await page.isVisible('#tab-overview') && await page.isVisible('#tab-water'), 'A10 viewer cannot see Overview and Water use');
+    for (const id of ['#btnStart', '#btnStop', '#btnWash', '#btnUpload'])
+      check(!(await page.isVisible(id)), 'A10 viewer sees ' + id);
+    check(await page.isVisible('#viewNote'), 'A10 view-only note not shown');
+    await page.click('#tab-water'); await tick(page, 300);
+    check(await page.isVisible('#view-water') && await page.isVisible('#btnDownload'), 'A10 Water use tab or history download missing');
+    await page.focus('#tab-water'); await page.keyboard.press('ArrowRight'); await tick(page, 300);
+    check(await page.isVisible('#view-overview') && !(await page.isVisible('#view-service')), 'A10 arrow keys reach a hidden tab');
+    await ctx.close();
+  }
+  // A11 An admin who had the Settings tab open loses it if the same page signs in as viewer.
+  {
+    status = baseStatus();
+    const { ctx, page } = await fresh(browser, base);
+    await page.click('#tab-settings'); await tick(page, 500);
+    check(await page.isVisible('#f-viewerOn') && await page.isVisible('#f-viewerPassword'), 'A11 viewer fields missing in Settings');
+    status.role = 'viewer'; await tick(page, 2500);
+    check(await page.isVisible('#view-overview') && !(await page.isVisible('#view-settings')), 'A11 Settings still shown to the viewer');
+    status.role = 'admin'; await tick(page, 2500);
+    check(await page.isVisible('#tab-settings') && await page.isVisible('#btnStart'), 'A11 admin controls not back');
+    await ctx.close();
+  }
+  // A12 Turning the viewer on needs a password; the form sends viewerOn and the password.
+  {
+    status = baseStatus(); settings.viewerOn = false; lastSettingsPost = null;
+    const { ctx, page } = await fresh(browser, base);
+    await page.click('#tab-settings'); await tick(page, 500);
+    await page.check('#f-viewerOn'); await page.click('#btnSave'); await tick(page, 500);
+    check(lastSettingsPost === null && (await page.isVisible('#e-viewerPassword')), 'A12 viewer turned on without a password');
+    await page.fill('#f-viewerPassword', 'family-view-1'); await page.click('#btnSave'); await tick(page, 1000);
+    check(lastSettingsPost && lastSettingsPost.get('viewerOn') === '1' && lastSettingsPost.get('viewerPassword') === 'family-view-1',
+      'A12 viewer settings not sent');
+    await ctx.close();
+  }
+
   // A7 Accessibility (axe-core, if installed): no violations on any tab, normal and fault states.
   let axePath = null;
   try { axePath = require.resolve('axe-core/axe.min.js'); } catch (e) { console.log('  (axe-core not installed: accessibility check skipped)'); }
@@ -194,6 +234,15 @@ async function fresh(browser, base) {
       }
       await ctx.close();
     }
+    status = baseStatus(); status.role = 'viewer';
+    { const { ctx, page } = await fresh(browser, base);
+      await page.addScriptTag({ path: axePath });
+      for (const tab of ['overview', 'water']) {
+        await page.click('#tab-' + tab); await tick(page, 500);
+        const r = await page.evaluate(() => axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] }));
+        check(r.violations.length === 0, 'A7 viewer ' + tab + ': ' + r.violations.map(v => v.id + ' x' + v.nodes.length).join(', '));
+      }
+      await ctx.close(); }
     settings.language = 'en';
   }
 

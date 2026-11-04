@@ -394,5 +394,13 @@
  "Minimum flow to save": "Flujo mínimo para guardar",
  "In step 4, rinse water goes to the tank only while the drain flow is above this. At or below it the fill valve closes and the drain opens at once; saving starts again when the flow stays above it for 2 s (in litres per minute)": "En el paso 4, el agua de enjuague va al tanque solo mientras el flujo de desagüe esté por encima de este valor. Si es igual o menor, la válvula de llenado se cierra y el desagüe se abre de inmediato; vuelve a guardar cuando el flujo se mantiene por encima durante 2 s (en litros por minuto)",
  "Low drain flow, so the rest goes to the drain": "Flujo de desagüe bajo: el resto va al desagüe",
- "Minimum flow to save: use 0.5 to 10 L/min.": "Flujo mínimo para guardar: use de 0,5 a 10 L/min."
+ "Minimum flow to save: use 0.5 to 10 L/min.": "Flujo mínimo para guardar: use de 0,5 a 10 L/min.",
+ "View only. Starting, stopping, the tank wash and the settings need the admin sign-in.": "Solo consulta. Para iniciar, detener, lavar el tanque o cambiar la configuración, entre con el usuario admin.",
+ "View-only user": "Usuario de solo consulta",
+ "Someone who signs in with the user name viewer sees only Overview and Water use, and cannot start, stop or change anything": "Quien entre con el usuario viewer ve solo Resumen y Consumo de agua, y no puede iniciar, detener ni cambiar nada",
+ "New viewer password": "Nueva contraseña del usuario viewer",
+ "8 to 32 characters, not the dashboard password. Leave empty to keep the current one.": "De 8 a 32 caracteres, distinta de la contraseña de la app. Déjela vacía para conservar la actual.",
+ "Enter a password for the viewer user.": "Escriba una contraseña para el usuario viewer.",
+ "The viewer password must differ from the dashboard password.": "La contraseña del usuario viewer debe ser distinta de la de la app.",
+ "The viewer user can only look. Sign in as admin to make changes.": "El usuario viewer solo puede consultar. Entre con el usuario admin para hacer cambios."
 }

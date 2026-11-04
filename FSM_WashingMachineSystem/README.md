@@ -1,4 +1,16 @@
-# Reuse Water System – Firmware 3.4 (Wi-Fi)
+# Reuse Water System – Firmware 3.5 (Wi-Fi)
+
+## What's new in 3.5: a view-only user
+
+For people who should follow the washes and the water figures but must not change the controller.
+
+- **Second sign-in, user `viewer`**, with its own password. Settings → Security → *View-only user* (*Usuario de solo consulta*) turns it on and sets the password (8–32 characters, not the dashboard password). Off by default and after the upgrade; turning it off forgets the password.
+- The viewer sees only **Overview** and **Water use**. No Start, Stop, *Wash tank*, *OK, I checked the machine*, *Restore to controller* or *Restore from file*; the Service and Settings tabs are not shown; a note says changes need the admin sign-in. *Download history file* still works (it reads only).
+- **Enforced by the controller, not just the page:** with the viewer password, `GET /api/settings`, `GET /api/events` and every `POST` return `403` *The viewer user can only look. Sign in as admin to make changes.* `GET /api/history` comes without the settings (they hold the alert topic). `GET /api/status` has `"role":"admin"` or `"viewer"`, and `defaultPasswords` is only reported to the admin.
+- The wrong-password lockout counts both users together (5 wrong in a minute from one device).
+- **Settings version 9** adds `viewerPassword` at the end (292 → 328 bytes); 3.4 settings are kept, with the viewer off. The settings JSON has `viewerOn`; `POST /api/settings` takes `viewerOn` (0/1) and `viewerPassword`.
+- Tests: history S6–S8 (migration, restart, older versions start with the viewer off); dashboard A10–A12 (viewer view, losing the Settings tab, turning the viewer on) and axe on the viewer's tabs.
+- Build: 1.39 MB flash (44%), 97 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.4.1: shorter screen messages, full brightness
 
@@ -483,14 +495,14 @@ In the Arduino IDE, choose **Tools > Port > reusewater at <IP>** (network port),
 
 ## Dashboard API
 
-All pages need the dashboard password (HTTP Basic, user `admin`). Actions (`POST`) also need the header `X-GW: 1`, which blocks other websites from pressing buttons with the remembered password.
+All pages need a password (HTTP Basic). User `admin` (the dashboard password) can use everything. User `viewer` (3.5, only when a viewer password is set in Settings) can use only `/`, `/api/status` and `/api/history` (without settings); everything else answers `403`. Actions (`POST`) also need the header `X-GW: 1`, which blocks other websites from pressing buttons with the remembered password.
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/` | Dashboard page |
 | GET | `/api/status` | Live status and statistics (JSON) |
 | GET | `/api/settings` | Current settings (JSON, passwords not included) |
-| POST | `/api/settings` | Save settings (form fields, same names as the GET response, plus `webPassword`, `otaPassword`) |
+| POST | `/api/settings` | Save settings (form fields, same names as the GET response, plus `webPassword`, `otaPassword`, `viewerPassword`) |
 | POST | `/api/stop` | Stop the cycle (409 when no cycle runs, from 3.0) |
 | POST | `/api/start` | Start a cycle (when enabled in Settings, on by default, and the system is Idle) |
 | POST | `/api/wash` | Start a manual tank wash (only while Idle and the tank is not full) |
@@ -520,6 +532,7 @@ Full message formats, status fields and error codes: `docs/PROTOCOL.md`.
 | Alert topic | Empty (alerts off) | — |
 | Time zone | `<-05>5` (UTC−5) | POSIX TZ string |
 | Dashboard / update passwords | `greywater` | 8–32 characters |
+| View-only user (`viewer`) | Off | On with a password of 8–32 characters, not the dashboard password |
 
 The `#define`s in `GreyWaterSystem.h` are the factory defaults for first boot. Changing them later has no effect until the stored settings are reset (bump `SETTINGS_VERSION` in `GreyWaterSettings.h`).
 
@@ -531,7 +544,7 @@ The `#define`s in `GreyWaterSystem.h` are the factory defaults for first boot. C
 - **Tank water age** starts when the level rises above the low switch and resets when it falls below it again, so it reports the age of the oldest water. It needs three equal level readings 10 s apart, so sloshing does not reset it.
 - **Statistics** are written to flash at the end of each cycle and when the tank age starts or resets, a few writes per day.
 - **Alerts use HTTPS without certificate checking.** They contain no secrets; anyone who knows the topic name can read them, so use a long, random topic.
-- **Security:** keep the dashboard on the home network. Do not forward router ports to it. Change both default passwords on first use.
+- **Security:** keep the dashboard on the home network. Do not forward router ports to it. Change both default passwords on first use. Give people who only need to look the `viewer` sign-in, not the admin password.
 - **Float switches (3.0):** the tank is full whenever the high float is wet; the pump is used only when the low float is wet. These rules are enforced every 20 ms by the safety task, in every state.
 - **Pin D0** (tank-wash valve) is also the RX0 serial pin. `Serial` uses USB, so do not use `Serial0`. A 10 kΩ resistor from D0 to GND keeps the SSR firmly off while the board starts.
 

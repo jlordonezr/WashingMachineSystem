@@ -86,6 +86,23 @@ int main(){
   cfg.saveMinLpm=0.2f; settingsSanitize(cfg); CHECK(cfg.saveMinLpm==0.5f, "0.2 L/min accepted (minimum 0.5)");
   cfg.saveMinLpm=0.0f/0.0f; settingsSanitize(cfg); CHECK(cfg.saveMinLpm==0.5f, "NaN accepted");
 
+  printf("S6 settings from 3.4 (version 8) keep every value; the viewer user starts off (3.5)\n");
+  st.clear(); { Settings v8; settingsDefaults(v8); v8.version=8; v8.screenFont=3; v8.saveMinLpm=2.0f;
+    strlcpy(v8.webPassword,"owner-pass-1",sizeof(v8.webPassword));
+    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v8,(uint8_t*)&v8+offsetof(Settings,viewerPassword)); }   // 3.4 stored up to saveMinLpm
+  boot();
+  CHECK(cfg.version==SETTINGS_VERSION && cfg.viewerPassword[0]=='\0', "version 8 settings not migrated with the viewer off");
+  CHECK(cfg.screenFont==3 && cfg.saveMinLpm==2.0f && !strcmp(cfg.webPassword,"owner-pass-1"), "version 8 values lost in the migration");
+  printf("S7 a viewer password survives a restart\n");
+  strlcpy(cfg.viewerPassword,"family-view-1",sizeof(cfg.viewerPassword)); settingsSave(); cfg.viewerPassword[0]='\0'; boot();
+  CHECK(!strcmp(cfg.viewerPassword,"family-view-1"), "viewer password not kept after a restart");
+  printf("S8 older settings (version 6) start with the viewer off\n");
+  st.clear(); { Settings v6; memset(&v6,0x5A,sizeof(v6)); settingsDefaults(v6); v6.version=6;
+    memset(v6.viewerPassword,'x',sizeof(v6.viewerPassword));   // bytes beyond what 3.0 stored must not become a password
+    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v6,(uint8_t*)&v6+offsetof(Settings,saveMinLpm)); }
+  boot();
+  CHECK(cfg.viewerPassword[0]=='\0', "version 6 settings migrated with a viewer password");
+
   printf("\n%d checks passed, %d failed\n", pass, fail);
   return fail?1:0;
 }

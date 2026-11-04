@@ -10,6 +10,10 @@ HistorySource historySource = historyEmpty;
 
 static Preferences prefs;
 
+// Version 8 data is everything before viewerPassword (3.4 stored that many bytes).
+static_assert(offsetof(Settings, viewerPassword) == offsetof(Settings, saveMinLpm) + sizeof(float),
+              "viewerPassword must follow saveMinLpm directly so version 8 settings migrate");
+
 // Reads one stored history record. Returns 1 for the current format, 2 for a
 // migrated version 1 record, 0 if missing or unreadable.
 static int loadStats(const char* key, WaterStats& out) {
@@ -62,6 +66,7 @@ void settingsDefaults(Settings& s) {
   strlcpy(s.timeZone,    DEFAULT_TIME_ZONE,    sizeof(s.timeZone));
   strlcpy(s.webPassword, DEFAULT_WEB_PASSWORD, sizeof(s.webPassword));
   strlcpy(s.otaPassword, DEFAULT_OTA_PASSWORD, sizeof(s.otaPassword));
+  s.viewerPassword[0] = '\0';   // view-only user off until the owner sets a password
 }
 
 static uint32_t clampU32(uint32_t v, uint32_t lo, uint32_t hi) {
@@ -84,6 +89,7 @@ void settingsSanitize(Settings& s) {
   s.timeZone[sizeof(s.timeZone) - 1]       = '\0';
   s.webPassword[sizeof(s.webPassword) - 1] = '\0';
   s.otaPassword[sizeof(s.otaPassword) - 1] = '\0';
+  s.viewerPassword[sizeof(s.viewerPassword) - 1] = '\0';
   if (s.timeZone[0] == '\0')    strlcpy(s.timeZone, DEFAULT_TIME_ZONE, sizeof(s.timeZone));
   if (s.webPassword[0] == '\0') strlcpy(s.webPassword, DEFAULT_WEB_PASSWORD, sizeof(s.webPassword));
   if (s.otaPassword[0] == '\0') strlcpy(s.otaPassword, DEFAULT_OTA_PASSWORD, sizeof(s.otaPassword));
@@ -100,6 +106,15 @@ void settingsBegin() {
       prefs.getBytes("cfg", &stored, sizeof(stored)) == sizeof(stored) &&
       stored.version == SETTINGS_VERSION) {
     cfg = stored;
+  } else if (prefs.getBytesLength("cfg") == offsetof(Settings, viewerPassword) &&
+             prefs.getBytes("cfg", &stored, offsetof(Settings, viewerPassword)) == offsetof(Settings, viewerPassword) &&
+             stored.version == 8) {
+    // Version 8 stored everything up to saveMinLpm: keep it, the view-only user starts off.
+    stored.version           = SETTINGS_VERSION;
+    stored.viewerPassword[0] = '\0';
+    cfg = stored;
+    settingsSanitize(cfg);
+    settingsSave();
   } else if (prefs.getBytesLength("cfg") == offsetof(Settings, saveMinLpm) &&
              prefs.getBytes("cfg", &stored, offsetof(Settings, saveMinLpm)) == offsetof(Settings, saveMinLpm) &&
              stored.version == 7) {
@@ -107,6 +122,7 @@ void settingsBegin() {
     stored.version    = SETTINGS_VERSION;
     stored.screenFont = 0;
     stored.saveMinLpm = SAVE_MIN_LPM;
+    stored.viewerPassword[0] = '\0';
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -118,6 +134,7 @@ void settingsBegin() {
     stored.language   = LANG_ES;
     stored.screenFont = 0;
     stored.saveMinLpm = SAVE_MIN_LPM;
+    stored.viewerPassword[0] = '\0';
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -130,6 +147,7 @@ void settingsBegin() {
     stored.language   = LANG_ES;
     stored.screenFont = 0;
     stored.saveMinLpm = SAVE_MIN_LPM;
+    stored.viewerPassword[0] = '\0';
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -143,6 +161,7 @@ void settingsBegin() {
     stored.language      = LANG_ES;
     stored.screenFont    = 0;
     stored.saveMinLpm    = SAVE_MIN_LPM;
+    stored.viewerPassword[0] = '\0';
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();

@@ -7,7 +7,7 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 | Item | Rule |
 |---|---|
 | Address | `http://reusewater.local` (mDNS) or the IP shown on the screen |
-| Authentication | HTTP Basic, user `admin`, the dashboard password (8–32 characters) |
+| Authentication | HTTP Basic. User `admin` with the dashboard password (8–32 characters): everything. User `viewer` with the viewer password (3.5; off while none is set): only `GET /`, `GET /api/status` and `GET /api/history` (without `settings`); every other request answers `403` *The viewer user can only look. Sign in as admin to make changes.* |
 | Wrong passwords | 5 within a minute from one IP address → that address gets `429` for 1 minute (per device from 3.0) |
 | Actions | Every `POST` also needs the header `X-GW: 1`, else `403`. Other websites cannot send it, so they cannot press buttons with a remembered password |
 | Caching | All API replies carry `Cache-Control: no-store` |
@@ -20,17 +20,17 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 |---|---|---|---|---|
 | GET | `/` | — | page | 401, 429 |
 | GET | `/api/status` | — | status JSON (below) | 401, 429 |
-| GET | `/api/settings` | — | settings JSON (no passwords) | 401, 429 |
-| POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–5, 3.4), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword` | the saved settings JSON | 400 (message says which field), 500 (flash write failed) |
+| GET | `/api/settings` | — | settings JSON (no passwords; `viewerOn` says whether the viewer user is on, 3.5) | 401, 403 (viewer), 429 |
+| POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–5, 3.4), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword`, `viewerOn` (0 turns the viewer off and forgets its password; 1 needs a password, 3.5), `viewerPassword` (8–32, not the dashboard password, 3.5) | the saved settings JSON | 400 (message says which field), 403 (viewer), 500 (flash write failed) |
 | POST | `/api/start` | — | `{"ok":true}` = request accepted | 403 (turned off in Settings), 409 (not Ready) |
 | POST | `/api/stop` | — | `{"ok":true}` = request accepted | 409 `No cycle is running.` (3.0) |
 | POST | `/api/wash` | — | `{"ok":true}` = started | 409 (cycle running, or tank already full) |
 | POST | `/api/wash/stop` | — | `{"ok":true}` | — |
 | POST | `/api/test-alert` | — | `{"ok":true}` = queued | 400 (no topic) |
 | POST | `/api/restart` | — | `{"ok":true}`, then restart | 409 (cycle running) |
-| GET | `/api/history` | — | history JSON + `settings` | — |
+| GET | `/api/history` | — | history JSON + `settings` (`null` for the viewer, 3.5) | — |
 | POST | `/api/history/restore` | history fields, `force=1` to replace | `{"ok":true}` | 400 (invalid), 409 (history exists) |
-| GET | `/api/events` | — | array of `{epoch, uptimeS, text}`, newest first, up to 50 | — |
+| GET | `/api/events` | — | array of `{epoch, uptimeS, text}`, newest first, up to 50 | 403 (viewer) |
 | POST | `/api/interrupted/dismiss` | — | `{"ok":true}` | — |
 
 Errors are JSON: `{"error":"<sentence for the user>"}`, always in English; the app translates them (`web/es.json`). Settings values outside their ranges are clamped (README, *Settings*), not refused, except the rules that return 400.
@@ -75,7 +75,8 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `interrupted` | object | `active`, `step` (0 = before step 1, else 1–4), `epoch` of the last cycle cut short |
 | `boot` | string | Last restart reason |
 | `updatesAllowed` | bool | Wireless updates accepted now (Ready, no tank wash) |
-| `defaultPasswords` | bool | A password is still `greywater` (the app then asks for new ones) |
+| `defaultPasswords` | bool | A password is still `greywater` (the app then asks for new ones); always `false` for the viewer (3.5) |
+| `role` | `admin` / `viewer` | Who signed in (3.5). The app hides the controls and the Service and Settings tabs for `viewer` |
 | `allowRemoteStart`, `alerts` | bool | Settings in effect |
 | `screen` | bool | OLED answered at start-up (3.0) |
 | `loop` | object | `maxMs` since start-up, `lastMinMaxMs` in the last full minute (3.0) |
