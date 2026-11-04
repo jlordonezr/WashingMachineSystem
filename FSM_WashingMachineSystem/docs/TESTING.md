@@ -91,6 +91,8 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 | — | 3.2.0 | Hardware H11, H12 | Not done yet |
 | 2026-11-03 | 3.3.0 | PC tests, firmware build | All suites pass (browser tests skipped: Playwright not installed); 1,372,029 bytes flash, 95,916 bytes RAM with core 3.3.12 |
 | — | 3.3.0 | Hardware H13, test alert | Not done yet |
+| 2026-11-04 | 3.4.1 | PC tests, firmware build | All suites pass (browser tests skipped: Playwright not installed); 1,383,837 bytes flash with core 3.3.12 |
+| — | 3.4.1 | Hardware H14, H15 | Not done yet |
 | 2026-10-30 | 3.1.0 | PC tests | All suites pass (see `tests/test_results.txt`) |
 | — | 3.1.0 | Hardware H10 | Not done yet |
 | 2026-10-30 | 3.0.0 | Jose, installed system | Working as expected |

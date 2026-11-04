@@ -1,11 +1,16 @@
 # Reuse Water System – Firmware 3.4 (Wi-Fi)
 
+## What's new in 3.4.1: shorter screen messages, full brightness
+
+Only screen texts and the screen brightness change; the cycle, the settings (version 8) and the app are the same as in 3.4.0.
+
+- **Shorter screen messages**: each one says what is happening now and does not repeat the top line or the icons, in one or two parts. Ready: *Inicie lavadora › y pulse START* (the tank level part is gone, the icon shows it); step 1: *Esperando agua*, *Reusando agua*, *Agua de la llave*, *Lavando...*; step 2: *Desaguando › agua jabonosa*; step 3: *Agua de la llave*, *Enjuagando...*; step 4: *Agua al tanque › Fin en 18:42*, *Tanque lleno › Fin en 18:42*; `TERMINADO`: *Reusados 26 L › Guardados 30 L* (or *Ciclo completo*); `DETENIDO`: *Ciclo cancelado*; no flow: *Sin flujo › Revise lavadora › Pida ayuda* (the "if it runs, press STOP" advice stays in the Quick Card); `INTERRUMPIDO`: *Revise lavadora › Inicie de nuevo*; tank wash: *Hasta llenarse › Quedan 9:42*, *Tanque lleno*, *Tanque no lleno*; updates: *No desconecte*, *Reintente*. 127 texts and pages, all fit.
+- **Full screen brightness** (contrast 255 instead of the library's 207), set once at start-up.
+
 ## What's new in 3.4: minimum flow to save, and the household chooses the screen font
 
 The safety interlocks and the water history are unchanged from 3.3.1. Step 4 now saves only while water really flows.
 
-- **Shorter screen messages**: each one says what is happening now and does not repeat the top line or the icons, in one or two parts. Ready: *Inicie lavadora › y pulse START* (the tank level part is gone, the icon shows it); step 1: *Esperando agua*, *Reusando agua*, *Agua de la llave*, *Lavando...*; step 2: *Desaguando › agua jabonosa*; step 3: *Agua de la llave*, *Enjuagando...*; step 4: *Agua al tanque › Fin en 18:42*, *Tanque lleno › Fin en 18:42*; `TERMINADO`: *Reusados 26 L › Guardados 30 L* (or *Ciclo completo*); `DETENIDO`: *Ciclo cancelado*; no flow: *Sin flujo › Revise lavadora › Pida ayuda* (the "if it runs, press STOP" advice stays in the Quick Card); `INTERRUMPIDO`: *Revise lavadora › Inicie de nuevo*; tank wash: *Hasta llenarse › Quedan 9:42*, *Tanque lleno*, *Tanque no lleno*; updates: *No desconecte*, *Reintente*. 127 texts and pages, all fit.
-- **Full screen brightness** (contrast 255 instead of the library's 207), set once at start-up.
 - **Minimum flow to save** (Settings → Cycle, *Flujo mínimo para guardar*, default 0.5 L/min, 0.5–10). In step 4 rinse water goes to the tank only while the drain flow is above it. At or below it the fill valve closes and the drain opens on the same pass, about 2 s after the flow drops (the drain meter's 2 s average), so the last trickle goes to the drain; if the machine pumps out again (a spin), saving resumes after 2 s above the limit (`SAVE_RESUME_MS`), so the valves do not chatter. The screen shows *Flujo bajo › Al desague*, the event log *Saving paused* / *Saving resumed*. The *tank full* alert now comes only from the tank being full (it used to fire whenever step 4 was not saving). Simulation F13 covers it.
 - **Settings → Screen → Screen font** (*Pantalla → Letra de la pantalla*): six letter styles for the messages on the controller screen. The screen changes as soon as the settings are saved, so each household can try them and keep the one they read best.
 
