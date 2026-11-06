@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Builds the screen fonts (Settings -> Screen font) as Adafruit GFX headers.
 
-Each style has a main size and a smaller size of the same family. A message
-page too wide for the main size is shown in the smaller one, which every
-screen text fits (tools/check_screen_text.py checks it). ASCII 0x20-0x7E,
+From 3.9 each style has one size, used for every message: the largest in
+which every screen text fits the 128 px line (tools/check_screen_text.py
+checks it, and that every glyph stays on rows 12-31). ASCII 0x20-0x7E,
 1 bit per pixel. The source files are not stored in this repository; download
 them into one folder first (all are free to embed):
 
-  AtkinsonHyperlegible-Bold.ttf  github.com/google/fonts  ofl/atkinsonhyperlegible   SIL OFL 1.1  -> FontHyperlegible13.h, FontHyperlegible12.h
-  PT_Sans-Web-Bold.ttf           github.com/google/fonts  ofl/ptsans                 SIL OFL 1.1  -> FontPlainSans14.h, FontPlainSans13.h
-  ter-u20b.bdf, ter-u16b.bdf     terminus-font.sourceforge.net (terminus-font-4.49.1) SIL OFL 1.1  -> FontTerminal20.h, FontTerminal16.h
-  ncenB14.bdf, ncenB10.bdf       github.com/olikraus/u8g2 tools/font/bdf             Adobe X11    -> FontSchoolbook14.h, FontSchoolbook10.h
+  AtkinsonHyperlegible-Bold.ttf  github.com/google/fonts  ofl/atkinsonhyperlegible   SIL OFL 1.1  -> FontHyperlegible12.h
+  PT_Sans-Web-Bold.ttf           github.com/google/fonts  ofl/ptsans                 SIL OFL 1.1  -> FontPlainSans13.h
+  ter-u16b.bdf                   terminus-font.sourceforge.net (terminus-font-4.49.1) SIL OFL 1.1  -> FontTerminal16.h
+  ncenB10.bdf                    github.com/olikraus/u8g2 tools/font/bdf             Adobe X11    -> FontSchoolbook10.h
 
 TrueType fonts are drawn with FreeType's monochrome hinting, as Adafruit's
 fontconvert does (needs: pip install freetype-py). Run from the sketch folder:
@@ -49,14 +49,10 @@ TERMINUS = ('Copyright (C) 2020 Dimitar Toshkov Zhekov. Licensed under the SIL O
 # a Reserved Font Name (PT Sans, Terminus Font): the header, variable and app
 # label describe the style instead, and the notice names the original.
 FONTS = [  # file, capital height (TrueType only), header, variable, description, licence note, space narrower by
-    ('AtkinsonHyperlegible-Bold.ttf', 13, 'FontHyperlegible13.h', 'Hyperlegible13', 'hyperlegible bold sans, derived from Atkinson Hyperlegible Bold', ATKINSON, 0),
     # word space 1 px narrower, so "Wi-Fi connected" fits 128 px
     ('AtkinsonHyperlegible-Bold.ttf', 12, 'FontHyperlegible12.h', 'Hyperlegible12', 'hyperlegible bold sans, derived from Atkinson Hyperlegible Bold', ATKINSON, 1),
-    ('PT_Sans-Web-Bold.ttf', 14, 'FontPlainSans14.h', 'PlainSans14', 'plain bold sans, derived from PT Sans Bold', PTSANS, 0),
     ('PT_Sans-Web-Bold.ttf', 13, 'FontPlainSans13.h', 'PlainSans13', 'plain bold sans, derived from PT Sans Bold', PTSANS, 0),
-    ('ter-u20b.bdf', None, 'FontTerminal20.h', 'Terminal20', 'terminal bold 10x20 pixel font, derived from Terminus Font (ter-u20b)', TERMINUS, 0),
     ('ter-u16b.bdf', None, 'FontTerminal16.h', 'Terminal16', 'terminal bold 8x16 pixel font, derived from Terminus Font (ter-u16b)', TERMINUS, 0),
-    ('ncenB14.bdf', None, 'FontSchoolbook14.h', 'Schoolbook14', 'Adobe New Century Schoolbook Bold pixel font (X11 "ncenB14.bdf")', ADOBE, 0),
     ('ncenB10.bdf', None, 'FontSchoolbook10.h', 'Schoolbook10', 'Adobe New Century Schoolbook Bold pixel font (X11 "ncenB10.bdf")', ADOBE, 0),
 ]
 

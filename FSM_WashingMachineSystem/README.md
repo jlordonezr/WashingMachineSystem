@@ -1,4 +1,21 @@
-# Reuse Water System – Firmware 3.8 (Wi-Fi)
+# Reuse Water System – Firmware 3.9 (Wi-Fi)
+
+## What's new in 3.9: one fixed letter size for every screen message
+
+Until 3.8 a message part too wide for a font's main size was drawn in a smaller size, so the letters changed size from page to page. From 3.9 each of the four screen fonts has **one size for every message**: the largest in which every screen text (107 message pages, English and Spanish) fits the 128 px line without scrolling, centred in the message area under the separator.
+
+| # | Font (ES) | Fixed size | Widest message | Rows used (message area 12-31) |
+|---|---|---|---|---|
+| 0 | Hyperlegible (*Hiperlegible*), default | capitals 12 px | 128 of 128 px | 13-29 |
+| 1 | Plain sans (*Sencilla*) | capitals 13 px | 121 of 128 px | 12-30 |
+| 2 | Terminal bold (*Terminal gruesa*) | capitals 12 px (8x16 pixel font) | 128 of 128 px | 14-29 |
+| 3 | Schoolbook bold (*Escolar gruesa*) | capitals 11 px | 124 of 128 px | 14-28 |
+
+- Why not the larger sizes of 3.6: in them 28 (Hyperlegible), 5 (Plain sans) and 39 (Terminal, Schoolbook) of the 83 different message pages are wider than the screen; only Plain sans could go up one pixel, and only by shortening five texts (*Tanque no lleno*, *Configurar Wi-Fi*, *Wi-Fi connected*, *Wi-Fi conectado*, *Agua de la llave*).
+- Removed the unused larger sizes: `FontHyperlegible13.h`, `FontPlainSans14.h`, `FontTerminal20.h`, `FontSchoolbook14.h`.
+- `tools/check_screen_text.py` now fails if any page is wider than 128 px in any font, or if any glyph of a font, at the baseline in `GreyWaterDisplay.cpp`, leaves rows 12-31.
+- The header line keeps its small built-in font. Settings, app and history unchanged.
+- Build: 1.38 MB flash (43%), 97 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.8: "Reuse only" from the panel, by holding START
 

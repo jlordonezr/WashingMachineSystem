@@ -7,12 +7,12 @@ Screen texts are the TRS("English", "Español") pairs in the firmware
   - headers (ALL CAPS, the small 6 px font): at most 16 characters, with
     "%lu:%02lu" counted as "18:42", so the tank and wash icons stay clear,
   - messages: every page ("a|b|c", shown one after the other) at most 128 px
-    wide in the smaller size of every screen font in Settings (3.6), measured
-    as the firmware does (Adafruit GFX getTextBounds, from the font headers).
-    The screen uses the main size when a page fits, else the smaller size of
-    the same font; wider pages would scroll.
-  - for each screen font, how many pages show in its main size (information,
-    not an error).
+    wide in every screen font in Settings, measured as the firmware does
+    (Adafruit GFX getTextBounds, from the font headers). From 3.9 each font
+    has one fixed size for every message, so a wider page would scroll.
+  - every glyph of every screen font, at the baseline set in
+    GreyWaterDisplay.cpp, stays on rows 12-31: under the separator line
+    (row 10, with one blank row) and inside the 32-row screen.
 
 Usage: python3 tools/check_screen_text.py
 Exit code 1 if anything does not fit.
@@ -25,11 +25,28 @@ here = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 def glyphs(name):
     src = open(os.path.join(here, name), encoding='utf-8').read()
     return [tuple(map(int, g)) for g in re.findall(r'\{\s*\d+,\s*(\d+),\s*\d+,\s*(\d+),\s*(-?\d+),\s*-?\d+\s*\}', src)]
-# App label, main size, smaller size (as SCREEN_FONTS in GreyWaterDisplay.cpp)
-SCREEN_FONTS = [('Hyperlegible', glyphs('FontHyperlegible13.h'), glyphs('FontHyperlegible12.h')),
-                ('Plain sans', glyphs('FontPlainSans14.h'), glyphs('FontPlainSans13.h')),
-                ('Terminal bold', glyphs('FontTerminal20.h'), glyphs('FontTerminal16.h')),
-                ('Schoolbook bold', glyphs('FontSchoolbook14.h'), glyphs('FontSchoolbook10.h'))]
+# Rows of every glyph at the baseline the firmware uses (SCREEN_FONTS in GreyWaterDisplay.cpp).
+def vertical_problems():
+    disp = open(os.path.join(here, 'GreyWaterDisplay.cpp'), encoding='utf-8').read()
+    table = disp[disp.index('SCREEN_FONTS[SCREEN_FONT_COUNT]'):]
+    table = table[:table.index('};')]
+    out = []
+    for var, base in re.findall(r'\{\s*&(\w+),\s*(\d+)\s*\}', table):
+        src = open(os.path.join(here, f'Font{var}.h'), encoding='utf-8').read()
+        rows = [(int(h), int(yo), i) for i, (h, yo) in enumerate(
+            re.findall(r'\{\s*\d+,\s*\d+,\s*(\d+),\s*\d+,\s*-?\d+,\s*(-?\d+)\s*\}', src)) if int(h)]
+        top = min(int(base) + yo for h, yo, i in rows)
+        bottom = max(int(base) + yo + h - 1 for h, yo, i in rows)
+        print(f'  font {var}: baseline {base}, glyphs on rows {top}-{bottom}')
+        if top < 12 or bottom > 31:
+            out.append(f'font {var}: glyphs on rows {top}-{bottom}, outside the message area (rows 12-31)')
+    return out
+
+# App label and the one size used for every message (as SCREEN_FONTS in GreyWaterDisplay.cpp)
+SCREEN_FONTS = [('Hyperlegible', glyphs('FontHyperlegible12.h')),
+                ('Plain sans', glyphs('FontPlainSans13.h')),
+                ('Terminal bold', glyphs('FontTerminal16.h')),
+                ('Schoolbook bold', glyphs('FontSchoolbook10.h'))]
 messages = []
 def width(text, font):
     """Width as getTextBounds reports it: from the leftmost to the rightmost glyph box."""
@@ -62,14 +79,15 @@ for en, es in pairs:
                     bad.append(f'{lang} header "{page}": {len(page)} characters (max 16)')
                 continue
             messages.append(page)
-            for name, main, small in SCREEN_FONTS:
-                if width(page, small) > 128:
-                    bad.append(f'{lang} message page "{page}": {width(page, small)} px in {name}, smaller size (max 128)')
+            for name, font in SCREEN_FONTS:
+                if width(page, font) > 128:
+                    bad.append(f'{lang} message page "{page}": {width(page, font)} px in {name} (max 128)')
 
+bad += vertical_problems()
 for b in bad:
     print('  FAIL ' + b)
-for name, main, small in SCREEN_FONTS:
-    own = sum(1 for m in messages if width(m, main) <= 128)
-    print(f'  screen font {name}: {own} of {len(messages)} message pages in the main size, the rest in the smaller size')
+for name, font in SCREEN_FONTS:
+    widest = max(width(m, font) for m in messages)
+    print(f'  screen font {name}: all {len(messages)} message pages in one size, widest {widest} px of 128')
 print(f'{checked} screen texts and pages checked, {len(bad)} do not fit')
 sys.exit(1 if bad else 0)

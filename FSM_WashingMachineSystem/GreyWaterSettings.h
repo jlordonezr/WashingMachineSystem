@@ -60,7 +60,7 @@ extern Settings   cfg;
 // texts for the app and alerts may use UTF-8.
 inline const char* TR(const char* en, const char* es) { return cfg.language == LANG_EN ? en : es; }
 // The same, for text shown on the OLED: plain ASCII, headers up to 16 characters,
-// messages up to 128 px in the smaller size of every screen font. tools/check_screen_text.py checks every TRS().
+// messages up to 128 px in every screen font (one fixed size each). tools/check_screen_text.py checks every TRS().
 inline const char* TRS(const char* en, const char* es) { return TR(en, es); }
 
 struct WaterStats {
