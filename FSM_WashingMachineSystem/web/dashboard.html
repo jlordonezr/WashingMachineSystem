@@ -97,11 +97,16 @@ ol.steps li.done::before{content:"\2713";color:var(--primary-ink)}
 ol.steps li.on{border-color:var(--primary);color:var(--ink);font-weight:600}
 ol.steps li.on::before{color:var(--primary-ink)}
 .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.start-opt{display:grid;gap:4px;align-content:start}
+.start-opt small{font-size:0.75rem;color:var(--muted);text-align:center;line-height:1.3}
+.controls .stop-btn{grid-column:1/-1}
+.mode-note{font-size:0.875rem;color:var(--muted);margin:10px 0 0}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 18px;
   border-radius:var(--r-ctl);border:1px solid var(--line-strong);background:var(--surface);font-weight:600;cursor:pointer}
 .btn:hover:not(:disabled):not([aria-disabled=true]){background:var(--sunken)}
 .btn:disabled,.btn.primary:disabled,.btn.danger:disabled,.btn[aria-disabled=true],.btn.primary[aria-disabled=true],.btn.danger[aria-disabled=true]{background:var(--sunken);border-color:var(--line);color:var(--faint);opacity:1;cursor:not-allowed}
 .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.btn.outline-primary{border-color:var(--primary);color:var(--primary)}
 .btn.primary:hover:not(:disabled):not([aria-disabled=true]){background:var(--primary-hover)}
 .btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
 .btn.danger:hover:not(:disabled):not([aria-disabled=true]){background:var(--danger-hover)}
@@ -259,7 +264,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
 @media (forced-colors:active){
   nav.tabs button{border-bottom-style:none;padding-bottom:12px}
   nav.tabs button[aria-selected=true]{border-bottom:2px solid Highlight;padding-bottom:10px}
-  .btn:disabled,.btn[aria-disabled=true],.btn.primary[aria-disabled=true],.btn.danger[aria-disabled=true],.btn.outline-danger[aria-disabled=true]{color:GrayText;border-color:GrayText}
+  .btn:disabled,.btn[aria-disabled=true],.btn.primary[aria-disabled=true],.btn.danger[aria-disabled=true],.btn.outline-danger[aria-disabled=true],.btn.outline-primary[aria-disabled=true]{color:GrayText;border-color:GrayText}
   ol.steps li{border-top-color:GrayText}
   ol.steps li.done,ol.steps li.on{border-top-color:Highlight}
   .split,.sw,.dot,.bars i{forced-color-adjust:none}
@@ -316,15 +321,26 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           <li>Wash<span class="sr-only"></span></li><li>Soapy drain<span class="sr-only"></span></li><li>Rinse<span class="sr-only"></span></li><li>Save<span class="sr-only"></span></li>
         </ol>
         <div class="controls admin-only">
-          <button class="btn primary" id="btnStart" type="button" aria-describedby="ctlHint">
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
-            <span>Start cycle</span>
-          </button>
-          <button class="btn danger" id="btnStop" type="button" aria-describedby="ctlHint">
+          <div class="start-opt">
+            <button class="btn primary" id="btnStart" type="button" aria-describedby="subStart ctlHint">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+              <span>Reuse and save</span>
+            </button>
+            <small id="subStart">Tank water for the wash, rinse water to the tank</small>
+          </div>
+          <div class="start-opt">
+            <button class="btn outline-primary" id="btnReuse" type="button" aria-describedby="subReuse ctlHint">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+              <span>Reuse only</span>
+            </button>
+            <small id="subReuse">Tank water for the wash, rinse water to the drain</small>
+          </div>
+          <button class="btn danger stop-btn" id="btnStop" type="button" aria-describedby="ctlHint">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
             <span>Stop cycle</span>
           </button>
         </div>
+        <p class="mode-note" id="noSaveNote" hidden>Reuse only: this wash sends the rinse water to the drain, not to the tank.</p>
         <p id="ctlHint" class="admin-only"></p>
         <p class="view-note" id="viewNote" hidden>View only. Starting, stopping, the tank wash and the settings need the admin sign-in.</p>
       </section>
@@ -610,7 +626,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
 (function(){
   var $=function(id){return document.getElementById(id)};
   var TABS=['overview','water','service','settings'];
-  var last=null,failures=0,formLoaded=false,pending=null,pendingWash=false,toastTimer=null,offline=false,connShown='';
+  var last=null,failures=0,formLoaded=false,pending=null,pendingSave=true,pendingWash=false,toastTimer=null,offline=false,connShown='';
   // Actions are reported as done only when the controller's status shows them (3.0).
   var pendingSince=0,washSince=0,alertWait=null,CONFIRM_MS=10000,ALERT_WAIT_MS=120000;
 
@@ -707,15 +723,17 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   }
 
   function setControls(s){
-    var idle=s.state===0, start=$('btnStart'), stop=$('btnStop'), hint='';
+    var idle=s.state===0, start=$('btnStart'), reuse=$('btnReuse'), stop=$('btnStop'), hint='';
     setDis(start,!idle||!s.allowRemoteStart||pending!==null);
+    setDis(reuse,!idle||!s.allowRemoteStart||pending!==null);
     setDis(stop,idle||pending!==null);
-    start.querySelector('span').textContent=pending==='start'?t('Starting…'):t('Start cycle');
+    start.querySelector('span').textContent=pending==='start'&&pendingSave?t('Starting…'):t('Reuse and save');
+    reuse.querySelector('span').textContent=pending==='start'&&!pendingSave?t('Starting…'):t('Reuse only');
     stop.querySelector('span').textContent=pending==='stop'?t('Stopping…'):t('Stop cycle');
     if(idle&&!s.allowRemoteStart)hint='Starting from the dashboard is turned off in Settings. Use the START button on the controller.';
     else if(idle&&s.manualWash)hint='Starting a cycle ends the tank wash first.';
     else if(idle)hint='Start the washing machine program first, then start the cycle here or on the controller.';
-    else hint='Stop ends the cycle at once and returns the controller to Ready. Start is available when the controller is Ready.';
+    else hint='Stop ends the cycle at once and returns the controller to Ready. The start buttons are available when the controller is Ready.';
     hint=t(hint);if(idle&&!s.manualWash)hint+=' '+t('Stop is available while a cycle runs.');
     $('ctlHint').textContent=hint;
   }
@@ -821,7 +839,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   function announceChanges(s){
     if(!last)return;
     if(s.state!==last.state){
-      if(s.state>=2)announce(t('Step {0} of 4, {1}: {2}',s.state-1,t(STEP_NAMES[s.state]),plain(s.message)));
+      if(s.state>=2)announce(t('Step {0} of 4, {1}: {2}',s.state-1,stepName(s),plain(s.message)));
       else if(s.state===1)announce(t('Cycle starting'));
       else if(last.state>=1)announce(s.last&&s.last.valid&&!s.last.completed?t('Cycle stopped'):t('Cycle complete'));
     }
@@ -889,6 +907,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
 
   // Same words as the controller's screen, so the household sees one vocabulary.
   var STEP_NAMES=['Ready','Starting','Wash','Soapy drain','Rinse','Save'];
+  // Step 4 is a final drain, not "Save", in a Reuse only cycle (3.7).
+  function stepName(s){return s.state===5&&s.cycle&&s.cycle.noSave?t('Final drain'):t(STEP_NAMES[s.state])}
   var PLAIN={'Using tank water':'Reusing water from the tank','Using tap water':'Using tap water',
     'Tank low: using tap water':'Tank low, so using tap water','Draining soapy water':'Draining soapy water (not saved)',
     'Saving water to tank':'Saving rinse water to the tank','Tank full: not saving':'Tank full, so rinse water goes to the drain',
@@ -927,7 +947,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     $('lvHigh').textContent=s.tank==='high'?t('Wet'):t('Dry');
     $('lvLevel').textContent=s.tankFault?t('Switches disagree: treated as full, pump not used'):t((LEVEL[s.tank]||LEVEL.low).t);
     var stepNo=s.state>=2?s.state-1:0;
-    $('stStep').textContent=s.manualWash?t('Manual tank wash'):(stepNo?t('Step {0} of 4: {1}',stepNo,t(STEP_NAMES[s.state])):t(STEP_NAMES[s.state]));
+    $('stStep').textContent=s.manualWash?t('Manual tank wash'):(stepNo?t('Step {0} of 4: {1}',stepNo,stepName(s)):stepName(s));
     $('stTime').textContent=stepNo?clock(s.stepElapsedS):'—';
     var inFill=s.fill&&(s.state===2||s.state===4);
     $('stFill').textContent=inFill?(s.fill.litres.toFixed(1)+' L'):t('Not in a fill step');
@@ -1004,7 +1024,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     else if(s.manualWash){chip.className='chip run';chip.textContent=t('Cleaning tank');}
     else if(s.state===0){chip.className='chip';chip.textContent=t('Ready');}
     else{chip.className='chip run';chip.textContent=t('Running');}
-    $('stepText').textContent=stepNo?t('Step {0} of 4: {1}',stepNo,t(STEP_NAMES[s.state])):(s.state===1?t('Starting'):'');
+    $('stepText').textContent=stepNo?t('Step {0} of 4: {1}',stepNo,stepName(s)):(s.state===1?t('Starting'):'');
     var isReady=s.state===0&&!s.manualWash;
     $('headline').textContent=s.manualWash?t('Cleaning the tank'):(s.state===0?t('Ready for the next wash'):(s.state===1?t('Starting the cycle'):plain(s.message)));
     $('ready').hidden=!isReady;
@@ -1012,7 +1032,10 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     $('timing').hidden=isReady;
     if(isReady)renderReady(s);
     $('stuck').hidden=!s.stuck;
+    var noSave=!!(s.cycle&&s.cycle.noSave);
+    $('noSaveNote').hidden=!noSave;
     var li=$('steps').children;
+    li[3].firstChild.textContent=noSave?t('Final drain'):t('Save');
     for(var i=0;i<4;i++){
       var st=stepNo>i+1?'done':(stepNo===i+1?'on':'');
       li[i].className=st;
@@ -1119,17 +1142,26 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     }
   },1000);
 
-  $('btnStart').addEventListener('click',function(){
-    if(isDis(this))return;
-    ask(t('Start a wash cycle?'),t('Load the washing machine and start its program first. The controller follows the machine; it does not start it.'),t('Start cycle'))
+  // Two ways to start (3.7): "Reuse and save" (normal cycle) and "Reuse only"
+  // (step 4 sends the rinse water to the drain). Both reuse tank water in step 1.
+  function startCycle(btn,save){
+    if(isDis(btn))return;
+    ask(save?t('Reuse and save?'):t('Reuse only, without saving?'),
+        t('Load the washing machine and start its program first. The controller follows the machine; it does not start it.')+' '+
+        (save?t('The wash uses tank water when there is enough, and the rinse water goes to the tank.'):
+              t('The wash uses tank water when there is enough, and the rinse water goes to the drain, not to the tank.')),
+        save?t('Reuse and save'):t('Reuse only'))
       .then(function(ok){
         if(!ok)return;
-        pending='start';if(last)setControls(last);
+        pending='start';pendingSave=save;if(last)setControls(last);
         pendingSince=Date.now();
-        api('/api/start',{method:'POST'}).then(function(){announce(t('Start sent, waiting for the controller'))})
+        var body=new URLSearchParams();body.append('save',save?'1':'0');
+        api('/api/start',{method:'POST',body:body}).then(function(){announce(t('Start sent, waiting for the controller'))})
           .catch(function(e){pending=null;if(last)setControls(last);toast(e.message,true)});
       });
-  });
+  }
+  $('btnStart').addEventListener('click',function(){startCycle(this,true)});
+  $('btnReuse').addEventListener('click',function(){startCycle(this,false)});
   $('btnStop').addEventListener('click',function(){
     if(isDis(this))return;
     pending='stop';pendingSince=Date.now();if(last)setControls(last);

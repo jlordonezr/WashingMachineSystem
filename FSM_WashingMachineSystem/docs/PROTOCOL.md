@@ -22,7 +22,7 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 | GET | `/api/status` | — | status JSON (below) | 401, 429 |
 | GET | `/api/settings` | — | settings JSON (no passwords; `viewerOn` says whether the viewer user is on, 3.5) | 401, 403 (viewer), 429 |
 | POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–3: Hyperlegible, Plain sans, Terminal bold, Schoolbook bold; 3.6), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword`, `viewerOn` (0 turns the viewer off and forgets its password; 1 needs a password, 3.5), `viewerPassword` (8–32, not the dashboard password, 3.5) | the saved settings JSON | 400 (message says which field), 403 (viewer), 500 (flash write failed) |
-| POST | `/api/start` | — | `{"ok":true}` = request accepted | 403 (turned off in Settings), 409 (not Ready) |
+| POST | `/api/start` | optional `save`: `1` *Reuse and save* (the default), `0` *Reuse only*, step 4 sends the rinse water to the drain (3.7) | `{"ok":true}` = request accepted | 400 (`save` not 0 or 1), 403 (turned off in Settings, or viewer), 409 (not Ready) |
 | POST | `/api/stop` | — | `{"ok":true}` = request accepted | 409 `No cycle is running.` (3.0) |
 | POST | `/api/wash` | — | `{"ok":true}` = started | 409 (cycle running, or tank already full) |
 | POST | `/api/wash/stop` | — | `{"ok":true}` | — |
@@ -70,7 +70,7 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `typicalS` | [3] | Typical duration of steps 1–3 on this machine, s (0 = not learned) |
 | `manualWash`, `manualWashLeftS`, `manualWashMaxMin`, `manualWashResult` | | Manual wash state; result `full` / `timeout` / `stopped` / `cycle` |
 | `tankAgeH`, `tankMaxAgeH` | number | Age of the oldest tank water (−1 empty/unknown), limit |
-| `cycle`, `month`, `prevMonth`, `total`, `last` | objects | Water statistics, litres (`tap`, `reused`, `saved`, `cycles`) |
+| `cycle`, `month`, `prevMonth`, `total`, `last` | objects | Water statistics, litres (`tap`, `reused`, `saved`, `cycles`); `cycle.noSave` is true while a *Reuse only* cycle runs (3.7) |
 | `history` | object | `source` (where the history was loaded from), `hasData` |
 | `interrupted` | object | `active`, `step` (0 = before step 1, else 1–4), `epoch` of the last cycle cut short |
 | `boot` | string | Last restart reason |

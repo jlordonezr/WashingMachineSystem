@@ -316,6 +316,46 @@ int main(int argc, char** argv) {
     CHECK(!alertSeen("Reuse Water: tank full") && !tankFull(), "a low flow raised the tank-full alert");
     printf("    tank %.1f L; fill valve switched %d times\n", tankL, rec.fillSwitches);
   }
+  else if (sc == "F14") {
+    printf("F14 Reuse only from the app: tank water in step 1, rinse water to the drain in step 4 (3.7)\n");
+    typicalProgram(); boot();
+    cfg.allowRemoteStart = false;
+    CHECK(!requestRemoteStart(false), "Reuse only accepted with starting from the app turned off");
+    cfg.allowRemoteStart = true;
+    CHECK(requestRemoteStart(false), "Reuse only refused at Ready");
+    startAt = now();                                   // the washer program starts with the app start
+    runFor(5);
+    CHECK(systemBusy() && eventSeen("Cycle started: reuse only"), "Reuse only cycle did not start");
+    CHECK(!requestRemoteStart(true), "a second start accepted while a cycle runs");
+    SystemStatus snap; getSystemStatus(snap);
+    CHECK(snap.noSave, "status does not report the Reuse only cycle");
+    bool fillInStep4 = false, drainShut = false, header = false;
+    while (activeState != stIdle && now() < 2200) {
+      runFor(0.25);
+      if (activeState == stDrain2) {
+        if (pinOut[OUT_FILL_EV] == HIGH) fillInStep4 = true;
+        if (pinOut[OUT_DRAIN_EV] == LOW) drainShut = true;
+        if (!strcmp(displayGetTitle(), "DRAIN 4 OF 4")) header = true;
+      }
+    }
+    CHECK(stateAt(stDrain2) >= 1500, "step 4 never began");
+    CHECK(!fillInStep4 && !rec.savedWhileSaving, "rinse water went to the tank in a Reuse only cycle");
+    CHECK(!drainShut, "drain valve closed during step 4 of a Reuse only cycle");
+    CHECK(activeState == stIdle && stats.totalCycles == 1, "Reuse only cycle did not complete");
+    CHECK(stats.totalReusedL > 10 && stats.totalSavedL == 0, "stats: reused %.1f L, saved %.1f L (expected reused, nothing saved)",
+          stats.totalReusedL, stats.totalSavedL);
+    CHECK(sawMsg("Getting ready...|Reuse only") || sawMsg("Reuse only"), "screen never showed \"Reuse only\" at the start");
+    CHECK(sawMsg("Not saving"), "step 4 screen never showed \"Not saving\"");
+    CHECK(header, "step 4 header is not DRAIN 4 OF 4");
+    CHECK(!alertSeen("Reuse Water: tank full"), "tank-full alert in a Reuse only cycle");
+    CHECK(eventSeen("Step 4/4 final drain started (reuse only"), "event log has no reuse-only step 4");
+    getSystemStatus(snap); CHECK(!snap.noSave, "Reuse only still reported after the cycle");
+    printf("    reused %.1f L, saved %.1f L\n", stats.totalReusedL, stats.totalSavedL);
+    // The START button on the controller is always a normal cycle, and saves again.
+    tankL = 20.0; rec.savedWhileSaving = false;
+    pressStart(); runFor(1800);
+    CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "START button after a Reuse only cycle did not save (saved %.1f L)", stats.totalSavedL);
+  }
   else if (sc == "F12") {
     printf("F12 full cycle in Spanish (factory default language)\n");
     simLanguage = LANG_ES; typicalProgram(); boot();

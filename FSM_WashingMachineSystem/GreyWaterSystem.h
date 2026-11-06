@@ -235,6 +235,7 @@ struct SystemStatus {
   float      tankAgeH;         // hours since the tank started holding water, -1 unknown/empty
   int32_t    lastAgoS;         // seconds since the last wash ended, -1 unknown or none
   float      cycleTapL, cycleReusedL, cycleSavedL;
+  bool       noSave;          // this cycle is "Reuse only": step 4 sends the rinse water to the drain
   bool       tankFault;        // float switches disagree (high wet, low dry)
   bool       manualWash;       // manual tank wash running
   uint32_t   manualWashLeftS;  // seconds left before the manual wash time limit
@@ -246,7 +247,7 @@ extern bool drain2Done;        // step 4 finished (replaces the fixed-time trans
 
 void getSystemStatus(SystemStatus& s);
 void requestRemoteStop();      // dashboard Stop
-bool requestRemoteStart();     // dashboard Start; false if not allowed right now
+bool requestRemoteStart(bool save = true);   // dashboard start; save=false: "Reuse only" (3.7). False if not allowed now
 void applyRemoteRequests();    // call right after updateInputs() in loop()
 void sampleFlowSensors();      // call every loop(): keeps flow rate and volumes current
 void systemPeriodic();         // call every loop(): tank level, water age, stats saving

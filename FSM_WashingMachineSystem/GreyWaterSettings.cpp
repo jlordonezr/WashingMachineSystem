@@ -60,7 +60,7 @@ void settingsDefaults(Settings& s) {
   s.language         = LANG_ES;
   s.screenFont       = 0;
   s.saveMinLpm       = SAVE_MIN_LPM;
-  s.allowRemoteStart = true;   // dashboard Start button; asks for confirmation
+  s.allowRemoteStart = true;   // dashboard start buttons; each asks for confirmation
   strlcpy(s.ntfyServer,  DEFAULT_NTFY_SERVER,  sizeof(s.ntfyServer));
   strlcpy(s.ntfyTopic,   "",                   sizeof(s.ntfyTopic));
   strlcpy(s.timeZone,    DEFAULT_TIME_ZONE,    sizeof(s.timeZone));

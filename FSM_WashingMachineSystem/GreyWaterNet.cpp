@@ -337,7 +337,7 @@ static void handleStatus() {
     "\"stepElapsedS\":%lu,\"drain2LeftS\":%lu,\"stuck\":%s,\"tankAgeH\":%.2f,\"tankMaxAgeH\":%u,"
     "\"allowRemoteStart\":%s,\"alerts\":%s,"
     "\"manualWash\":%s,\"manualWashLeftS\":%lu,\"manualWashMaxMin\":%lu,\"manualWashResult\":\"%s\","
-    "\"cycle\":{\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f},"
+    "\"cycle\":{\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"noSave\":%s},"
     "\"month\":{\"key\":%lu,\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"cycles\":%lu},"
     "\"total\":{\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"cycles\":%lu},"
     "\"prevMonth\":{\"key\":%lu,\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"cycles\":%lu},"
@@ -357,7 +357,7 @@ static void handleStatus() {
     cfg.allowRemoteStart ? "true" : "false", cfg.ntfyTopic[0] ? "true" : "false",
     s.manualWash ? "true" : "false", (unsigned long)s.manualWashLeftS,
     (unsigned long)(cfg.manualWashMs / 60000UL), s.manualWashResult,
-    s.cycleTapL, s.cycleReusedL, s.cycleSavedL,
+    s.cycleTapL, s.cycleReusedL, s.cycleSavedL, s.noSave ? "true" : "false",
     (unsigned long)stats.monthKey, stats.monthTapL, stats.monthReusedL, stats.monthSavedL,
     (unsigned long)stats.monthCycles,
     stats.totalTapL, stats.totalReusedL, stats.totalSavedL, (unsigned long)stats.totalCycles,
@@ -613,7 +613,14 @@ static void handleStop() {
 static void handleStart() {
   if (!actionAllowed()) return;
   if (!cfg.allowRemoteStart) { sendError(403, "Starting from the dashboard is turned off in Settings."); return; }
-  if (!requestRemoteStart()) { sendError(409, "A cycle is already running."); return; }
+  // save=0: "Reuse only" (3.7), the rinse water goes to the drain. Missing or 1: "Reuse and save".
+  bool save = true;
+  if (server.hasArg("save")) {
+    String v = server.arg("save");
+    if (v != "0" && v != "1") { sendError(400, "save must be 0 or 1."); return; }
+    save = (v == "1");
+  }
+  if (!requestRemoteStart(save)) { sendError(409, "A cycle is already running."); return; }
   sendJson(200, "{\"ok\":true}");
 }
 

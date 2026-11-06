@@ -32,6 +32,7 @@ function baseStatus() {
 }
 let status = baseStatus();
 let onStart = () => {};        // what the mock does when /api/start arrives
+let lastStartBody = null;      // form body of the last /api/start
 let onTestAlert = () => {};
 let settings = { language: 'en', buzzerOn: false, minFillLitres: 3, saveMinLpm: 0.5, flowOnLpm: 1, washPeriodS: 10, washOpenS: 2,
     drain2Min: 20, edgeS: 4, stepAlertMin: 90, tankMaxAgeH: 48, manualWashMaxMin: 10, allowRemoteStart: true,
@@ -49,7 +50,10 @@ const server = http.createServer((req, res) => {
   }
   if (req.url === '/api/settings') return json(200, settings);
   if (req.url === '/api/history') return json(200, {});
-  if (req.url === '/api/start') { onStart(); return json(200, { ok: true }); }
+  if (req.url === '/api/start') {
+    let body = ''; req.on('data', c => body += c);
+    return req.on('end', () => { lastStartBody = new URLSearchParams(body); onStart(); json(200, { ok: true }); });
+  }
   if (req.url === '/api/test-alert') { onTestAlert(); return json(200, { ok: true }); }
   if (req.url === '/api/stop') return json(200, { ok: true });
   json(404, { error: 'Not found.' });
@@ -216,6 +220,32 @@ async function fresh(browser, base) {
     check(lastSettingsPost && lastSettingsPost.get('viewerOn') === '1' && lastSettingsPost.get('viewerPassword') === 'family-view-1',
       'A12 viewer settings not sent');
     await ctx.close();
+  }
+
+  // A13 Two start buttons (3.7): "Reuse and save" sends save=1, "Reuse only" save=0; a Reuse only
+  // cycle shows its note and names step 4 "Final drain".
+  {
+    status = baseStatus(); onStart = () => {}; lastStartBody = null;
+    const { ctx, page } = await fresh(browser, base);
+    check((await page.innerText('#btnStart')).includes('Reuse and save') && (await page.innerText('#btnReuse')).includes('Reuse only'),
+      'A13 start buttons not named Reuse and save / Reuse only');
+    await page.click('#btnReuse');
+    check((await page.innerText('#dlgBody')).includes('to the drain'), 'A13 Reuse only confirmation does not say the rinse water goes to the drain');
+    await page.click('#dlgOk'); await tick(page, 500);
+    check(lastStartBody && lastStartBody.get('save') === '0', 'A13 Reuse only did not send save=0');
+    await page.click('#btnStart'); await tick(page, 300);
+    check((await page.getAttribute('#btnStart', 'aria-disabled')) === 'true', 'A13 Reuse and save not disabled while a start is pending');
+    await page.click('#dlgCancel').catch(() => {});
+    await tick(page, 11000);                            // the pending start times out
+    await page.click('#btnStart'); await page.click('#dlgOk'); await tick(page, 500);
+    check(lastStartBody && lastStartBody.get('save') === '1', 'A13 Reuse and save did not send save=1');
+    status = baseStatus(); status.state = 5; status.stateName = 'Drain2'; status.title = 'DRAIN 4 OF 4';
+    status.message = 'Not saving|To the drain'; status.cycle = { tap: 30, reused: 20, saved: 0, noSave: true };
+    await tick(page, 2500);
+    check(await page.isVisible('#noSaveNote'), 'A13 Reuse only note not shown during the cycle');
+    check((await page.innerText('#stepText')).includes('Final drain'), 'A13 step 4 not named Final drain in a Reuse only cycle');
+    await ctx.close();
+    status = baseStatus();
   }
 
   // A7 Accessibility (axe-core, if installed): no violations on any tab, normal and fault states.

@@ -77,6 +77,7 @@ Do these with the washing machine empty and someone at the controller. Note each
 | H11 | Start-up screen (3.2) | Power on, watch the screen; then power on again and press START during the dog | Border Collie chases the butterfly (about 4 s), then `REUSO DE AGUA` / *Sistema listo* for 2 s, then `LISTO`; START ends the animation at once. Messages are in Helvetica Bold and readable |
 | H15 | Minimum flow to save (3.4) | In step 4, watch Service → Valves and pump as the rinse pump-out ends | Fill valve turns off and drain on within about 3 s of the flow dropping below the limit; screen *Flujo bajo › Al desague*; a spin pump-out turns the fill valve on again |
 | H16 | View-only user (3.5) | Settings → *View-only user* on, set a password, Save. On another phone (or a private browser window) sign in as `viewer` | Only Overview and Water use; no buttons that change anything. As admin again, turning it off makes the viewer password stop working |
+| H17 | Reuse only (3.7) | With water in the tank, start the machine, then *Solo reusar* in the app; watch step 1 and step 4 | Step 1 *Reusando agua*; step 4 header `DESAGUE 4 DE 4`, *Sin guardar › Al desague*; Service → Valves: fill valve off, drain on all through step 4; *TERMINADO* shows only the litres reused. Then press START on the controller: a normal cycle that saves |
 | H14 | Screen font (3.6) | Settings → Screen font: choose each of the four styles (Hyperlegible, Plain sans, Terminal bold, Schoolbook bold), Save, look at the screen during a wash | The screen changes at once; long parts switch to the smaller size of the same style, never to another style; the choice is kept after Restart controller. After the upgrade from 3.5 the screen starts in Hyperlegible |
 | H13 | Screen pages (3.3) | Run one wash in Spanish; watch each step for 15 s | Pages change every 3 s and each is readable; header `LAVADO 1 DE 4` … `AHORRO 4 DE 4`; *Faltan n min* from the second wash and roughly right; `TERMINADO` shows *Lavado listo › Reusados n L › Guardados n L* |
 | H12 | Buzzer on D1 (3.2) | Settings → Buzzer on; run a short cycle, or the float fault in H3 | Two short beeps at the end, three long beeps on the alarm. A short chirp at power-on is expected (D1 is the TX0 pin) |
@@ -101,6 +102,8 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 | — | 3.5.0 | Hardware H16 | Not done yet |
 | 2026-11-04 | 3.6.0 | PC tests, firmware build | All suites pass (browser tests skipped: no Node.js on this Mac); 1,390,025 bytes flash, 99,732 bytes RAM with core 3.3.12 |
 | — | 3.6.0 | Hardware H14 (four new fonts) | Not done yet |
+| 2026-11-06 | 3.7.0 | PC tests, firmware build | All suites pass, simulation F14 included (browser test A13 written, skipped: no Node.js on this Mac); 1,392,069 bytes flash, 99,740 bytes RAM with core 3.3.12 |
+| — | 3.7.0 | Hardware H17 (Reuse only) | Not done yet |
 | 2026-10-30 | 3.1.0 | PC tests | All suites pass (see `tests/test_results.txt`) |
 | — | 3.1.0 | Hardware H10 | Not done yet |
 | 2026-10-30 | 3.0.0 | Jose, installed system | Working as expected |

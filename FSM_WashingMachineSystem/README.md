@@ -1,4 +1,22 @@
-# Reuse Water System – Firmware 3.6 (Wi-Fi)
+# Reuse Water System – Firmware 3.7 (Wi-Fi)
+
+## What's new in 3.7: "Reuse only" cycle, clearer start buttons
+
+The Overview tab has three buttons, named for what happens to the water:
+
+| Button (ES) | What it does |
+|---|---|
+| **Reuse and save** (*Reusar y guardar*) | The normal cycle, as before: step 1 uses tank water when there is enough, step 4 sends the rinse water to the tank |
+| **Reuse only** (*Solo reusar*), new | Step 1 the same; in step 4 all rinse water goes to the drain and the fill valve stays closed |
+| **Stop cycle** (*Detener ciclo*) | Unchanged |
+
+- Each start button has a one-line description under it and its own confirmation. Both follow Settings → *Start from the dashboard*; the view-only user sees neither.
+- The **START button on the controller always starts *Reuse and save***, even right after an app request that did not take effect.
+- During a *Reuse only* cycle: start screen `STARTING` › *Getting ready... › Reuse only* (*Preparando... › Solo reusar*); step 4 header `DRAIN 4 OF 4` (*DESAGUE 4 DE 4*) with *Not saving › To the drain › Ends in 18:42* (*Sin guardar › Al desague › Fin en …*). Step 4 lasts the usual time, so the controller follows the machine's spin. No *tank full* alert. Overview shows *Reuse only: this wash sends the rinse water to the drain* and names step 4 *Final drain*.
+- Water history: tank water reused counts as usual, 0 L saved for that wash. Event log: *Cycle started: reuse only, rinse water to the drain*, *Step 4/4 final drain started (reuse only, not saving)*. The end alert says the rinse water went to the drain.
+- API: `POST /api/start` takes `save=0` (*Reuse only*) or `save=1`; without it, a normal cycle (older pages keep working). `/api/status` → `cycle.noSave`. Settings and history formats unchanged (versions 10 and 3).
+- Tests: simulation F14 (Reuse only cycle, then START on the controller saves again); dashboard A13 (both buttons, `save=0/1`, note and *Final drain*).
+- Build: 1.39 MB flash (44%), 97 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.6: four new screen fonts, the old ones removed
 
@@ -521,7 +539,7 @@ All pages need a password (HTTP Basic). User `admin` (the dashboard password) ca
 | GET | `/api/settings` | Current settings (JSON, passwords not included) |
 | POST | `/api/settings` | Save settings (form fields, same names as the GET response, plus `webPassword`, `otaPassword`, `viewerPassword`) |
 | POST | `/api/stop` | Stop the cycle (409 when no cycle runs, from 3.0) |
-| POST | `/api/start` | Start a cycle (when enabled in Settings, on by default, and the system is Idle) |
+| POST | `/api/start` | Start a cycle (when enabled in Settings, on by default, and the system is Idle); `save=0` for *Reuse only* (3.7) |
 | POST | `/api/wash` | Start a manual tank wash (only while Idle and the tank is not full) |
 | POST | `/api/wash/stop` | Stop the manual tank wash |
 | POST | `/api/test-alert` | Send a test alert |

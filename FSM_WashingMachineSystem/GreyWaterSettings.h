@@ -34,7 +34,7 @@ struct Settings {
   uint16_t tankMaxAgeHours;   // alert when tank water is older than this
   uint32_t manualWashMs;      // safety time limit for the dashboard "Wash tank" button
   float    flowOnLpm;         // flow counts above this (L/min); stopped below it for 2 s
-  bool     allowRemoteStart;  // show the Start button on the dashboard
+  bool     allowRemoteStart;  // show the start buttons (Reuse and save, Reuse only) on the dashboard
   char     ntfyServer[64];    // e.g. https://ntfy.sh
   char     ntfyTopic[64];     // empty = alerts off
   char     timeZone[48];      // POSIX TZ string, e.g. "<-05>5" for UTC-5
