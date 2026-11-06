@@ -20,6 +20,7 @@ dst = os.path.join(here, '..', 'DashboardPage.h')
 import json
 page = open(src, encoding='utf-8').read()
 es = json.load(open(os.path.join(here, '..', 'web', 'es.json'), encoding='utf-8'))
+es = {k: v for k, v in es.items() if not k.startswith('_')}  # '_comment' etc. are notes, not texts
 marker = '/*ES-DICTIONARY*/{}'
 if marker not in page:
     sys.exit('web/dashboard.html has no /*ES-DICTIONARY*/{} marker')

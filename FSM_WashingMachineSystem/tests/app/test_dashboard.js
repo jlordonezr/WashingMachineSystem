@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
 
 // The page as the firmware serves it: web/dashboard.html with the Spanish texts
 // from web/es.json inserted (tools/build_dashboard.py does the same).
-const ES = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'es.json'), 'utf8'));
+const ES = Object.fromEntries(Object.entries(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'es.json'), 'utf8'))).filter(([k]) => !k.startsWith('_')));  // '_comment' is a note
 const PAGE = fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'dashboard.html'), 'utf8')
   .replace('/*ES-DICTIONARY*/{}', JSON.stringify(ES).replace(/<\//g, '<\\/'));
 

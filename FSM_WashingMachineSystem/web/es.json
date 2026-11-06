@@ -1,4 +1,5 @@
 {
+ "_comment": "Spanish translations for the dashboard (English -> Spanish). Every text the dashboard can show needs an entry here; tests/run_all.sh checks it with tools/i18n_keys.py (prints missing/unused keys). Keys starting with _ are notes and are not sent to the page.",
  "Reuse Water System": "Sistema de Reúso de Agua",
  "Connecting": "Conectando",
  "Refresh": "Actualizar",

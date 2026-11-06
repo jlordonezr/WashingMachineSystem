@@ -50,8 +50,14 @@ if '--all' in sys.argv:
     print('\n'.join(keys)); sys.exit(0)
 es = json.load(open(os.path.join(root, 'web', 'es.json'), encoding='utf-8')) if os.path.exists(os.path.join(root, 'web', 'es.json')) else {}
 missing = [k for k in keys if k not in es]
-unused = [k for k in es if k not in keys]
+unused = [k for k in es if k not in keys and not k.startswith('_')]  # '_comment' is a note
 for k in missing: print('missing: ' + k)
 for k in unused: print('unused: ' + k)
 print(f'{len(keys)} texts, {len(missing)} missing, {len(unused)} unused')
-sys.exit(1 if missing else 0)
+# Notes in es.json ('_comment' ...) must not be built into the page.
+import gzip
+hdr = open(os.path.join(root, 'DashboardPage.h'), encoding='utf-8').read()
+page = gzip.decompress(bytes(int(b, 16) for b in re.findall(r'0x([0-9a-f]{2})', hdr.split('PROGMEM', 1)[1]))).decode('utf-8')
+leaked = [k for k in es if k.startswith('_') and json.dumps(k) in page]
+for k in leaked: print('note built into DashboardPage.h: ' + k)
+sys.exit(1 if missing or leaked else 0)
