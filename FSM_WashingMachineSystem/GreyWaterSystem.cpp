@@ -64,8 +64,62 @@ bool debounceButton(int pin, unsigned long& lastPressTime, bool& lastState) {
   return (millis() - lastPressTime > DEBOUNCE_DELAY) && (current == LOW);
 }
 
+// START on the panel (3.8). At READY the cycle starts when START is released:
+// a press shorter than START_HOLD_MS starts "Reuse and save", a longer one
+// "Reuse only". While it is held the screen shows which one a release starts,
+// so nobody has to count. Held START_STUCK_MS or more: treated as a stuck
+// button and nothing starts. In any other state START does nothing, as before.
+static bool startNoSave = false;        // the next Start is "Reuse only" (panel hold or app)
+static bool startDown   = false;        // START held (debounced) on the last pass
+static bool startStuck  = false;
+static bool startLong   = false;        // held past START_HOLD_MS
+static unsigned long startDownSince = 0;
+
+static void showStartChoice(bool reuseOnly) {
+  displayShowNotice(reuseOnly ? TRS("REUSE ONLY", "SOLO REUSAR") : TRS("REUSE AND SAVE", "REUSAR Y GUARDAR"),
+                    TRS("Release to start", "Suelte e inicia"), START_STUCK_MS + 1000);
+}
+
+static void readStartButton() {
+  bool down = debounceButton(START_BUTTON, lastStartButtonPressTime, lastStartButtonState);
+  inStart = false;
+  if (down) {
+    if (!startDown) {                   // just pressed
+      startDown = true;
+      startDownSince = millis();
+      startLong = startStuck = false;
+      if (activeState == stIdle) {
+        displayClearNotice();           // also ends the start-up animation
+        showStartChoice(false);
+      }
+    }
+    unsigned long held = millis() - startDownSince;
+    if (activeState != stIdle || startStuck) return;
+    if (held >= START_STUCK_MS) {
+      startStuck = true;
+      logEvent("START held %lu s: treated as stuck, nothing started", held / 1000UL);
+      displayShowNotice(TRS("START BUTTON", "BOTON START"), TRS("Stuck|Check button", "Atascado|Revise el boton"),
+                        START_STUCK_MS + 1000);
+    } else if (held >= START_HOLD_MS && !startLong) {
+      startLong = true;
+      beep(BEEP_TICK);
+      showStartChoice(true);
+    }
+    return;
+  }
+  if (!startDown) return;
+  startDown = false;                    // just released
+  if (activeState != stIdle) return;
+  if (startStuck) {
+    displayClearNotice();
+    return;
+  }
+  inStart = true;                       // one pass, like the app's Start
+  startNoSave = startLong;
+}
+
 void updateInputs() {
-  inStart = debounceButton(START_BUTTON, lastStartButtonPressTime, lastStartButtonState);
+  readStartButton();
   inStop  = debounceButton(STOP_BUTTON,  lastStopButtonPressTime,  lastStopButtonState);
 
   // A float-switch disagreement is reported once, and again only after it cleared.
@@ -143,7 +197,6 @@ const char* checkAndFillWashingMachine() {
 // "Reuse only" cycle (app button, 3.7): step 1 reuses tank water as usual, but
 // in step 4 the rinse water goes to the drain; the fill valve stays closed.
 static bool cycleNoSave = false;       // set when the cycle starts, for the whole cycle
-static bool startNoSave = false;       // the next Start is a reuse-only start from the app
 static bool saveStoppedFull = false;   // reset when step 4 begins
 static bool saveLowFlow     = false;   // drain flow at or below cfg.saveMinLpm: draining
 static bool saveAbove       = false;   // ... flow back above the limit since saveAboveMs
@@ -360,7 +413,7 @@ void handleRunStateEntry() {
   cycleStartMillis = millis();
   interruptedFlag = false;   // a new cycle replaces the "interrupted" notice
   cycleMarkStep(stRun);
-  cycleNoSave = startNoSave;   // only a reuse-only start from the app; the START button saves
+  cycleNoSave = startNoSave;   // "Reuse only" from the app, or START held 2 s on the panel
   startNoSave = false;
   logEvent(cycleNoSave ? "Cycle started: reuse only, rinse water to the drain" : "Cycle started");
   if (manualWashActive) {    // starting a cycle ends a manual wash
@@ -690,8 +743,6 @@ void applyRemoteRequests() {
   if (remoteStartRequested) {
     remoteStartRequested = false;
     if (activeState == stIdle) { inStart = true; startNoSave = remoteStartNoSave; }
-  } else if (inStart) {
-    startNoSave = false;       // the START button on the controller: always a normal cycle
   }
 }
 

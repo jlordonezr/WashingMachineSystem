@@ -1,4 +1,20 @@
-# Reuse Water System – Firmware 3.7 (Wi-Fi)
+# Reuse Water System – Firmware 3.8 (Wi-Fi)
+
+## What's new in 3.8: "Reuse only" from the panel, by holding START
+
+The panel has only START and STOP, so START now has two uses at `READY`. The cycle starts when START is **released**, and while it is held the screen shows which cycle the release starts:
+
+| START at `READY` | Screen while held | On release |
+|---|---|---|
+| Pressed, released before 2 s | `REUSE AND SAVE` › *Release to start* (`REUSAR Y GUARDAR` › *Suelte e inicia*) | **Reuse and save**, the normal cycle |
+| Held 2 s (`START_HOLD_MS`) | Changes to `REUSE ONLY` › *Release to start* (`SOLO REUSAR` › *Suelte e inicia*); one short beep if the buzzer is on | **Reuse only**: rinse water to the drain (as the app button of 3.7) |
+| Held 15 s (`START_STUCK_MS`) | `START BUTTON` › *Stuck › Check button* (`BOTON START` › *Atascado › Revise el boton*) | Nothing starts; event log *START held 15 s: treated as stuck* |
+
+- A short press starts about 0.1 s later than before (on release instead of on press). A press during the start-up animation still ends it at once; the release then starts the cycle.
+- In a running cycle START still does nothing; STOP is unchanged (hold 5 s at `READY` for Wi-Fi setup).
+- Suggested panel label: *START: pulse = Reusar y guardar · mantenga 2 s = Solo reusar*.
+- Tests: simulation F15 (press during the animation, short press, 2 s hold, 20 s stuck hold); the other scenarios now start on release.
+- Build: 1.39 MB flash (44%), 97 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.7: "Reuse only" cycle, clearer start buttons
 
@@ -11,7 +27,7 @@ The Overview tab has three buttons, named for what happens to the water:
 | **Stop cycle** (*Detener ciclo*) | Unchanged |
 
 - Each start button has a one-line description under it and its own confirmation. Both follow Settings → *Start from the dashboard*; the view-only user sees neither.
-- The **START button on the controller always starts *Reuse and save***, even right after an app request that did not take effect.
+- The **START button on the controller always starts *Reuse and save***, even right after an app request that did not take effect. (From 3.8, holding START for 2 s starts *Reuse only*.)
 - During a *Reuse only* cycle: start screen `STARTING` › *Getting ready... › Reuse only* (*Preparando... › Solo reusar*); step 4 header `DRAIN 4 OF 4` (*DESAGUE 4 DE 4*) with *Not saving › To the drain › Ends in 18:42* (*Sin guardar › Al desague › Fin en …*). Step 4 lasts the usual time, so the controller follows the machine's spin. No *tank full* alert. Overview shows *Reuse only: this wash sends the rinse water to the drain* and names step 4 *Final drain*.
 - Water history: tank water reused counts as usual, 0 L saved for that wash. Event log: *Cycle started: reuse only, rinse water to the drain*, *Step 4/4 final drain started (reuse only, not saving)*. The end alert says the rinse water went to the drain.
 - API: `POST /api/start` takes `save=0` (*Reuse only*) or `save=1`; without it, a normal cycle (older pages keep working). `/api/status` → `cycle.noSave`. Settings and history formats unchanged (versions 10 and 3).

@@ -21,7 +21,7 @@
 <ol>
 <li><b>Check the controller’s screen</b> shows <code>READY</code> and <i>Start washer › Press START</i> (Spanish: <code>LISTO</code>, <i>Inicie lavadora › y pulse START</i>).</li>
 <li><b>Start the washing machine program</b> as usual.</li>
-<li><b>Press the button labelled START</b> on the controller, or <b>Reuse and save</b> in the app. To use tank water but not keep the rinse water, choose <b>Reuse only</b> in the app instead; step 4 then shows <code>DRAIN 4 OF 4</code> (<code>DESAGUE 4 DE 4</code>).</li>
+<li><b>Press the button labelled START</b> on the controller and let go (screen: <code>REUSAR Y GUARDAR</code> › <i>Suelte e inicia</i>), or <b>Reuse and save</b> in the app.<br><b>To use tank water but not keep the rinse water:</b> hold START for <b>2 seconds</b> until the screen shows <code>SOLO REUSAR</code>, then let go; or <b>Reuse only</b> in the app. Step 4 then shows <code>DESAGUE 4 DE 4</code>.</li>
 <li><b>Let it run.</b> The top line shows the step, <code>WASH 1 OF 4</code> to <code>SAVE 4 OF 4</code> (Spanish: <code>LAVADO 1 DE 4</code> to <code>AHORRO 4 DE 4</code>). After the first wash the screen also says about how many minutes are left.</li>
 <li><b>Done</b> when the screen shows <code>DONE</code> (Spanish: <code>TERMINADO</code>) with the litres it reused and saved.</li>
 </ol>
@@ -71,7 +71,7 @@
 <p>Phone alerts start with <i>Reuse Water:</i> (Spanish: <i>Reúso de Agua:</i>).</p>
 <p>Technician: <span class="blank"></span> Phone: <span class="blank"></span></p>
 
-<h2 class="page-break">Installer commissioning checklist (firmware 3.7)</h2>
+<h2 class="page-break">Installer commissioning checklist (firmware 3.8)</h2>
 <p>Firmware 3.0 has run correctly on the installed system. Firmware 3.1 adds the Spanish texts and the language setting. Firmware 3.2 renames the app to Reuse Water System, adds the start-up animation and a clearer screen font, and moves the optional buzzer from D12 to D1, on the same control logic. Firmware 3.3 makes the screen messages explain themselves in short pages and makes phone alerts more reliable. Complete these checks when installing or replacing a controller.</p>
 <h3>Hardware</h3>
 <ul class="check">
@@ -87,7 +87,7 @@
 <ul class="check">
 <li><b>Start-up screen:</b> the dog chases the butterfly (about 4 s), then <code>REUSO DE AGUA</code> / Sistema listo for 2 s, then <code>LISTO</code>. START during the dog skips it.</li>
 <li><b>Readability:</b> the bold messages can be read from where the household stands.</li>
-<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.7.0.</li>
+<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.8.0.</li>
 </ul>
 <h3>First cycle (watch the Service tab)</h3>
 <ul class="check">
@@ -97,7 +97,7 @@
 <li>Step 4 saves water (<i>Filling tank › Ends in …</i>); the fill valve is on and the drain valve off in <i>Valves and pump</i>. When the pump-out ends, the screen shows <i>Low flow › To the drain</i> and the fill valve turns off within about 3 s.</li>
 <li><code>DONE</code> shows the litres reused and saved; <i>Water use</i> shows the wash. With the buzzer on: two short beeps.</li>
 </ul>
-<h3>Firmware features (3.0 to 3.7)</h3>
+<h3>Firmware features (3.0 to 3.8)</h3>
 <ul class="check">
 <li><b>Passwords:</b> the app asked for new passwords on first use, and both were changed.</li>
 <li><b>View-only user (if the household wants one):</b> Settings → Security → View-only user on, with its own password. In a private browser window, sign in as <code>viewer</code>: only Overview and Water use, with no Start, Stop or Wash tank.</li>
@@ -109,7 +109,8 @@
 <li><b>Wi-Fi setup key:</b> hold STOP for 5 s at <code>READY</code>. The screen shows <code>ReuseWater-Setup</code> and a key like <code>gw-a1b2c3</code>, unique to this board; it is also printed over USB. Join the network with that key. The old shared password <code>greywater</code> works only if the screen is missing.</li>
 <li><b>Screen messages:</b> during a wash the message changes every 3 seconds (for example <i>Draining › soapy water</i>); every part is readable and nothing is cut off. From the second wash a <i>min left</i> part appears.</li>
 <li><b>Float switches:</b> with the low float down, hold the high float up for 5 s. Expect the alert <i>check level switches</i> and <i>Check float switches</i> in the app (and three long beeps with the buzzer on).</li>
-<li><b>Reuse only:</b> with water in the tank, start a wash with <b>Reuse only</b> in the app. Step 4 shows <code>DESAGUE 4 DE 4</code> and <i>Sin guardar</i>, and Service shows the fill valve off; <code>TERMINADO</code> shows only the litres reused.</li>
+<li><b>START press and hold:</b> a short press shows <code>REUSAR Y GUARDAR</code> and starts on release; held 2 s the screen changes to <code>SOLO REUSAR</code>. Put the label <i>START: pulse = Reusar y guardar · mantenga 2 s = Solo reusar</i> on the panel.</li>
+<li><b>Reuse only:</b> with water in the tank, start a wash with <b>Reuse only</b> in the app (or hold START 2 s). Step 4 shows <code>DESAGUE 4 DE 4</code> and <i>Sin guardar</i>, and Service shows the fill valve off; <code>TERMINADO</code> shows only the litres reused.</li>
 <li><b>Screen font:</b> each of the four styles in Settings → Screen font changes the screen after Save, and long parts stay in the same style; the household’s choice is set before handover (after an upgrade from 3.5 the screen starts in Hyperlegible).</li>
 <li><b>Language:</b> Settings → Language switches the app, the screen and the alerts; the household’s language is set before handover.</li>
 <li><b>Test alert:</b> the app reports <i>Test alert delivered</i> (or the reason it failed).</li>

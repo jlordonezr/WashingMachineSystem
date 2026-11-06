@@ -61,6 +61,7 @@ uint32_t loopMaxLastMinuteMs() { return loopLastMinuteMaxUs / 1000UL; }
 // Patterns are on/off times in ms, ending with 0. Non-blocking.
 const uint16_t BEEP_DONE[]  = { 150, 120, 150, 0 };
 const uint16_t BEEP_ALARM[] = { 500, 250, 500, 250, 500, 0 };
+const uint16_t BEEP_TICK[]  = { 80, 0 };
 static const uint16_t* beepPattern = nullptr;
 static uint8_t         beepStep = 0;
 static unsigned long   beepSince = 0;

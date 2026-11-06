@@ -121,6 +121,9 @@ static void stepWorld(uint32_t dtMs) {
 static void runFor(double seconds) { uint64_t end = simUs + (uint64_t)(seconds * 1e6); while (simUs < end) stepWorld(2); }
 static void pressStart() { startHeldUntil = simUs + 150000; startAt = now(); }
 static void pressStop()  { stopHeldUntil  = simUs + 150000; }
+// Holds START for the given time; the washer program starts when it is released (3.8).
+static void holdStart(double s) { startHeldUntil = simUs + (uint64_t)(s * 1e6); startAt = now() + s; }
+static bool onScreen(const char* t) { for (auto& x : oled.shown) if (x == t) return true; return false; }
 static double stateAt(int st) { for (auto& s : rec.states) if (s.first == st) return s.second; return -1; }
 // True if any screen message had m as one of its pages ("a|b|c").
 static bool sawMsg(const char* m) {
@@ -355,6 +358,43 @@ int main(int argc, char** argv) {
     tankL = 20.0; rec.savedWhileSaving = false;
     pressStart(); runFor(1800);
     CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "START button after a Reuse only cycle did not save (saved %.1f L)", stats.totalSavedL);
+  }
+  else if (sc == "F15") {
+    printf("F15 START on the panel: a short press is Reuse and save, held 2 s Reuse only, held 15 s nothing (3.8)\n");
+    typicalProgram(); boot();                             // the start-up animation is still running
+    // During the start-up animation a press ends it and shows the choice; the release starts the cycle.
+    holdStart(0.5); runFor(0.2);
+    CHECK(onScreen("REUSE AND SAVE"), "a press during the start-up animation does not show REUSE AND SAVE");
+    runFor(1);
+    CHECK(activeState != stIdle, "a short press during the start-up animation did not start the cycle");
+    pressStop(); runFor(6);
+    // Short press: the screen says what a release starts; the cycle starts on release and saves.
+    holdStart(1.0); runFor(0.3);
+    CHECK(onScreen("REUSE AND SAVE") && onScreen("Release to start"), "short press: screen does not show REUSE AND SAVE / Release to start");
+    CHECK(activeState == stIdle, "the cycle started while START was still held");
+    runFor(1.0);
+    SystemStatus snap; getSystemStatus(snap);
+    CHECK(activeState != stIdle && !snap.noSave, "short press did not start Reuse and save (state %d, noSave %d)", activeState, snap.noSave);
+    pressStop(); runFor(1);
+    CHECK(activeState == stIdle, "STOP did not end the cycle");
+    runFor(5);                                             // past the STOPPED notice
+    // Held 2 s: the screen switches to REUSE ONLY at 2 s; the release starts Reuse only.
+    holdStart(3.0); runFor(1.8);
+    CHECK(onScreen("REUSE AND SAVE"), "at 1.8 s the screen should still show REUSE AND SAVE");
+    runFor(0.4);
+    CHECK(onScreen("REUSE ONLY") && onScreen("Release to start"), "at 2.2 s the screen does not show REUSE ONLY / Release to start");
+    CHECK(activeState == stIdle, "the cycle started before START was released");
+    runFor(1.5);
+    getSystemStatus(snap);
+    CHECK(activeState != stIdle && snap.noSave, "START held 3 s did not start Reuse only (state %d, noSave %d)", activeState, snap.noSave);
+    CHECK(eventSeen("Cycle started: reuse only"), "event log has no reuse-only start from the panel");
+    pressStop(); runFor(6);
+    // Held 20 s: stuck; nothing starts, before or after the release.
+    holdStart(20.0); runFor(16);
+    CHECK(onScreen("START BUTTON") && onScreen("Stuck"), "a stuck START is not reported on the screen");
+    runFor(6);
+    CHECK(activeState == stIdle, "a 20 s hold started a cycle (state %d)", activeState);
+    CHECK(eventSeen("START held 15 s: treated as stuck"), "stuck START not in the event log");
   }
   else if (sc == "F12") {
     printf("F12 full cycle in Spanish (factory default language)\n");

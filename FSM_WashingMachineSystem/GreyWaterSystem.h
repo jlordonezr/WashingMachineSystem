@@ -80,6 +80,8 @@ extern volatile uint32_t drainPulseCount;
 #define DEFAULT_WEB_PASSWORD "greywater"  // change on first use (dashboard user: admin)
 #define DEFAULT_OTA_PASSWORD "greywater"  // change on first use
 #define WIFI_SETUP_HOLD_MS 5000  // hold STOP this long while READY to open Wi-Fi setup
+#define START_HOLD_MS 2000       // hold START this long at READY for "Reuse only" (3.8); a shorter press: "Reuse and save"
+#define START_STUCK_MS 15000     // START held this long: treated as stuck, nothing starts
 #define TANK_CHECK_PERIOD 10000  // ms between tank level / water age checks
 #define DEBOUNCE_DELAY 20        // Debounce delay for button presses in milliseconds
 // OLED display
