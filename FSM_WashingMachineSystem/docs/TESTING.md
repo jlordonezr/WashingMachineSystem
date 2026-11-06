@@ -1,4 +1,4 @@
-# Testing – firmware 3.10
+# Testing – firmware 3.11
 
 **Status on 30 Oct 2026:** every automated suite passes and the firmware builds for the Arduino Nano ESP32 with cores 3.0.7 and 2.0.17. 3.0 has run correctly on the installed system. 3.1 adds languages only; 3.2 renames the app, adds the start-up animation and the Helvetica Bold screen font, and moves the buzzer to D1. 3.3 pages the screen messages and makes phone alerts more reliable. Check H10–H13 on the real board.
 
@@ -9,11 +9,12 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | Suite | File | Checks | Covers |
 |---|---|---|---|
 | Flow meter, step gates, pump guard | `tests/test_flow.cpp` | 56 | Flow detection, noise, trickles, wrap-around, "machine is filled" guard, pump cut-off (since 2.4–2.6) |
+| Sign-in tokens | `tests/test_auth.cpp` | 21 | SHA-256 (FIPS 180-2 vectors, one million `a`), HMAC-SHA256 (RFC 4231 cases 1, 2, 6), remember-device tokens: role and remember flag, refused after a password change, a new key, the viewer turned off or any changed character; the cookie header parser (3.11) |
 | Float switches | `tests/test_level.cpp` | 19 | Debouncing towards safety, bobbing float, failed low float, fault timing, wrap-around (3.0) |
 | Phone alerts | `tests/test_ntfy.cpp` | 31 | Topic rules, server address clean-up, JSON body (accents, quotes, `click`), UTF-8-safe cuts, which failures are retried (3.3), retry intervals and the 30 min window (3.3.1) |
 | Screen texts | `tools/check_screen_text.py` | 127 texts and pages | Every screen text, and each page of a paged message, fits the OLED in both languages in Helvetica Bold 12 px, plain ASCII (3.1; font from 3.2; pages from 3.3) |
-| Translations | `tools/i18n_keys.py` | 420 texts | Every app text has a Spanish translation (3.1); notes in `web/es.json` (keys starting with `_`, e.g. `_comment`) are not built into the page |
-| Water history and settings storage | `tests/test_history.cpp` | 46 | Backup copy, unreadable records, migration, restore validation (since 2.8); settings version 7 → 8, the screen font and the minimum save flow (3.4); cycle snapshot and the 3.9 marker (3.10) |
+| Translations | `tools/i18n_keys.py` | 436 texts | Every app text has a Spanish translation (3.1); notes in `web/es.json` (keys starting with `_`, e.g. `_comment`) are not built into the page |
+| Water history and settings storage | `tests/test_history.cpp` | 49 | Backup copy, unreadable records, migration, restore validation (since 2.8); settings version 7 → 8, the screen font and the minimum save flow (3.4); cycle snapshot and the 3.9 marker (3.10); the sign-in key in flash (3.11) |
 | Full-cycle simulation | `tests/sim/` | 18 scenarios | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |
 | Dashboard | `tests/app/test_dashboard.js` | 38 | The real page in headless Chromium against a mock controller; axe-core accessibility on all tabs (3.0) |
 | Build | `arduino-cli compile --fqbn esp32:esp32:nano_nora` | — | 3.2.0: 1,368,305 bytes flash, 95,156 bytes RAM with core 3.3.12 (3.0.0: 1,301,277 / 72,624 with core 3.0.7) |
@@ -54,6 +55,7 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | A12 | Turning the viewer on without a password is refused on the page; with one, `viewerOn=1` and the password are sent (3.5) |
 | A13 | Two start buttons: *Reuse and save* sends `save=1`, *Reuse only* `save=0`; the Reuse only note and *Final drain* (3.7) |
 | A14 | Resume popup (3.10): shown once after a cut, names the step, *Reuse only* and the minutes left; *Not now* keeps a Resume button on the notice; Resume (popup or notice) calls `/api/interrupted/resume`; *Don't resume* dismisses; closes when the offer expires; not shown to the viewer or with *Start from the dashboard* off; Spanish |
+| A15 | Sign-in form (3.11): only the form while the controller answers 401; *Remember this device* on and user `admin` by default; a wrong password is reported; the right one sends `remember=1` and shows the app; *Sign out other devices* sends `all=1` and keeps this device signed in; *Sign out* returns to the form and the badge reads *Signed out* (no Offline) |
 
 ## What the PC tests cannot show
 
@@ -76,6 +78,7 @@ Do these with the washing machine empty and someone at the controller. Note each
 | H6 | Pump cut-off | Step 1 with tank water: when the machine closes its inlet, time the pump | Pump off within about 0.3 s (listen or watch the SSR LED); event *Pump stopped: machine closed its inlet* |
 | H7 | Pump cut-off while the page loads | Repeat H6 while a weak-signal phone reloads the app | Same as H6 |
 | H19 | Resume after a power cut (3.10) | Start a short wash with *Solo reusar*; once the machine has filled in step 1, unplug the controller for 30 s (leave the washer on), plug it in, open the app | Outputs off at power-up; screen `INTERRUMPIDO` › *Reanude en app*; the app shows *¿Reanudar el ciclo interrumpido?* with step 1 and *Solo reusar*. *Reanudar ciclo*: `REANUDADO`, step 1 continues and ends when the washer drains; step 4 sends the rinse to the drain. Repeat and wait 30 min: the popup closes and only *Listo, revisé la lavadora* remains |
+| H20 | Sign in once (3.11) | On a phone: open the app, sign in with *Recordar este dispositivo* on. Close the browser completely (and restart the phone), open the app again. Then, on a second phone, sign in; on the first, Settings → *Cerrar sesión en otros dispositivos* | Asked once only; after the restart the app opens straight to Overview. The second phone shows the sign-in form at its next refresh; the first stays signed in. The browser's own password box never appears |
 | H8 | Manual tank wash | Ready with the low float wet, **Wash tank**, then lift the high float | Wash valve (D0) closes at once; screen `TANK CLEANED`; event *Manual tank wash ended: full* |
 | H10 | Spanish screen (3.1) | Run one wash in Spanish; read every screen | Every text readable, nothing scrolls or is cut off; alerts arrive with accents |
 | H9 | Setup page | Hold STOP 5 s at `READY`; join with the key shown; browse to `/update` | Key works; `/update` is not offered (setup page only) |
@@ -116,6 +119,8 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 | — | 3.9.0 | Hardware H14 (fixed sizes) | Not done yet |
 | 2026-11-06 | 3.10.0 | PC tests, firmware build | All suites pass, simulation F16, F17, unit S6b, C1–C3 included (browser test A14 written, skipped: no Node.js on this Mac; page script syntax-checked); 1,386,013 bytes flash with core 3.3.12 |
 | — | 3.10.0 | Hardware H19 (resume) | Not done yet |
+| 2026-11-06 | 3.11.0 | PC tests, firmware build, headless Chrome | All suites pass, `test_auth` and K1 included (browser test A15 written, skipped: no Node.js on this Mac). Sign-in checked in headless Chrome 6 steps with a persistent profile against a mock controller: form only; wrong password reported; signed in; still signed in after the browser restarted; Sign out; without Remember, signed out after the restart. 1,391,345 bytes flash with core 3.3.12 |
+| — | 3.11.0 | Hardware H20 (sign in once) | Not done yet |
 | 2026-10-30 | 3.1.0 | PC tests | All suites pass (see `tests/test_results.txt`) |
 | — | 3.1.0 | Hardware H10 | Not done yet |
 | 2026-10-30 | 3.0.0 | Jose, installed system | Working as expected |

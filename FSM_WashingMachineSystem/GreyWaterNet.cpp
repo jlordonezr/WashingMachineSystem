@@ -3,6 +3,7 @@
 #include "GreyWaterSettings.h"
 #include "DashboardPage.h"
 #include "Ntfy.h"
+#include "AuthToken.h"
 
 #include <WiFi.h>
 #include <WiFiManager.h>
@@ -12,6 +13,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <time.h>
+#include <esp_random.h>
 
 static WiFiManager wm;
 static WebServer   server(80);
@@ -229,7 +231,17 @@ static void sendError(int code, const char* message) {
 }
 
 // ── Access control ─────────────────────────────────────────────────────────
-// Every page needs a password (HTTP Basic). Two users:
+// Signing in (3.11): the app shows its own sign-in form (user name, password,
+// "Remember this device"). POST /api/login checks them and sets the cookie
+// gwsid, a token signed with a key kept in flash (AuthToken.h). With Remember
+// it lasts 400 days and is renewed every time the app is opened, so a device
+// is asked only once; without it, until the browser closes. Changing a
+// password signs out the devices that used it (not the one that changed it);
+// "Sign out other devices" makes a new key. HTTP Basic is still accepted for
+// tools, but the controller no longer asks the browser for it, so the
+// browser's own password box never appears. The page itself (GET /) is
+// public: it holds no data, every /api/ request needs the sign-in.
+// Two users:
 //  - "admin" (password webPassword): everything.
 //  - "viewer" (password viewerPassword, off while empty): the Overview and
 //    Water use tabs only. It can read the status and the water history, and
@@ -243,6 +255,43 @@ static void sendError(int code, const char* message) {
 // the network can lock the owner out (2.9 locked everyone out).
 enum WebRole { roleNone, roleViewer, roleAdmin };
 static WebRole currentRole = roleNone;   // who sent the request being handled
+static bool currentRemember = true;       // ... signed in with "Remember this device" (or by HTTP Basic)
+
+#define AUTH_COOKIE_MAX_AGE 34560000UL    // 400 days, the longest browsers keep a cookie
+static uint8_t authKey[AUTH_KEY_LEN];
+static bool    authKeyReady = false;
+
+// The key is made at the first sign-in, when Wi-Fi is on: the chip's random
+// number generator is then truly random.
+static void ensureAuthKey() {
+  if (authKeyReady) return;
+  if (!authKeyLoad(authKey)) { esp_fill_random(authKey, sizeof(authKey)); authKeySave(authKey); }
+  authKeyReady = true;
+}
+
+static void sendSessionCookie(const char* token, bool remember) {
+  char c[AUTH_TOKEN_LEN + 80];
+  snprintf(c, sizeof(c), "%s=%s; Path=/; HttpOnly; SameSite=Strict%s", AUTH_COOKIE, token,
+           remember ? "; Max-Age=34560000" : "");
+  server.sendHeader("Set-Cookie", c);
+}
+
+static void issueSession(char role, bool remember) {
+  ensureAuthKey();
+  uint8_t nonce[AUTH_NONCE_LEN];
+  esp_fill_random(nonce, sizeof(nonce));
+  char tok[AUTH_TOKEN_LEN + 1];
+  authMakeToken(authKey, role, remember, nonce, role == 'a' ? cfg.webPassword : cfg.viewerPassword, tok);
+  sendSessionCookie(tok, remember);
+}
+
+// The role of a valid gwsid cookie in this request ('a', 'v' or 0).
+static char cookieRole(char* token, bool* remember) {
+  if (!authKeyReady) return 0;
+  String header = server.header("Cookie");
+  if (!authCookieValue(header.c_str(), token)) return 0;
+  return authCheckToken(authKey, token, cfg.webPassword, cfg.viewerPassword, remember);
+}
 
 struct AuthSlot { uint32_t ip; uint8_t fails; bool locked; unsigned long windowStart, lockStart, lastSeen; };
 static AuthSlot authSlots[AUTH_SLOTS];
@@ -258,9 +307,23 @@ static AuthSlot& authSlotFor(uint32_t ip) {
   return *oldest;
 }
 
+// Counts a wrong password from this device; true if it is now locked.
+static bool countWrongPassword(AuthSlot& a) {
+  if (millis() - a.windowStart > 60000UL) { a.windowStart = millis(); a.fails = 0; }
+  if (++a.fails < 5) return false;
+  a.locked = true; a.lockStart = millis(); a.fails = 0;
+  logEvent("Device %s locked for 1 minute: 5 wrong passwords", server.client().remoteIP().toString().c_str());
+  return true;
+}
+
 // Any signed-in user (admin or viewer). Use for pages the viewer may see.
 static bool authorized() {
   currentRole = roleNone;
+  currentRemember = true;
+  char tok[AUTH_TOKEN_LEN + 1];
+  char r = cookieRole(tok, &currentRemember);
+  if (r) { currentRole = r == 'a' ? roleAdmin : roleViewer; return true; }
+  currentRemember = true;
   uint32_t ip = (uint32_t)server.client().remoteIP();
   AuthSlot& a = authSlotFor(ip);
   a.lastSeen = millis();
@@ -273,18 +336,14 @@ static bool authorized() {
   if (cfg.viewerPassword[0] && server.authenticate(WEB_VIEWER_USER, cfg.viewerPassword)) {
     a.fails = 0; currentRole = roleViewer; return true;
   }
-  if (server.hasHeader("Authorization")) {                // a password was given, and it was wrong
-    if (millis() - a.windowStart > 60000UL) { a.windowStart = millis(); a.fails = 0; }
-    if (++a.fails >= 5) {
-      a.locked = true; a.lockStart = millis(); a.fails = 0;
-      logEvent("Device %s locked for 1 minute: 5 wrong passwords", server.client().remoteIP().toString().c_str());
-      sendError(429, "Too many wrong passwords from this device. Wait one minute and try again.");
-      return false;
-    }
+  if (server.hasHeader("Authorization") && countWrongPassword(a)) {   // a password was given, and it was wrong
+    sendError(429, "Too many wrong passwords from this device. Wait one minute and try again.");
+    return false;
   }
-  server.requestAuthentication(BASIC_AUTH, "Reuse Water System");
+  sendError(401, "Sign in to continue.");   // no WWW-Authenticate: the app shows its own sign-in form
   return false;
 }
+
 
 // Admin only: settings, the event log and every action.
 static bool adminOnly() {
@@ -304,7 +363,12 @@ static bool actionAllowed() {
 
 // ── Web handlers ───────────────────────────────────────────────────────────
 static void handleRoot() {
-  if (!authorized()) return;
+  // Public (3.11): the page holds no data, and shows the sign-in form until
+  // /api/status answers. A remembered device gets its cookie renewed here,
+  // so it is never asked again while the app is opened at least once in 400 days.
+  char tok[AUTH_TOKEN_LEN + 1];
+  bool remember = false;
+  if (cookieRole(tok, &remember) && remember) sendSessionCookie(tok, true);
   // Sent compressed (about 21 KB instead of 77 KB): every browser unpacks it.
   // Less data means less time inside handleClient(), which runs in loop().
   server.sendHeader("Cache-Control", "no-store");
@@ -512,7 +576,10 @@ static void handleSettingsPost() {
     ArduinoOTA.setPassword(cfg.otaPassword);
     logEvent("Update password changed");
   }
-  if (webChanged) logEvent("App password changed");
+  if (webChanged) {
+    logEvent("App password changed");
+    issueSession('a', currentRemember);   // this device stays signed in; the others sign in again
+  }
   if (viewerChanged) logEvent(next.viewerPassword[0] ? "Viewer user password set" : "Viewer user turned off");
   sendSettings();
 }
@@ -610,6 +677,54 @@ static void handleResume() {
   if (!actionAllowed()) return;
   if (!cfg.allowRemoteStart) { sendError(403, "Starting from the dashboard is turned off in Settings."); return; }
   if (!requestResume()) { sendError(409, "The cycle can no longer be resumed."); return; }
+  sendJson(200, "{\"ok\":true}");
+}
+
+// Sign in (3.11): user, password, remember (1 = keep this device signed in).
+// The X-GW header stops other websites from signing a browser in.
+static void handleLogin() {
+  if (server.header("X-GW") != "1") { sendError(403, "Request blocked: use the dashboard page."); return; }
+  AuthSlot& a = authSlotFor((uint32_t)server.client().remoteIP());
+  a.lastSeen = millis();
+  if (a.locked && millis() - a.lockStart < 60000UL) {
+    sendError(429, "Too many wrong passwords from this device. Wait one minute and try again.");
+    return;
+  }
+  a.locked = false;
+  String user = server.arg("user");
+  user.trim();
+  user.toLowerCase();
+  String pw = server.arg("password");
+  char role = 0;
+  if (user == WEB_USER && pw == cfg.webPassword) role = 'a';
+  else if (cfg.viewerPassword[0] && user == WEB_VIEWER_USER && pw == cfg.viewerPassword) role = 'v';
+  if (!role) {
+    if (countWrongPassword(a)) sendError(429, "Too many wrong passwords from this device. Wait one minute and try again.");
+    else sendError(401, "Wrong user name or password.");
+    return;
+  }
+  a.fails = 0;
+  bool remember = server.arg("remember") != "0";
+  issueSession(role, remember);
+  logEvent("Signed in: %s%s", role == 'a' ? "admin" : "viewer", remember ? ", device remembered" : "");
+  sendJson(200, role == 'a' ? "{\"ok\":true,\"role\":\"admin\"}" : "{\"ok\":true,\"role\":\"viewer\"}");
+}
+
+// Sign out this device; all=1 (admin): sign out every other device too, with a
+// new key, and keep this one signed in.
+static void handleLogout() {
+  if (server.header("X-GW") != "1") { sendError(403, "Request blocked: use the dashboard page."); return; }
+  if (server.arg("all") == "1") {
+    if (!adminOnly()) return;
+    esp_fill_random(authKey, sizeof(authKey));
+    authKeySave(authKey);
+    authKeyReady = true;
+    issueSession('a', currentRemember);
+    logEvent("Other devices signed out (new sign-in key)");
+    sendJson(200, "{\"ok\":true}");
+    return;
+  }
+  server.sendHeader("Set-Cookie", AUTH_COOKIE "=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
   sendJson(200, "{\"ok\":true}");
 }
 
@@ -718,8 +833,9 @@ void netBegin() {
   resultQueue = xQueueCreate(6, sizeof(NotifyResult));
   xTaskCreatePinnedToCore(notifyTask, "notify", 12288, nullptr, 1, nullptr, 0);
 
-  static const char* headerKeys[] = { "X-GW" };
-  server.collectHeaders(headerKeys, 1);
+  static const char* headerKeys[] = { "X-GW", "Cookie" };
+  server.collectHeaders(headerKeys, 2);
+  authKeyReady = authKeyLoad(authKey);   // none yet: made at the first sign-in
   server.on("/",                HTTP_GET,  handleRoot);
   server.on("/api/status",      HTTP_GET,  handleStatus);
   server.on("/api/settings",    HTTP_GET,  handleSettingsGet);
@@ -729,6 +845,8 @@ void netBegin() {
   server.on("/api/events",      HTTP_GET,  handleEvents);
   server.on("/api/interrupted/dismiss", HTTP_POST, handleDismissInterrupted);
   server.on("/api/interrupted/resume",  HTTP_POST, handleResume);
+  server.on("/api/login",       HTTP_POST, handleLogin);
+  server.on("/api/logout",      HTTP_POST, handleLogout);
   server.on("/api/history/restore", HTTP_POST, handleHistoryRestore);
   server.on("/api/start",       HTTP_POST, handleStart);
   server.on("/api/wash",        HTTP_POST, handleWashStart);

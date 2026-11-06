@@ -191,6 +191,12 @@ ol.events time{color:var(--muted);font-variant-numeric:tabular-nums}
 .topic-tools p{margin:0}
 select{width:100%;font:inherit;padding:10px 12px;border:0;background:none;color:var(--ink)}
 .pw-row{display:grid;gap:6px;margin:0 0 14px;font-weight:500}
+/* Sign-in form (3.11) */
+body.signedout nav.tabs,body.signedout .view,body.signedout #btnRefresh,body.signedout #btnSignOut{display:none!important}
+.login{max-width:420px;margin:24px auto}
+.login .remember{display:flex;align-items:center;gap:10px;margin:0 0 6px;font-weight:500}
+.login .remember input{width:20px;height:20px;margin:0;accent-color:var(--primary)}
+.login small{display:block;margin:0 0 16px;color:var(--muted)}
 .pw-row input{font:inherit;padding:10px 12px;border:1px solid var(--line-strong);border-radius:var(--r-ctl);background:var(--surface);color:var(--ink)}
 
 /* KPIs */
@@ -284,6 +290,9 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span id="refreshText">Refresh</span>
     </button>
+    <button type="button" class="refresh" id="btnSignOut" aria-label="Sign out" title="Sign out">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11l3-3-3-3M13.5 8H6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
   </div>
   <div id="announce" class="sr-only" aria-live="polite"></div>
   <div id="announceAlert" class="sr-only" role="alert"></div>
@@ -296,6 +305,17 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
 </header>
 
 <main>
+  <section class="panel login" id="loginView" aria-labelledby="h-login" hidden>
+    <h2 id="h-login">Sign in</h2>
+    <form id="loginForm" novalidate>
+      <label class="pw-row" for="lgUser">User name<input type="text" id="lgUser" name="user" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="16" value="admin"></label>
+      <label class="pw-row" for="lgPass">Password<input type="password" id="lgPass" name="password" autocomplete="current-password" maxlength="32"></label>
+      <label class="remember" for="lgRemember"><input type="checkbox" id="lgRemember" aria-describedby="h-remember" checked>Remember this device</label>
+      <small id="h-remember">This phone or computer stays signed in, so you are not asked again. Leave it off on a shared computer.</small>
+      <p class="ferr" id="lgErr" role="alert" hidden></p>
+      <div class="actions"><button type="submit" class="btn primary" id="lgBtn">Sign in</button></div>
+    </form>
+  </section>
   <div class="view" id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
     <section class="panel intr" id="intrPanel" aria-labelledby="h-intr" hidden>
       <h2 id="h-intr">The last cycle was interrupted</h2>
@@ -590,6 +610,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           <span class="switch"><input type="checkbox" id="f-viewerOn" aria-describedby="h-viewerOn" name="viewerOn" role="switch"><i></i></span></div>
         <div class="field wide-in"><span><label for="f-viewerPassword">New viewer password</label><small id="h-viewerPassword">8 to 32 characters, not the dashboard password. Leave empty to keep the current one.</small></span>
           <span class="inp"><input id="f-viewerPassword" aria-describedby="h-viewerPassword e-viewerPassword" type="password" name="viewerPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-viewerPassword" hidden></p></div>
+        <div class="field"><span><span id="l-signOutAll">Signed-in devices</span><small id="h-signOutAll">Devices that chose Remember this device stay signed in. Sign out all the others, for example after losing a phone. A new dashboard password also signs them out.</small></span>
+          <span><button type="button" class="btn" id="btnSignOutAll" aria-describedby="l-signOutAll h-signOutAll">Sign out other devices</button></span></div>
       </fieldset>
       <div class="actions">
         <button type="submit" class="btn primary" id="btnSave">Save settings</button>
@@ -605,7 +627,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
 
 <dialog id="pwDlg" aria-labelledby="pwTitle">
   <h3 id="pwTitle">Choose new passwords</h3>
-  <p>The controller still uses the default password, which anyone on your Wi-Fi could guess. Choose two new passwords of 8 to 32 characters. Your browser will then ask you to sign in again with the new dashboard password.</p>
+  <p>The controller still uses the default password, which anyone on your Wi-Fi could guess. Choose two new passwords of 8 to 32 characters. This device stays signed in; other devices sign in again with the new dashboard password.</p>
   <form id="pwForm" novalidate>
     <label class="pw-row" for="pwWeb">New dashboard password<input type="password" id="pwWeb" autocomplete="new-password" maxlength="32"></label>
     <label class="pw-row" for="pwOta">New firmware update password<input type="password" id="pwOta" autocomplete="new-password" maxlength="32"></label>
@@ -718,7 +740,13 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     var ctrl=opts.controller||new AbortController(),timer=setTimeout(function(){ctrl.abort()},opts.timeoutMs||8000);
     opts.signal=ctrl.signal;delete opts.controller;delete opts.timeoutMs;
     return fetch(path,opts).then(function(r){
-      return r.json().catch(function(){return {}}).then(function(j){if(!r.ok)throw new Error(j.error?t(j.error):t('Request failed ({0})',r.status));return j});
+      return r.json().catch(function(){return {}}).then(function(j){
+        if(!r.ok){
+          if(r.status===401&&path!=='/api/login')showLogin();   // not signed in, or signed out from another device (3.11)
+          var err=new Error(j.error?t(j.error):t('Request failed ({0})',r.status));err.status=r.status;throw err;
+        }
+        return j;
+      });
     },function(e){
       if(e&&e.name==='AbortError')throw new Error(t('The controller took too long to answer. Try Refresh.'));
       throw new Error(t('Can\u2019t reach the controller. Check that this device is on the home Wi-Fi.'));
@@ -1147,13 +1175,14 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       if(manual)announce(t('Screen updated'));
     }).catch(function(e){
       if(pollCtrl!==ctrl)return;                      // replaced by a newer request
+      if(e.status===401)return;                       // the sign-in form is shown
       if(manual)toast(e.message,true);
       if(++failures>=2&&!offline){offline=true;$('conn').className='badge off';connShown='Offline';$('connText').textContent=t('Offline');
         announce(t('Connection to the controller lost'),true);
         $('foot').textContent=t('Can\u2019t reach the controller. Check that this device is on the home Wi-Fi.');}
     }).finally(function(){
       if(pollCtrl!==ctrl)return;
-      pollCtrl=null;setRefreshing(false);pollTimer=setTimeout(poll,2000);
+      pollCtrl=null;setRefreshing(false);if(!signedOut)pollTimer=setTimeout(poll,2000);
     });
   }
   $('btnRefresh').addEventListener('click',function(){
@@ -1174,7 +1203,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     if(alertWait&&now-alertWait.since>ALERT_WAIT_MS){
       toast(t('No answer from the alert server yet. Recent events on the Service tab will show the result.'),true);alertWait=null;
     }
-    if(offline||!lastOk)return;
+    if(offline||!lastOk||signedOut)return;
     if(Date.now()-lastOk>6000&&connShown!=='Updating slowly'){
       $('conn').className='badge slow';connShown='Updating slowly';$('connText').textContent=t('Updating slowly');
     }
@@ -1261,7 +1290,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     err.hidden=true;
     var body=new URLSearchParams();body.append('webPassword',w);body.append('otaPassword',o);
     api('/api/settings',{method:'POST',body:body}).then(function(){
-      $('pwDlg').close();toast(t('Passwords saved. Your browser will ask you to sign in with the new password.'));
+      $('pwDlg').close();toast(t('Passwords saved. Other devices sign in again with the new password.'));
     }).catch(function(e2){err.textContent=e2.message;err.hidden=false;});
   });
   $('btnUpload').addEventListener('click',function(){$('fileHistory').click()});
@@ -1380,6 +1409,47 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     ask(t('Restart the controller?'),t('The dashboard reconnects in about 20 seconds. Restarting is only possible while no cycle is running.'),t('Restart')).then(function(ok){
       if(!ok)return;
       api('/api/restart',{method:'POST'}).then(function(){toast(t('Restarting'))}).catch(function(e){toast(e.message,true)});
+    });
+  });
+
+  // Sign-in (3.11): the controller answers 401 until this device signs in.
+  // With "Remember this device" it keeps the device signed in for 400 days,
+  // renewed each time the app is opened, so the form appears only once.
+  var signedOut=false;
+  function showLogin(){
+    if(signedOut)return;
+    signedOut=true;clearTimeout(pollTimer);
+    ['resumeDlg','pwDlg','dlg'].forEach(function(id){var d=$(id);if(d.open)d.close()});
+    document.body.classList.add('signedout');$('loginView').hidden=false;
+    $('conn').className='badge';connShown='Signed out';$('connText').textContent=t('Signed out');
+    $('foot').textContent='';
+    var u=$('lgUser'),p=$('lgPass');p.value='';
+    setTimeout(function(){(u.value?p:u).focus()},0);
+  }
+  function hideLogin(){
+    signedOut=false;document.body.classList.remove('signedout');$('loginView').hidden=true;$('lgErr').hidden=true;
+    last=null;pwAsked=false;resumeAsked='';
+  }
+  $('loginForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var err=$('lgErr'),user=$('lgUser').value.trim(),pw=$('lgPass').value,btn=$('lgBtn');
+    if(!user||!pw){err.textContent=t('Enter the user name and the password.');err.hidden=false;return;}
+    if(isDis(btn))return;
+    var body=new URLSearchParams();body.append('user',user);body.append('password',pw);body.append('remember',$('lgRemember').checked?'1':'0');
+    setDis(btn,true);err.hidden=true;
+    api('/api/login',{method:'POST',body:body}).then(function(){
+      hideLogin();$('lgPass').value='';connShown='';poll();
+    }).catch(function(e2){err.textContent=e2.message;err.hidden=false;$('lgPass').select();})
+      .finally(function(){setDis(btn,false)});
+  });
+  $('btnSignOut').addEventListener('click',function(){
+    api('/api/logout',{method:'POST'}).then(function(){showLogin();toast(t('Signed out'))}).catch(function(e){toast(e.message,true)});
+  });
+  $('btnSignOutAll').addEventListener('click',function(){
+    ask(t('Sign out other devices?'),t('Every other phone and computer must sign in again with the password. This device stays signed in.'),t('Sign out other devices')).then(function(ok){
+      if(!ok)return;
+      var body=new URLSearchParams();body.append('all','1');
+      api('/api/logout',{method:'POST',body:body}).then(function(){toast(t('Other devices signed out'))}).catch(function(e){toast(e.message,true)});
     });
   });
 

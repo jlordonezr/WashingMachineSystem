@@ -133,6 +133,14 @@ int main(){
     CycleSnapshot r; CHECK(cycleSnapLoad(r)==snapStepOnly && r.state==0 && r.reusedL==0, "other snapshot version not read as step only");
     st["cyc"].resize(5); CHECK(cycleSnapLoad(r)==snapStepOnly, "damaged snapshot not reported"); }
 
+  printf("K1 sign-in key: none at first, then kept in flash across restarts (3.11)\n");
+  st.clear(); boot();
+  { uint8_t k[32], r[32]; CHECK(!authKeyLoad(k), "a key reported before one was saved");
+    for (int i = 0; i < 32; ++i) k[i] = (uint8_t)(i * 13 + 5);
+    authKeySave(k); boot();
+    CHECK(authKeyLoad(r) && memcmp(k, r, 32) == 0, "sign-in key not kept in flash");
+    st["authkey"].resize(16); CHECK(!authKeyLoad(r), "a damaged key was used"); }
+
   printf("\n%d checks passed, %d failed\n", pass, fail);
   return fail?1:0;
 }

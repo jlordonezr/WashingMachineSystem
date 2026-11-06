@@ -1,4 +1,4 @@
-# Architecture – firmware 3.10
+# Architecture – firmware 3.11
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -105,4 +105,4 @@ events ─► notify() ─► queue ─► alert task ─► ntfy ─► result 
 
 ## Storage
 
-NVS namespace `greywater`: `cfg` (Settings v7 from 3.1, adds `language`), `stats` and `stats_bak` (WaterStats v3), `stats_keep` (an unreadable record kept aside), `cyc` (cycle snapshot from 3.10: `CycleSnapshot`, 24 bytes, version `CYCLE_SNAP_VERSION`; written at Start, at each step and when the machine has filled in step 1 or 3, removed when the cycle ends; read and removed by `bootChecks()` at power-up. The 8-byte marker of 2.9–3.9 is still recognised: reported, not resumable). Settings v6 (3.0) is upgraded to v7 at start-up; history is unchanged.
+NVS namespace `greywater`: `cfg` (Settings v7 from 3.1, adds `language`), `stats` and `stats_bak` (WaterStats v3), `stats_keep` (an unreadable record kept aside), `cyc` (cycle snapshot from 3.10: `CycleSnapshot`, 24 bytes, version `CYCLE_SNAP_VERSION`; written at Start, at each step and when the machine has filled in step 1 or 3, removed when the cycle ends; read and removed by `bootChecks()` at power-up. The 8-byte marker of 2.9–3.9 is still recognised: reported, not resumable), `authkey` (3.11: 32 random bytes that sign the `gwsid` sign-in cookies, see `AuthToken.h`; made at the first sign-in, replaced by *Sign out other devices*). Settings v6 (3.0) is upgraded to v7 at start-up; history is unchanged.

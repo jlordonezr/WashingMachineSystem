@@ -1,4 +1,22 @@
-# Reuse Water System – Firmware 3.10 (Wi-Fi)
+# Reuse Water System – Firmware 3.11 (Wi-Fi)
+
+## What's new in 3.11: sign in once on each device
+
+Until 3.10 the browser asked for the user name and password every time it was opened again (HTTP Basic: browsers forget it when they close). From 3.11 the app has its **own sign-in form** and the controller **remembers the device**.
+
+- **Sign-in form** (*Iniciar sesión*): user name (`admin` filled in), password, and **Remember this device** (*Recordar este dispositivo*), on by default. The browser's own password box no longer appears.
+- **Remembered for 400 days, renewed at every visit**: the controller sets the cookie `gwsid` (`HttpOnly`, `SameSite=Strict`, `Max-Age` 400 days, the longest browsers allow) and renews it each time the app is opened. A device used at least once a year is never asked again. Without *Remember*, the cookie ends when the browser closes.
+- **The cookie is a signed token, not the password** (`AuthToken.h`): role, remember flag and a random number, signed with HMAC-SHA256 using a random 32-byte key kept in flash (`authkey`, made at the first sign-in). The signature also covers the role's password, so:
+  - **changing the dashboard password signs out every other device** (the device that changed it stays signed in); changing the viewer password signs out the viewers;
+  - **Settings → Security → Sign out other devices** (*Cerrar sesión en otros dispositivos*) makes a new key: every other device must sign in again. Use it after losing a phone.
+  - Nothing is stored per device: no table to fill up, no flash write at sign-in.
+- **Sign out** button (door icon, top bar) for admin and viewer.
+- **The page `/` is public**; it holds no data. Every `/api/` request still needs the sign-in and answers `401` *Sign in to continue.* without one. The lockout after 5 wrong passwords per device and minute also covers the form. HTTP Basic is still accepted for tools (curl), but never asked for.
+- Each address is a separate site for the browser: sign in once at `reusewater.local` and once at the IP address if both are used.
+- New endpoints: `POST /api/login`, `POST /api/logout` (`all=1`: sign out other devices). Event log: *Signed in: admin, device remembered*, *Other devices signed out (new sign-in key)*.
+- Tests: unit `tests/test_auth.cpp` (SHA-256 and HMAC test vectors from FIPS 180-2 and RFC 4231, tokens, cookie), K1 (key in flash), dashboard A15 (form, wrong password, remember, sign out). Checked in headless Chrome with a persistent profile: still signed in after the browser is closed and opened again; signed out after Sign out; a sign-in without Remember ends with the browser.
+- Build: 1.39 MB flash (44%) with Espressif core 3.3.12.
+
 
 ## What's new in 3.10: resume a cycle cut short, from the app
 
@@ -258,7 +276,7 @@ In 2.9 every valve and pump decision ran in `loop()`, together with the web serv
 ### Known limitations and pending
 
 - 3.1's Spanish texts have been checked in the simulation, the browser tests and the screen-width check; check them once on the real screen.
-- The dashboard still uses HTTP Basic over plain HTTP; keep it on the home network. Passwords are stored unencrypted in flash.
+- The dashboard still uses HTTP Basic over plain HTTP; keep it on the home network. Passwords are stored unencrypted in flash. (3.11: a sign-in form and a remembered-device cookie replace the Basic prompt; still plain HTTP.)
 - `/restart` on the Wi-Fi setup page remains (WiFiManager); the interrupted-cycle check covers a restart mid-cycle.
 - Firmware alone cannot remove the last 0.3 s of pump dead-heading; a pressure switch or bypass is still recommended (unchanged since 2.5).
 - The Spanish wording was written for Colombian usage (usted) but has not been reviewed by the household yet; changes go in `web/es.json` and the `TR`/`TRS` pairs.
@@ -583,11 +601,13 @@ In the Arduino IDE, choose **Tools > Port > reusewater at <IP>** (network port),
 
 ## Dashboard API
 
-All pages need a password (HTTP Basic). User `admin` (the dashboard password) can use everything. User `viewer` (3.5, only when a viewer password is set in Settings) can use only `/`, `/api/status` and `/api/history` (without settings); everything else answers `403`. Actions (`POST`) also need the header `X-GW: 1`, which blocks other websites from pressing buttons with the remembered password.
+Every `/api/` request needs a sign-in: the `gwsid` cookie from `POST /api/login` (3.11), or HTTP Basic for tools. The page `/` itself is public (3.11). User `admin` (the dashboard password) can use everything. User `viewer` (3.5, only when a viewer password is set in Settings) can use only `/`, `/api/status` and `/api/history` (without settings); everything else answers `403`. Actions (`POST`) also need the header `X-GW: 1`, which blocks other websites from pressing buttons with the remembered password.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/` | Dashboard page |
+| GET | `/` | Dashboard page (public from 3.11; renews a remembered sign-in) |
+| POST | `/api/login` | Sign in: `user`, `password`, `remember` (`1` keep this device signed in for 400 days, `0` until the browser closes); sets the `gwsid` cookie (3.11) |
+| POST | `/api/logout` | Sign out this device; `all=1` (admin): sign out every other device with a new key, this one stays signed in (3.11) |
 | GET | `/api/status` | Live status and statistics (JSON) |
 | GET | `/api/settings` | Current settings (JSON, passwords not included) |
 | POST | `/api/settings` | Save settings (form fields, same names as the GET response, plus `webPassword`, `otaPassword`, `viewerPassword`) |

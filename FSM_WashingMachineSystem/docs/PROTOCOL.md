@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.10
+# Communication protocol – firmware 3.11
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -7,7 +7,8 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 | Item | Rule |
 |---|---|
 | Address | `http://reusewater.local` (mDNS) or the IP shown on the screen |
-| Authentication | HTTP Basic. User `admin` with the dashboard password (8–32 characters): everything. User `viewer` with the viewer password (3.5; off while none is set): only `GET /`, `GET /api/status` and `GET /api/history` (without `settings`); every other request answers `403` *The viewer user can only look. Sign in as admin to make changes.* |
+| Sign-in (3.11) | `POST /api/login` sets the cookie `gwsid` (`HttpOnly; SameSite=Strict`, `Max-Age=34560000` = 400 days with `remember=1`, a browser-session cookie with `remember=0`). Its value is `<role a/v><remember 1/0><16 hex nonce>.<32 hex HMAC>`, signed with HMAC-SHA256 under the 32-byte key `authkey` in flash; the signature covers the role's password (`AuthToken.h`). A password change invalidates that role's cookies; `POST /api/logout` with `all=1` makes a new key. `GET /` renews a remembered cookie. Without a valid cookie or Basic header, `/api/*` answers `401` `Sign in to continue.` **without** `WWW-Authenticate`, so browsers do not show their own password box; `GET /` is public |
+| Authentication | HTTP Basic (still accepted, for tools). User `admin` with the dashboard password (8–32 characters): everything. User `viewer` with the viewer password (3.5; off while none is set): only `GET /`, `GET /api/status` and `GET /api/history` (without `settings`); every other request answers `403` *The viewer user can only look. Sign in as admin to make changes.* |
 | Wrong passwords | 5 within a minute from one IP address → that address gets `429` for 1 minute (per device from 3.0) |
 | Actions | Every `POST` also needs the header `X-GW: 1`, else `403`. Other websites cannot send it, so they cannot press buttons with a remembered password |
 | Caching | All API replies carry `Cache-Control: no-store` |
@@ -32,6 +33,8 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 | POST | `/api/history/restore` | history fields, `force=1` to replace | `{"ok":true}` | 400 (invalid), 409 (history exists) |
 | GET | `/api/events` | — | array of `{epoch, uptimeS, text}`, newest first, up to 50 | 403 (viewer) |
 | POST | `/api/interrupted/dismiss` | — | `{"ok":true}` | — |
+| POST | `/api/login` | `user`, `password`, `remember` (`1`/`0`, default `1`); needs `X-GW: 1` | `{"ok":true,"role":"admin"}` or `viewer`, plus `Set-Cookie` (3.11) | 401 `Wrong user name or password.`, 403 (no `X-GW`), 429 (5 wrong in a minute from this device) |
+| POST | `/api/logout` | optional `all=1` (admin only): sign out every other device; needs `X-GW: 1` | `{"ok":true}`; clears the cookie, or with `all=1` sends a new one for this device (3.11) | 401/403 (`all=1` without admin) |
 | POST | `/api/interrupted/resume` | — | `{"ok":true}` = request accepted; the cycle continues at the start of the saved step on the next `loop()` pass (3.10) | 403 (*Start from the dashboard* off, or viewer), 409 `The cycle can no longer be resumed.` (no complete snapshot, more than 30 min after power-up, snapshot over 4 h old, not Ready, tank wash running, dismissed, or a cycle started) |
 
 Errors are JSON: `{"error":"<sentence for the user>"}`, always in English; the app translates them (`web/es.json`). Settings values outside their ranges are clamped (README, *Settings*), not refused, except the rules that return 400.

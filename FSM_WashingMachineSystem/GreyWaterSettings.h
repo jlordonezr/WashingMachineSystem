@@ -137,6 +137,10 @@ void     cycleMarkEnd();                 // removes the snapshot
 // snapFull: s is complete. snapStepOnly: a marker from firmware 3.9 or older, or
 // another snapshot version: only s.state and s.epoch are set (0 if unknown).
 CycleSnapFound cycleSnapLoad(CycleSnapshot& s);
+// Key that signs the "remember this device" cookies (3.11, AuthToken.h). Kept
+// in flash ("authkey"); a new key signs every device out.
+bool     authKeyLoad(uint8_t key[32]);      // false if none is stored yet
+void     authKeySave(const uint8_t key[32]);
 bool     timeIsValid();                  // true once NTP has set the clock
 uint32_t currentMonthKey();              // YYYYMM, or 0 if the clock is not set
 

@@ -39,9 +39,21 @@ let settings = { language: 'en', buzzerOn: false, minFillLitres: 3, saveMinLpm: 
     ntfyServer: 'https://ntfy.sh', ntfyTopic: 'x', screenFont: 0, screenFontCount: 4, timeZone: '<-05>5' };
 let lastSettingsPost = null;
 let resumeCalls = 0, dismissCalls = 0;
+let signedIn = true, lastLoginBody = null, logoutBodies = [];   // sign-in (3.11)
 const server = http.createServer((req, res) => {
   const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
   if (req.url === '/' ) { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(PAGE); }
+  if (req.url === '/api/login') {
+    let body = ''; req.on('data', c => body += c);
+    return req.on('end', () => { lastLoginBody = new URLSearchParams(body);
+      if (lastLoginBody.get('user') === 'admin' && lastLoginBody.get('password') === 'right-pass') { signedIn = true; return json(200, { ok: true, role: 'admin' }); }
+      json(401, { error: 'Wrong user name or password.' }); });
+  }
+  if (req.url === '/api/logout') {
+    let body = ''; req.on('data', c => body += c);
+    return req.on('end', () => { const b = new URLSearchParams(body); logoutBodies.push(b); if (b.get('all') !== '1') signedIn = false; json(200, { ok: true }); });
+  }
+  if (req.url.startsWith('/api/') && !signedIn) return json(401, { error: 'Sign in to continue.' });
   if (req.url === '/api/status') return json(200, status);
   if (req.url === '/api/events') return json(200, []);
   if (req.url === '/api/settings' && req.method === 'POST') {
@@ -309,6 +321,32 @@ async function fresh(browser, base) {
       'A14 popup not in Spanish');
     await ctx.close();
     settings.language = 'en'; status = baseStatus();
+  }
+
+  // A15 Sign-in form (3.11): shown when the controller answers 401, nothing else visible;
+  // a wrong password shows the error; the right one sends remember=1 and shows the app;
+  // Sign out returns to the form; Sign out other devices sends all=1 and keeps the app.
+  {
+    status = baseStatus(); signedIn = false; lastLoginBody = null; logoutBodies = [];
+    const { ctx, page } = await fresh(browser, base);
+    check(await page.isVisible('#loginView') && !(await page.isVisible('#view-overview')) && !(await page.isVisible('#tab-overview')),
+      'A15 sign-in form not shown, or the app visible, while signed out');
+    check(await page.isChecked('#lgRemember') && (await page.inputValue('#lgUser')) === 'admin', 'A15 Remember not on by default, or user not admin');
+    await page.fill('#lgPass', 'wrong'); await page.click('#lgBtn'); await tick(page, 500);
+    check((await page.innerText('#lgErr')).includes('Wrong user name or password') && await page.isVisible('#loginView'), 'A15 wrong password not reported');
+    await page.fill('#lgPass', 'right-pass'); await page.click('#lgBtn'); await tick(page, 2500);
+    check(lastLoginBody && lastLoginBody.get('remember') === '1', 'A15 Remember this device not sent');
+    check(!(await page.isVisible('#loginView')) && await page.isVisible('#view-overview'), 'A15 app not shown after signing in');
+    await page.click('#tab-settings'); await tick(page, 500);
+    await page.click('#btnSignOutAll'); await page.click('#dlgOk'); await tick(page, 500);
+    check(logoutBodies.length === 1 && logoutBodies[0].get('all') === '1' && signedIn && !(await page.isVisible('#loginView')),
+      'A15 Sign out other devices did not send all=1, or signed this device out');
+    await page.click('#btnSignOut'); await tick(page, 500);
+    check(!signedIn && await page.isVisible('#loginView') && !(await page.isVisible('#view-settings')), 'A15 Sign out did not return to the form');
+    await tick(page, 5000);
+    check((await page.innerText('#connText')).includes('Signed out'), 'A15 badge not Signed out (or polling marked it offline)');
+    await ctx.close();
+    signedIn = true; status = baseStatus();
   }
 
   // A7 Accessibility (axe-core, if installed): no violations on any tab, normal and fault states.

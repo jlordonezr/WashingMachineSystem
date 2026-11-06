@@ -17,8 +17,8 @@
 <table>
 <thead><tr><th>Item</th><th>Detail</th></tr></thead>
 <tr><td>Document</td><td>Reuse Water System – Runbook</td></tr>
-<tr><td>Version</td><td>3.10</td></tr>
-<tr><td>Applies to firmware</td><td><code>FSM_WashingMachineSystem.ino</code> and the <code>GreyWater*</code> files, firmware 3.10 (3.10: a cycle cut short by a power cut can be resumed from the app; 3.9: one fixed letter size per screen font for every message; 3.8: hold START 2 s on the panel for Reuse only, the cycle starts on release; 3.7: app buttons Reuse and save, Reuse only (rinse water to the drain) and Stop cycle; 3.6: four new screen fonts chosen by the household, the earlier ones removed; 3.5: view-only user <code>viewer</code> that sees only Overview and Water use; 3.4.1: shorter screen messages, full screen brightness; 3.4: minimum flow to save, screen font chosen in Settings; 3.3.1: alerts tried again for 30 min during an outage; 3.3: screen messages in short pages that explain what is happening and what to do, minutes left, more reliable phone alerts; 3.2: new name Reuse Water System, start-up animation, Helvetica Bold screen font, larger tank icon, buzzer on D1; 3.1: Spanish and English, chosen in Settings; 3.0: safety task, float-switch rules, code split into modules)</td></tr>
+<tr><td>Version</td><td>3.11</td></tr>
+<tr><td>Applies to firmware</td><td><code>FSM_WashingMachineSystem.ino</code> and the <code>GreyWater*</code> files, firmware 3.11 (3.11: the app asks for the password once per device, with Remember this device; 3.10: a cycle cut short by a power cut can be resumed from the app; 3.9: one fixed letter size per screen font for every message; 3.8: hold START 2 s on the panel for Reuse only, the cycle starts on release; 3.7: app buttons Reuse and save, Reuse only (rinse water to the drain) and Stop cycle; 3.6: four new screen fonts chosen by the household, the earlier ones removed; 3.5: view-only user <code>viewer</code> that sees only Overview and Water use; 3.4.1: shorter screen messages, full screen brightness; 3.4: minimum flow to save, screen font chosen in Settings; 3.3.1: alerts tried again for 30 min during an outage; 3.3: screen messages in short pages that explain what is happening and what to do, minutes left, more reliable phone alerts; 3.2: new name Reuse Water System, start-up animation, Helvetica Bold screen font, larger tank icon, buzzer on D1; 3.1: Spanish and English, chosen in Settings; 3.0: safety task, float-switch rules, code split into modules)</td></tr>
 <tr><td>Intended audience</td><td>Installers, operators and maintenance personnel</td></tr>
 <tr><td>Related documents</td><td><code>README.md</code> (firmware change summary); Reuse Water System – Quick Card</td></tr>
 </table>
@@ -554,7 +554,7 @@
 <li>On a phone, join the Wi-Fi network <b>ReuseWater-Setup</b> with that key. Only if the screen is missing or broken is the key the old shared password <code>greywater</code>.</li>
 <li>A setup page opens (otherwise browse to <code>192.168.4.1</code>). Choose the home network and enter its password.</li>
 <li>The screen shows the controller's IP address for 6 seconds.</li>
-<li>Open <code>http://reusewater.local</code> (or that IP address) and sign in as <code>admin</code>, password <code>greywater</code>.</li>
+<li>Open <code>http://reusewater.local</code> (or that IP address) and sign in as <code>admin</code>, password <code>greywater</code>, with <b>Remember this device</b> on (from 3.11 the app has its own sign-in form and asks only once per device).</li>
 <li>In <b>Settings</b>, set new passwords and an alert topic (see Phone alerts).</li>
 </ol>
 <p>The setup page closes after 3 minutes and the system then runs offline. To open it again, for example after changing the router, hold <b>STOP for 5 seconds</b> while the screen shows <code>READY</code>.</p>
@@ -573,7 +573,7 @@
 <li>Signed in as <code>viewer</code>, the app shows only <b>Overview</b> and <b>Water use</b>. There is no Reuse and save, Reuse only, Stop cycle, Wash tank, <i>OK, I checked the machine</i>, Restore to controller or Restore from file, and no Service or Settings tab. A note under the status says changes need the admin sign-in. Download history file still works.</li>
 <li>The controller itself refuses every change, the settings and the event log from <code>viewer</code>, so the limit holds even outside the app.</li>
 <li>To take the access away, switch View-only user off and Save: the viewer password stops working at once. To change it, enter a new one and Save.</li>
-<li>A browser remembers one sign-in per address. To try the viewer on your own phone, use a private browser window.</li>
+<li>A browser remembers one sign-in per address. To try the viewer on your own phone, use a private browser window, or Sign out (door icon in the top bar) and sign in as <code>viewer</code>.</li>
 <li>The STOP button on the controller always works, whoever is signed in to the app.</li>
 </ul>
 <p>On the Service tab, the tank-wash valve state is reported by the controller. The other valve and pump states are the expected states for the current step and fill source.</p>
@@ -608,6 +608,7 @@
 <tr><td>Wireless updates</td><td>Accepted only while the controller is Ready and no tank wash runs. During a cycle, the Arduino IDE’s network upload gets no answer</td><td>Service → Wireless updates</td></tr>
 <tr><td>Valves and pump</td><td>The Service tab shows what each output is actually set to</td><td>Service → Valves and pump</td></tr>
 <tr><td>Event log</td><td>The last 50 events since the controller started: steps, machine filled, pump on and off with the reason, alerts, tank wash, Wi-Fi, updates, restores</td><td>Service → Recent events</td></tr>
+<tr><td>Sign in once per device (3.11)</td><td>The app shows its own sign-in form: user name, password and <b>Remember this device</b> (on by default). A remembered phone or computer stays signed in for 400 days, renewed every time the app is opened, so it is asked only once. The controller gives the browser a signed token, never the password. Changing the dashboard password signs out every other device; <b>Settings → Security → Sign out other devices</b> does the same without a new password (use it after losing a phone). <b>Sign out</b> (door icon in the top bar) signs out this device. <code>reusewater.local</code> and the IP address are separate sign-ins</td><td>Sign-in form; top bar; Settings → Security; Service → Recent events</td></tr>
 <tr><td>Password protection</td><td>The app asks for new passwords while the defaults are in use. After 5 wrong passwords in a minute from one device, it refuses that device for a minute; other devices keep working (per device from 3.0)</td><td>App</td></tr>
 <tr><td>Buzzer (optional)</td><td>An active buzzer module on D1 / TX0 (D12 until 3.1), switched on in Settings: two short beeps when a cycle ends, three long beeps on alarms</td><td>Settings → Cycle</td></tr>
 <tr><td>Typical step times</td><td>The controller learns how long steps 1–3 usually take; the app shows “Usually about 25 min”</td><td>Overview</td></tr>
@@ -729,6 +730,7 @@
 <h2>Appendix B. Revision history</h2>
 <table>
 <thead><tr><th>Version</th><th>Date</th><th>Description</th></tr></thead>
+<tr><td>3.11</td><td>2026-11-06</td><td>Sign in once per device: the app has its own sign-in form with Remember this device (on by default) instead of the browser's password box; a remembered device stays signed in for 400 days, renewed at every visit. Sign out button in the top bar; Settings → Security → Sign out other devices; a new dashboard password signs out the other devices. New endpoints <code>POST /api/login</code>, <code>POST /api/logout</code></td></tr>
 <tr><td>3.10</td><td>2026-11-06</td><td>Resume after a power cut: the controller keeps a cycle snapshot in flash (step, mode, filled, litres). After power-up the app asks in a popup to resume; Resume continues at the start of the saved step with the same mode and litres. Offered for 30 min after power-up, admin only, with Start from the dashboard on. Screen <code>INTERRUMPIDO</code> › <i>Reanude en app</i>, <code>REANUDADO</code>; new endpoint <code>POST /api/interrupted/resume</code></td></tr>
 <tr><td>3.9</td><td>2026-11-06</td><td>One fixed letter size per screen font for every message, the largest that fits all texts (Hyperlegible 12 px, Plain sans 13 px, Terminal bold 12 px, Schoolbook bold 11 px), centred; the letters no longer change size between pages</td></tr>
 <tr><td>3.8</td><td>2026-11-06</td><td>Reuse only from the panel: hold START 2 s at READY until the screen shows <code>SOLO REUSAR</code>, then let go. The cycle starts when START is released; while it is held the screen shows which cycle starts. A START held 15 s is treated as stuck and starts nothing</td></tr>

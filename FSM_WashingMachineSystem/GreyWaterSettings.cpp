@@ -275,6 +275,14 @@ const char* historySourceName() {
   }
 }
 
+bool authKeyLoad(uint8_t key[32]) {
+  return prefs.getBytesLength("authkey") == 32 && prefs.getBytes("authkey", key, 32) == 32;
+}
+
+void authKeySave(const uint8_t key[32]) {
+  prefs.putBytes("authkey", key, 32);
+}
+
 bool timeIsValid() {
   return time(nullptr) > 1700000000;  // any date after Nov 2023 means NTP has synced
 }
