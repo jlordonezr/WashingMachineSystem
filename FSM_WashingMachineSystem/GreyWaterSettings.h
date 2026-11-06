@@ -113,12 +113,30 @@ bool     statsHasData(const WaterStats& s);
 bool     statsValid(const WaterStats& s);   // plausible values (used before a restore)
 bool     statsRestore(const WaterStats& in); // validates, keeps the current tank age, saves
 
-// Cycle-in-progress marker (2.9). Written when a cycle starts and at each step,
-// removed when it ends. If it is still there at power-up, the cycle was cut short
-// by a power cut, a crash or a watchdog restart.
-void     cycleMarkStep(int state);
-void     cycleMarkEnd();
-bool     cycleWasInterrupted(int& state, uint32_t& epoch);
+// Cycle-in-progress snapshot (2.9 marker, 3.10 snapshot). Written to flash when
+// a cycle starts, at each step and when the machine has filled in step 1 or 3;
+// removed when the cycle ends. If it is still there at power-up, the cycle was
+// cut short by a power cut, a crash or a watchdog restart, and the app can
+// resume it (see resumeAvailable() in GreyWaterSystem.h).
+// Bump CYCLE_SNAP_VERSION when a field changes: other versions are reported as
+// interrupted but cannot be resumed.
+#define CYCLE_SNAP_VERSION 1
+struct CycleSnapshot {
+  uint8_t  version;     // CYCLE_SNAP_VERSION
+  uint8_t  state;       // StateID of the step that was running
+  uint8_t  noSave;      // 1 = "Reuse only" cycle
+  uint8_t  filled;      // 1 = the machine had already filled in this step (step 1 or 3)
+  uint32_t epoch;       // when this was written (0 = clock not set)
+  uint32_t cycleS;      // seconds the cycle had run (since Start) when this was written
+  float    tapL, reusedL, savedL;   // this cycle's water so far
+};
+// What cycleSnapLoad() found in flash.
+enum CycleSnapFound { snapNone, snapStepOnly, snapFull };
+void     cycleSnapSave(const CycleSnapshot& s);
+void     cycleMarkEnd();                 // removes the snapshot
+// snapFull: s is complete. snapStepOnly: a marker from firmware 3.9 or older, or
+// another snapshot version: only s.state and s.epoch are set (0 if unknown).
+CycleSnapFound cycleSnapLoad(CycleSnapshot& s);
 bool     timeIsValid();                  // true once NTP has set the clock
 uint32_t currentMonthKey();              // YYYYMM, or 0 if the clock is not set
 

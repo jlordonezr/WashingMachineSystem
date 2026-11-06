@@ -396,6 +396,94 @@ int main(int argc, char** argv) {
     CHECK(activeState == stIdle, "a 20 s hold started a cycle (state %d)", activeState);
     CHECK(eventSeen("START held 15 s: treated as stuck"), "stuck START not in the event log");
   }
+  else if (sc == "F16a") {
+    printf("F16 Reuse only cycle cut after the machine filled in step 1 (part 1: run until 320 s, then cut power) (3.10)\n");
+    typicalProgram(); boot();
+    cfg.allowRemoteStart = true;
+    CHECK(requestRemoteStart(false), "Reuse only refused at Ready");
+    startAt = now(); runFor(320);
+    CHECK(activeState == stFill1, "expected to be washing, state %d", activeState);
+    CycleSnapshot snap; Preferences p;
+    CHECK(p.getBytesLength("cyc") == sizeof(snap), "no full snapshot in flash during the cycle");
+    p.getBytes("cyc", &snap, sizeof(snap));
+    CHECK(snap.version == CYCLE_SNAP_VERSION && snap.state == stFill1 && snap.filled == 1 && snap.noSave == 1,
+          "snapshot: version %d state %d filled %d noSave %d", snap.version, snap.state, snap.filled, snap.noSave);
+    CHECK(snap.reusedL > 5 && snap.cycleS >= 130, "snapshot water/time: reused %.1f L, %u s", snap.reusedL, (unsigned)snap.cycleS);
+    Preferences::saveFile(flash);
+  }
+  else if (sc == "F16b") {
+    printf("F16 Reuse only cycle cut after the machine filled in step 1 (part 2: power back, resume from the app)\n");
+    Preferences::loadFile(flash);
+    CycleSnapshot saved; { Preferences p; p.getBytes("cyc", &saved, sizeof(saved)); }
+    simUs += 400000000ULL;                               // the clock of this run starts later than the washer program
+    typicalProgram(); simReset = ESP_RST_POWERON; boot();
+    startAt = now() - 320;                               // the washer kept its own program; power was off a few seconds
+    runFor(10);                                          // start-up animation, then both pages of the INTERRUPTED notice
+    int st; uint32_t ep;
+    CHECK(interruptedInfo(st, ep) && st == stFill1 && interruptedNoSave(), "interruption or its mode not detected (step %d)", st);
+    CHECK(activeState == stIdle && pinOut[OUT_MOTOR] == LOW && pinOut[OUT_FILL_EV] == LOW && pinOut[OUT_WASH_EV] == LOW,
+          "not safely in Ready after power-up");
+    CHECK(resumeAvailable() && resumeLeftS() > 1770 && resumeLeftS() <= 1800, "Resume not offered (%u s left)", (unsigned)resumeLeftS());
+    CHECK(onScreen("Resume in app") || sawMsg("Resume in app"), "screen does not say Resume in app");
+    CHECK(eventSeen("Resume offered in the app for 30 min"), "event log does not say the cycle can be resumed");
+    CHECK(requestResume(), "Resume refused");
+    runFor(1);
+    CHECK(activeState == stFill1, "not back in step 1 after Resume (state %d)", activeState);
+    CHECK(eventSeen("Cycle resumed: step 1/4, reuse only, was filled"), "resume not in the event log");
+    CHECK(onScreen("RESUMED"), "screen does not show RESUMED");
+    CHECK(!interruptedInfo(st, ep) && !resumeAvailable(), "interrupted notice still shown after Resume");
+    SystemStatus snap; getSystemStatus(snap);
+    CHECK(snap.noSave && snap.cycleReusedL >= saved.reusedL - 0.01f, "mode or water not carried over (noSave %d, reused %.1f of %.1f L)",
+          snap.noSave, snap.cycleReusedL, saved.reusedL);
+    { CycleSnapshot now_; Preferences p; p.getBytes("cyc", &now_, sizeof(now_));
+      CHECK(p.getBytesLength("cyc") == sizeof(now_) && now_.state == stFill1 && now_.filled == 1, "snapshot not written again after Resume"); }
+    CHECK(!requestResume(), "a second Resume accepted while the cycle runs");
+    runFor(1500);
+    double d1 = stateAt(stDrain1), f2 = stateAt(stFill2), d2 = stateAt(stDrain2);
+    printf("    after Resume: soapy drain %.1f s, rinse %.1f s, final drain %.1f s\n", d1, f2, d2);
+    CHECK(d1 >= 600 && d1 <= 607, "step 1 did not end with the wash drain at 600 s (%.1f s): the fill before the cut was not kept", d1);
+    CHECK(f2 >= 780 && f2 <= 787 && d2 >= 1500 && d2 <= 1507, "later steps off: rinse %.1f s, final drain %.1f s", f2, d2);
+    CHECK(!rec.savedWhileSaving, "rinse water went to the tank in a resumed Reuse only cycle");
+    CHECK(activeState == stIdle && stats.totalCycles == 1, "resumed cycle did not complete");
+    CHECK(stats.totalReusedL >= saved.reusedL - 0.01f && stats.totalSavedL == 0, "history: reused %.1f L (before the cut %.1f), saved %.1f L",
+          stats.totalReusedL, saved.reusedL, stats.totalSavedL);
+    CHECK(stats.stepSamples[0] == 0 && stats.stepSamples[1] == 1, "a resumed step was used for the typical times (%u, %u)",
+          (unsigned)stats.stepSamples[0], (unsigned)stats.stepSamples[1]);
+    CHECK(alertSeen("Reuse Water: cycle complete"), "no cycle-complete alert");
+    Preferences p; CHECK(p.getBytesLength("cyc") == 0, "snapshot left behind after the resumed cycle ended");
+  }
+  else if (sc == "F17") {
+    printf("F17 Resume limits: 3.9 marker, tank wash, 30 min, dismiss, START, old snapshot (3.10)\n");
+    typicalProgram(); boot(); runFor(7);
+    Preferences p; int st; uint32_t ep;
+    auto cut = [&](uint8_t state, uint32_t epoch) {     // as if the power had just come back with this snapshot
+      CycleSnapshot s; memset(&s, 0, sizeof(s)); s.version = CYCLE_SNAP_VERSION; s.state = state; s.epoch = epoch; s.cycleS = 900; s.reusedL = 12;
+      p.putBytes("cyc", &s, sizeof(s)); bootChecks();
+    };
+    struct { uint8_t state; uint32_t epoch; } old = { stFill2, 0 };   // firmware 3.9 marker
+    p.putBytes("cyc", &old, sizeof(old)); bootChecks();
+    CHECK(interruptedInfo(st, ep) && st == stFill2, "3.9 marker not reported as interrupted");
+    CHECK(!resumeAvailable() && !requestResume(), "a 3.9 marker (no mode, no water) offered Resume");
+    CHECK(p.getBytesLength("cyc") == 0, "marker not cleared");
+    cut(stDrain1, 0);
+    CHECK(resumeAvailable(), "Resume not offered for a full snapshot");
+    CHECK(startManualWash() == washStarted && !resumeAvailable(), "Resume offered during a tank wash");
+    stopManualWash(); runFor(5);
+    CHECK(resumeAvailable(), "Resume not offered again after the tank wash");
+    runFor(1800);
+    CHECK(!resumeAvailable() && resumeLeftS() == 0 && !requestResume(), "Resume still offered 30 min after power-up");
+    CHECK(interruptedInfo(st, ep), "interrupted notice gone with the Resume offer");
+    cut(stDrain1, 0); dismissInterrupted();
+    CHECK(!resumeAvailable(), "Resume offered after the notice was dismissed");
+    cut(stFill1, (uint32_t)time(nullptr) - 5 * 3600);
+    CHECK(!resumeAvailable(), "Resume offered for a step saved 5 h ago");
+    cut(stFill1, (uint32_t)time(nullptr) - 3600);
+    CHECK(resumeAvailable(), "Resume not offered for a step saved 1 h ago");
+    pressStart(); runFor(2);
+    CHECK(activeState != stIdle && !resumeAvailable() && !interruptedInfo(st, ep), "START on the panel did not replace the Resume offer");
+    SystemStatus snap; getSystemStatus(snap);
+    CHECK(snap.cycleReusedL == 0, "a new cycle started with the cut cycle's water");
+  }
   else if (sc == "F12") {
     printf("F12 full cycle in Spanish (factory default language)\n");
     simLanguage = LANG_ES; typicalProgram(); boot();

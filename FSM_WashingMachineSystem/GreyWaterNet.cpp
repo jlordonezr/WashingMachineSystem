@@ -330,7 +330,7 @@ static void handleStatus() {
   jsonEscape(title,   sizeof(title),   s.title);
   jsonEscape(message, sizeof(message), s.message);
 
-  char buf[2760];
+  char buf[2840];
   snprintf(buf, sizeof(buf),
     "{\"fw\":\"%s\",\"state\":%d,\"stateName\":\"%s\",\"title\":\"%s\",\"message\":\"%s\","
     "\"tank\":\"%s\",\"wash\":%s,\"tapLpm\":%.2f,\"drainLpm\":%.2f,"
@@ -346,7 +346,7 @@ static void handleStatus() {
     "\"fill\":{\"litres\":%.1f,\"complete\":%s,\"minLitres\":%.1f},"
     "\"sensors\":{\"tapPulses\":%lu,\"drainPulses\":%lu,\"tapFlowing\":%s,\"drainFlowing\":%s,\"flowOnLpm\":%.1f},"
     "\"wifi\":{\"rssi\":%d,\"ip\":\"%s\"},\"time\":\"%s\",\"uptimeS\":%lu,"
-    "\"outputs\":%u,\"typicalS\":[%lu,%lu,%lu],\"interrupted\":{\"active\":%s,\"step\":%d,\"epoch\":%lu},"
+    "\"outputs\":%u,\"typicalS\":[%lu,%lu,%lu],\"interrupted\":{\"active\":%s,\"step\":%d,\"epoch\":%lu,\"noSave\":%s,\"resume\":%s,\"resumeLeftS\":%lu},"
     "\"boot\":\"%s\",\"updatesAllowed\":%s,\"defaultPasswords\":%s,"
     "\"lang\":\"%s\",\"tankFault\":%s,\"screen\":%s,\"loop\":{\"maxMs\":%lu,\"lastMinMaxMs\":%lu},"
     "\"heap\":{\"free\":%lu,\"min\":%lu},\"alert\":{\"seq\":%lu,\"ok\":%s,\"code\":%d},\"role\":\"%s\"}",
@@ -374,6 +374,7 @@ static void handleStatus() {
     (unsigned long)(stats.stepSamples[0] ? stats.stepAvgS[0] : 0), (unsigned long)(stats.stepSamples[1] ? stats.stepAvgS[1] : 0),
     (unsigned long)(stats.stepSamples[2] ? stats.stepAvgS[2] : 0),
     intrActive ? "true" : "false", intrStep >= stFill1 ? intrStep - 1 : 0, (unsigned long)intrEpoch,
+    interruptedNoSave() ? "true" : "false", resumeAvailable() ? "true" : "false", (unsigned long)resumeLeftS(),
     resetReasonTextLocal(), systemBusy() ? "false" : "true",
     (currentRole == roleAdmin &&    // only the admin can change them, so only the admin is asked
      (strcmp(cfg.webPassword, DEFAULT_WEB_PASSWORD) == 0 || strcmp(cfg.otaPassword, DEFAULT_OTA_PASSWORD) == 0)) ? "true" : "false",
@@ -603,6 +604,15 @@ static void handleDismissInterrupted() {
   sendJson(200, "{\"ok\":true}");
 }
 
+// Resume the cycle cut short by a power cut (3.10): it continues at the start
+// of the saved step. Like Start, it needs "Start from the dashboard" on.
+static void handleResume() {
+  if (!actionAllowed()) return;
+  if (!cfg.allowRemoteStart) { sendError(403, "Starting from the dashboard is turned off in Settings."); return; }
+  if (!requestResume()) { sendError(409, "The cycle can no longer be resumed."); return; }
+  sendJson(200, "{\"ok\":true}");
+}
+
 static void handleStop() {
   if (!actionAllowed()) return;
   if (activeState == stIdle) { sendError(409, "No cycle is running."); return; }
@@ -718,6 +728,7 @@ void netBegin() {
   server.on("/api/history",     HTTP_GET,  handleHistoryGet);
   server.on("/api/events",      HTTP_GET,  handleEvents);
   server.on("/api/interrupted/dismiss", HTTP_POST, handleDismissInterrupted);
+  server.on("/api/interrupted/resume",  HTTP_POST, handleResume);
   server.on("/api/history/restore", HTTP_POST, handleHistoryRestore);
   server.on("/api/start",       HTTP_POST, handleStart);
   server.on("/api/wash",        HTTP_POST, handleWashStart);

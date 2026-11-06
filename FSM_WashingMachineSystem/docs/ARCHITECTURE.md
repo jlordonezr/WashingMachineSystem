@@ -1,4 +1,4 @@
-# Architecture – firmware 3.3
+# Architecture – firmware 3.10
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -86,6 +86,7 @@ flow sensors ─ISR─► pulse counters ─► FlowMeter (loop) ─► CycleGat
 float switches ─────────────────────────► TankLevel (safety task) ─► interlocks, cycle decisions, screen, app
 buttons ─► updateInputs (loop) ─► inStart / inStop ─► state machine
 app ─HTTP─► web server (loop) ─► requestRemoteStart/Stop flags ─► applied at the start of the next loop pass
+app ─HTTP─► /api/interrupted/resume ─► requestResume flag ─► takeResumeRequest (loop) ─► the sketch enters the saved step (3.10)
 cycle (loop) ─► outputsRequest(mode) ─► GreyWaterOutputs (lock) ─► SSR pins
 status snapshot (loop) ─► /api/status JSON ─► app (polls every 2 s)
 events ─► notify() ─► queue ─► alert task ─► ntfy ─► result queue ─► event log + /api/status.alert
@@ -104,4 +105,4 @@ events ─► notify() ─► queue ─► alert task ─► ntfy ─► result 
 
 ## Storage
 
-NVS namespace `greywater`: `cfg` (Settings v7 from 3.1, adds `language`), `stats` and `stats_bak` (WaterStats v3), `stats_keep` (an unreadable record kept aside), `cyc` (cycle-in-progress marker). Settings v6 (3.0) is upgraded to v7 at start-up; history is unchanged.
+NVS namespace `greywater`: `cfg` (Settings v7 from 3.1, adds `language`), `stats` and `stats_bak` (WaterStats v3), `stats_keep` (an unreadable record kept aside), `cyc` (cycle snapshot from 3.10: `CycleSnapshot`, 24 bytes, version `CYCLE_SNAP_VERSION`; written at Start, at each step and when the machine has filled in step 1 or 3, removed when the cycle ends; read and removed by `bootChecks()` at power-up. The 8-byte marker of 2.9–3.9 is still recognised: reported, not resumable). Settings v6 (3.0) is upgraded to v7 at start-up; history is unchanged.

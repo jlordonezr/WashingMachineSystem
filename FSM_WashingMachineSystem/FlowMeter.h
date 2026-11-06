@@ -145,6 +145,13 @@ struct CycleGates {
     drainSeen = drainSeen || (filled && drain.starts() > drainArm);
     return drainSeen;
   }
+  // Resuming step 1 or 3 after a power cut (3.10) when the machine had already
+  // filled before the cut: the step now waits only for the drain that ends it.
+  // A drain already running at the resume counts: after a fill it can only be
+  // that drain (the soapy drain of step 2 came before the rinse fill).
+  void resumeFilled(const FlowMeter& drain) {
+    tapSeen = true; filled = true; drainSeen = drain.flowing(); drainArm = drain.starts();
+  }
   // Step 1: the machine fills (wash water), then starts draining it.
   bool fill1Done(const FlowMeter& tap, const FlowMeter& drain, float minLitres) {
     return fillThenDrainDone(tap, drain, minLitres);

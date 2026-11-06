@@ -252,6 +252,19 @@ int main() {
     CHECK(r.fill2 >= 1500 && r.fill2 <= 1506, "Fill2 ended on the old soapy drain (would save soapy water)");
   });
 
+  test("S6b resumed after a power cut, machine already filled: ends on the next drain, or the one running (3.10)", [&] {
+    FlowMeter tap = makeMeter(TAP_PPL), drain = makeMeter(DRAIN_PPL);
+    Sim st(TAP_PPL), sd(DRAIN_PPL);
+    CycleGates g; g.enter(tap, drain); g.resumeFilled(drain);
+    CHECK(g.filled && !g.fill1Done(tap, drain, MIN_FILL), "resumed step done before any drain");
+    for (int i = 0; i < 6000; ++i) { st.tick(0, tap); sd.tick(0, drain); }          // 60 s washing, no water
+    CHECK(!g.fill1Done(tap, drain, MIN_FILL), "resumed step done without a drain");
+    for (int i = 0; i < 1000; ++i) { st.tick(0, tap); sd.tick(18, drain); }         // the wash drain starts
+    CHECK(g.fill1Done(tap, drain, MIN_FILL), "resumed step did not end on the wash drain");
+    CycleGates g2; g2.enter(tap, drain); g2.resumeFilled(drain);                     // resumed while that drain runs
+    CHECK(drain.flowing() && g2.fill2Done(tap, drain, MIN_FILL), "a drain running at the resume was not counted");
+  });
+
   test("S7 trickle of 1.5 L/min between drains: waits at the default threshold, advances with 3 L/min", [&] {
     auto drainSiphon = [&](uint32_t t) { float d = drainTypical(t); return d > 0 ? d : (t > 720000 ? 1.5f : 0.0f); };
     Result r1 = cycle(tapTypical, drainSiphon, 2000000, 0);

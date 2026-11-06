@@ -410,5 +410,14 @@
  "The wash uses tank water when there is enough, and the rinse water goes to the drain, not to the tank.": "El lavado usa agua del tanque si hay suficiente, y el agua de enjuague va al desagüe, no al tanque.",
  "Stop ends the cycle at once and returns the controller to Ready. The start buttons are available when the controller is Ready.": "Detener termina el ciclo de inmediato y deja el controlador en Listo. Los botones para iniciar están disponibles cuando el controlador está Listo.",
  "save must be 0 or 1.": "save debe ser 0 o 1.",
- "Final drain": "Desagüe final"
+ "Final drain": "Desagüe final",
+ "Resume cycle": "Reanudar ciclo",
+ "Resume the interrupted cycle?": "¿Reanudar el ciclo interrumpido?",
+ "Don't resume": "No reanudar",
+ "Not now": "Ahora no",
+ "You can resume this cycle for {0} more min.": "Puede reanudar este ciclo durante {0} min más.",
+ "Resuming from the app is off in Settings (Start from the dashboard). Use the START button on the controller for a new cycle.": "Reanudar desde la app está desactivado en Configuración (Iniciar desde la app). Use el botón START del controlador para un ciclo nuevo.",
+ "Check the washing machine first: it may have finished, started again or still hold water. Resume continues from the start of that step, with the same choice of where the rinse water goes.": "Revise primero la lavadora: puede haber terminado, haber empezado de nuevo o tener agua todavía. Al reanudar, el ciclo sigue desde el inicio de ese paso, con la misma opción para el agua de enjuague.",
+ "Cycle resumed": "Ciclo reanudado",
+ "The cycle can no longer be resumed.": "El ciclo ya no se puede reanudar."
 }

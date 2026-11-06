@@ -65,11 +65,15 @@ static void checkWifiSetupHold() {
   }
 }
 
-static void resetFSMToIdle() {
+static void enterState(int idx) {
   fsm.stop();
-  fsm.setInitialState(states[stIdle]);
+  fsm.setInitialState(states[idx]);
   fsm.start();
   onEnter();
+}
+
+static void resetFSMToIdle() {
+  enterState(stIdle);
   DEBUG_PRINT("FSM reset to Idle state.");
 }
 
@@ -119,6 +123,8 @@ void loop() {
   loopTimingMark();        // Service tab: time between passes
   updateInputs();          // buttons; reports a float-switch fault (the safety task reads the floats)
   applyRemoteRequests();   // dashboard Start/Stop act like a button press
+  int resumeState;
+  if (takeResumeRequest(resumeState)) enterState(resumeState);   // dashboard Resume after a power cut (3.10)
   checkWifiSetupHold();
 
   if (isResettableState(fsm.getCurrentState()->getIndex()) && inStop) {

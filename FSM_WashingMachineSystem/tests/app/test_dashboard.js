@@ -25,7 +25,7 @@ function baseStatus() {
     history: { source: 'Loaded from the controller', hasData: true }, fill: { litres: 0, complete: false, minLitres: 3 },
     sensors: { tapPulses: 0, drainPulses: 0, tapFlowing: false, drainFlowing: false, flowOnLpm: 1 },
     wifi: { rssi: -60, ip: '192.168.1.50' }, time: '2026-10-30 10:00', uptimeS: 600, outputs: 3, typicalS: [0, 0, 0],
-    interrupted: { active: false, step: 0, epoch: 0 }, boot: 'Switched on or power cut', updatesAllowed: true,
+    interrupted: { active: false, step: 0, epoch: 0, noSave: false, resume: false, resumeLeftS: 0 }, boot: 'Switched on or power cut', updatesAllowed: true,
     defaultPasswords: false, tankFault: false, screen: true, loop: { maxMs: 12, lastMinMaxMs: 8 },
     heap: { free: 180000, min: 150000 }, alert: { seq: 0, ok: false, code: 0 }, role: 'admin',
   };
@@ -38,6 +38,7 @@ let settings = { language: 'en', buzzerOn: false, minFillLitres: 3, saveMinLpm: 
     drain2Min: 20, edgeS: 4, stepAlertMin: 90, tankMaxAgeH: 48, manualWashMaxMin: 10, allowRemoteStart: true,
     ntfyServer: 'https://ntfy.sh', ntfyTopic: 'x', screenFont: 0, screenFontCount: 4, timeZone: '<-05>5' };
 let lastSettingsPost = null;
+let resumeCalls = 0, dismissCalls = 0;
 const server = http.createServer((req, res) => {
   const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
   if (req.url === '/' ) { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(PAGE); }
@@ -56,6 +57,16 @@ const server = http.createServer((req, res) => {
   }
   if (req.url === '/api/test-alert') { onTestAlert(); return json(200, { ok: true }); }
   if (req.url === '/api/stop') return json(200, { ok: true });
+  if (req.url === '/api/interrupted/resume') {
+    resumeCalls++;
+    if (!status.interrupted.resume) return json(409, { error: 'The cycle can no longer be resumed.' });
+    status.interrupted = { active: false, step: 0, epoch: 0, noSave: false, resume: false, resumeLeftS: 0 };
+    status.state = 2; status.stateName = 'Fill1'; return json(200, { ok: true });
+  }
+  if (req.url === '/api/interrupted/dismiss') {
+    dismissCalls++; status.interrupted = { active: false, step: 0, epoch: 0, noSave: false, resume: false, resumeLeftS: 0 };
+    return json(200, { ok: true });
+  }
   json(404, { error: 'Not found.' });
 });
 
@@ -246,6 +257,58 @@ async function fresh(browser, base) {
     check((await page.innerText('#stepText')).includes('Final drain'), 'A13 step 4 not named Final drain in a Reuse only cycle');
     await ctx.close();
     status = baseStatus();
+  }
+
+  // A14 Resume after a power cut (3.10): the popup appears once, names the step and the mode,
+  // Resume sends /api/interrupted/resume; Not now keeps the panel's Resume button; Don't resume
+  // dismisses; a viewer or Start from the dashboard off gets no popup and no Resume button.
+  {
+    const intr = () => ({ active: true, step: 3, epoch: 1793000000, noSave: true, resume: true, resumeLeftS: 1500 });
+    status = baseStatus(); status.interrupted = intr(); resumeCalls = 0; dismissCalls = 0;
+    let { ctx, page } = await fresh(browser, base);
+    check(await page.isVisible('#resumeDlg'), 'A14 no Resume popup after a power cut');
+    const body = await page.innerText('#resumeBody');
+    check(body.includes('step 3 of 4') && body.includes('Reuse only') && body.includes('25 more min'),
+      'A14 popup does not name the step, the mode and the time left: ' + body);
+    await page.click('#resumeLater'); await tick(page, 2500);
+    check(!(await page.isVisible('#resumeDlg')), 'A14 popup shown again after Not now');
+    check(await page.isVisible('#btnIntrResume'), 'A14 panel has no Resume button after Not now');
+    await page.click('#btnIntrResume'); await tick(page, 500);
+    check(resumeCalls === 1, 'A14 Resume did not call /api/interrupted/resume');
+    check((await toastText(page)).includes('Cycle resumed') && !(await page.isVisible('#intrPanel')), 'A14 no confirmation, or the panel stayed');
+    await ctx.close();
+
+    status = baseStatus(); status.interrupted = intr();
+    ({ ctx, page } = await fresh(browser, base));
+    await page.click('#resumeYes'); await tick(page, 500);
+    check(resumeCalls === 2 && !(await page.isVisible('#resumeDlg')), 'A14 Resume in the popup did not resume');
+    await ctx.close();
+
+    status = baseStatus(); status.interrupted = intr();
+    ({ ctx, page } = await fresh(browser, base));
+    await page.click('#resumeNo'); await tick(page, 500);
+    check(dismissCalls === 1 && resumeCalls === 2 && !(await page.isVisible('#intrPanel')), "A14 Don't resume did not dismiss");
+    await ctx.close();
+
+    status = baseStatus(); status.interrupted = intr();       // the offer expires while the popup is open
+    ({ ctx, page } = await fresh(browser, base));
+    status.interrupted.resume = false; status.interrupted.resumeLeftS = 0; await tick(page, 2500);
+    check(!(await page.isVisible('#resumeDlg')) && !(await page.isVisible('#btnIntrResume')) && await page.isVisible('#btnIntrOk'),
+      'A14 Resume still offered after it expired');
+    await ctx.close();
+
+    for (const [what, set] of [['viewer', s => { s.role = 'viewer'; }], ['start from the dashboard off', s => { s.allowRemoteStart = false; }]]) {
+      status = baseStatus(); status.interrupted = intr(); set(status);
+      ({ ctx, page } = await fresh(browser, base));
+      check(!(await page.isVisible('#resumeDlg')) && !(await page.isVisible('#btnIntrResume')), 'A14 Resume offered to ' + what);
+      await ctx.close();
+    }
+    status = baseStatus(); status.lang = 'es'; status.interrupted = intr(); settings.language = 'es';
+    ({ ctx, page } = await fresh(browser, base));
+    check((await page.innerText('#resumeTitle')).includes('Reanudar') && (await page.innerText('#resumeBody')).includes('Solo reusar'),
+      'A14 popup not in Spanish');
+    await ctx.close();
+    settings.language = 'en'; status = baseStatus();
   }
 
   // A7 Accessibility (axe-core, if installed): no violations on any tab, normal and fault states.

@@ -24,9 +24,13 @@ static bool       tankFaultReported = false;
 static bool     interruptedFlag  = false;
 static int      interruptedState = 0;
 static uint32_t interruptedEpoch = 0;
+static bool     interruptedResumable = false;   // the full snapshot was found (3.10)
+static CycleSnapshot interruptedSnap;           // what the cut cycle had done
+static unsigned long interruptedAtMs = 0;       // millis() when it was found (start-up)
 
 bool interruptedInfo(int& state, uint32_t& epoch) { state = interruptedState; epoch = interruptedEpoch; return interruptedFlag; }
 void dismissInterrupted() { interruptedFlag = false; }
+bool interruptedNoSave() { return interruptedFlag && interruptedSnap.noSave; }
 
 void bootChecks() {
   logEvent("Controller started (%s), firmware %s", resetReasonText(), FIRMWARE_VERSION);
@@ -38,17 +42,32 @@ void bootChecks() {
               "La pantalla del controlador no respondió al encender. El ciclo, los botones y la app funcionan normalmente. "
               "Revise el cableado de la pantalla (I2C, dirección 0x3C)."), 3, "warning");
   }
-  int st; uint32_t ep;
-  if (cycleWasInterrupted(st, ep)) {
-    interruptedFlag = true; interruptedState = st; interruptedEpoch = ep;
-    cycleMarkEnd();
+  CycleSnapshot snap;
+  CycleSnapFound found = cycleSnapLoad(snap);
+  if (found != snapNone) {
+    int st = snap.state < STATE_COUNT ? snap.state : stIdle;
+    interruptedFlag = true; interruptedState = st; interruptedEpoch = snap.epoch;
+    interruptedSnap = snap; interruptedSnap.state = (uint8_t)st;
+    interruptedResumable = found == snapFull && st >= stRun;   // a 3.9 marker has no mode or litres
+    interruptedAtMs = millis();
+    cycleMarkEnd();          // the snapshot is kept in RAM; Resume writes a new one
     logEvent("Cycle interrupted in step %d (%s)", st >= stFill1 ? st - 1 : 0, resetReasonText());
-    displayShowNotice(TRS("INTERRUPTED", "INTERRUMPIDO"), TRS("Check washer|Start again", "Revise lavadora|Inicie de nuevo"), 15000);
+    if (interruptedResumable) logEvent("Resume offered in the app for %lu min", (unsigned long)(RESUME_OFFER_MS / 60000UL));
+    displayShowNotice(TRS("INTERRUPTED", "INTERRUMPIDO"),
+                      interruptedResumable ? TRS("Check washer|Resume in app", "Revise lavadora|Reanude en app")
+                                           : TRS("Check washer|Start again", "Revise lavadora|Inicie de nuevo"), 15000);
     char body[320];
-    snprintf(body, sizeof(body), TR("The wash cycle was cut short (%s). The controller is back to Ready. "
-                                    "Check the washing machine; start a new cycle if needed.",
-                                    "El ciclo de lavado se interrumpió (%s). El controlador volvió a Listo. "
-                                    "Revise la lavadora; inicie un ciclo nuevo si hace falta."), resetReasonTextLocal());
+    if (interruptedResumable)
+      snprintf(body, sizeof(body), TR("The wash cycle was cut short (%s). The controller is back to Ready. "
+                                      "Check the washing machine, then resume the cycle from the app within %lu minutes, or start a new one.",
+                                      "El ciclo de lavado se interrumpió (%s). El controlador volvió a Listo. "
+                                      "Revise la lavadora y reanude el ciclo desde la app en los próximos %lu minutos, o inicie uno nuevo."),
+               resetReasonTextLocal(), (unsigned long)(RESUME_OFFER_MS / 60000UL));
+    else
+      snprintf(body, sizeof(body), TR("The wash cycle was cut short (%s). The controller is back to Ready. "
+                                      "Check the washing machine; start a new cycle if needed.",
+                                      "El ciclo de lavado se interrumpió (%s). El controlador volvió a Listo. "
+                                      "Revise la lavadora; inicie un ciclo nuevo si hace falta."), resetReasonTextLocal());
     notify(TR("Reuse Water: cycle interrupted", "Reúso de Agua: ciclo interrumpido"), body, 4, "warning");
     beep(BEEP_ALARM);
   }
@@ -327,6 +346,23 @@ static void recordCycleStats(bool completed) {
   statsSave();
 }
 
+// Writes what the running cycle has done so far to flash (3.10), so a cycle
+// cut short can be resumed from the app. Called when a cycle starts, at each
+// step and when the machine has filled in step 1 or 3: a few writes per cycle.
+static void saveCycleSnapshot() {
+  CycleSnapshot s;
+  memset(&s, 0, sizeof(s));
+  s.state   = (uint8_t)activeState;
+  s.noSave  = cycleNoSave ? 1 : 0;
+  s.filled  = (activeState == stFill1 || activeState == stFill2) && gates.filled ? 1 : 0;
+  s.epoch   = timeIsValid() ? (uint32_t)time(nullptr) : 0;
+  s.cycleS  = (millis() - cycleStartMillis) / 1000UL;
+  s.tapL    = cycleTapL;
+  s.reusedL = cycleReusedL;
+  s.savedL  = cycleSavedL;
+  cycleSnapSave(s);
+}
+
 void handleIdleStateEntry() {
   DEBUG_PRINT("Idle.");
 
@@ -412,7 +448,6 @@ void handleRunStateEntry() {
   cycleActive  = true;
   cycleStartMillis = millis();
   interruptedFlag = false;   // a new cycle replaces the "interrupted" notice
-  cycleMarkStep(stRun);
   cycleNoSave = startNoSave;   // "Reuse only" from the app, or START held 2 s on the panel
   startNoSave = false;
   logEvent(cycleNoSave ? "Cycle started: reuse only, rinse water to the drain" : "Cycle started");
@@ -424,26 +459,37 @@ void handleRunStateEntry() {
   pumpResetForCycle();
   pumpDryAlertSent = false;
   tankFullAlertSent = false;
+  saveCycleSnapshot();
   displayClearNotice();  // Start pressed: drop "Cycle stopped/complete" right away
 }
 
 static const char* const STEP_EVENT[STATE_COUNT] = { "", "", "Step 1/4 wash started", "Step 2/4 soapy drain started",
                                                     "Step 3/4 rinse started", "Step 4/4 save started" };
+static bool resuming         = false;   // the next step entry is a Resume from the app (3.10)
+static bool resumeFilledStep = false;   // ... and the machine had already filled in that step
+static bool stepTimed        = false;   // stepStartTime is the real start of the step (not a resume)
+
 static void handleFillDrainEntry(const char* label) {
   DEBUG_PRINT(label);
-  cycleMarkStep(activeState);
-  if (activeState == stDrain2 && cycleNoSave) logEvent("Step 4/4 final drain started (reuse only, not saving)");
+  bool resumed = resuming;
+  resuming = false;
+  if (resumed) { /* takeResumeRequest() logged it */ }
+  else if (activeState == stDrain2 && cycleNoSave) logEvent("Step 4/4 final drain started (reuse only, not saving)");
   else if (activeState >= stFill1 && activeState < STATE_COUNT) logEvent("%s", STEP_EVENT[activeState]);
   resetFlowSensors();
+  if (resumed && resumeFilledStep) gates.resumeFilled(drainFlow());   // wait only for the drain that ends the step
+  resumeFilledStep = false;
   resetTankWash();
   stepStartTime = millis();
+  stepTimed = !resumed;      // a resumed step is not used for the typical step times
   stepAlertSent = false;
+  saveCycleSnapshot();
 }
 
 // Typical step times: a running average of how long steps 1-3 take on this
 // machine, so the app can say "usually about 25 min".
 static void recordStepDuration(int step) {
-  if (stepStartTime == 0 || step < 0 || step > 2) return;
+  if (stepStartTime == 0 || !stepTimed || step < 0 || step > 2) return;
   uint32_t s = (millis() - stepStartTime) / 1000UL;
   if (stats.stepSamples[step] == 0) stats.stepAvgS[step] = s;
   else stats.stepAvgS[step] = (stats.stepAvgS[step] * 3 + s) / 4;
@@ -631,7 +677,10 @@ void fill1StateLogic() {
   if (millis() - lastCheckTime >= OPERATION_DELAY) {
     bool wasFilled = gates.filled;
     filled1 = gates.fill1Done(tapFlow(), drainFlow(), cfg.minFillLitres);   // filled, then a drain started
-    if (gates.filled && !wasFilled) logEvent("Machine filled (%.1f L); washing", gates.litresTaken(tapFlow()));
+    if (gates.filled && !wasFilled) {
+      logEvent("Machine filled (%.1f L); washing", gates.litresTaken(tapFlow()));
+      saveCycleSnapshot();   // a resume after a cut now waits only for the drain
+    }
     const char* fillMsg = checkAndFillWashingMachine();
     DEBUG_PRINT(fillMsg);
     // Screen text for the household: what the machine and the grey water system are doing.
@@ -666,7 +715,10 @@ void fill2StateLogic() {
     fillWashingMachineWithTapWater();
     bool wasFilled = gates.filled;
     filled2 = gates.fill2Done(tapFlow(), drainFlow(), cfg.minFillLitres);   // rinse filled, then a new drain started
-    if (gates.filled && !wasFilled) logEvent("Machine filled (%.1f L); rinsing", gates.litresTaken(tapFlow()));
+    if (gates.filled && !wasFilled) {
+      logEvent("Machine filled (%.1f L); rinsing", gates.litresTaken(tapFlow()));
+      saveCycleSnapshot();
+    }
     DEBUG_PRINT("2nd fill: rinsing with tap water.");
     const char* step3 = TRS("RINSE 3 OF 4", "ENJUAGUE 3 DE 4");
     if (stepIsStuck())     displaySetStatus(step3, STUCK_SHORT, STUCK_MESSAGE);
@@ -732,6 +784,61 @@ bool requestRemoteStart(bool save) {
   if (!cfg.allowRemoteStart || activeState != stIdle) return false;
   remoteStartRequested = true;
   remoteStartNoSave    = !save;
+  return true;
+}
+
+// ── Resume a cycle cut short (3.10) ────────────────────────────────────────
+// At power-up the controller always starts in Ready with every output off.
+// If flash held a complete snapshot, the app may ask to resume: the cycle
+// continues at the start of the saved step, with its mode ("Reuse only") and
+// the water counted so far. A step 1 or 3 in which the machine had already
+// filled waits only for the drain that ends it. Offered for RESUME_OFFER_MS
+// after power-up, while Ready and no tank wash runs, and not when the saved
+// state is more than RESUME_MAX_AGE_S old (only known once the clock is set).
+static bool remoteResumeRequested = false;
+
+bool resumeAvailable() {
+  if (!interruptedFlag || !interruptedResumable) return false;
+  if (activeState != stIdle || manualWashActive) return false;
+  if (millis() - interruptedAtMs >= RESUME_OFFER_MS) return false;
+  if (interruptedSnap.epoch != 0 && timeIsValid() &&
+      (uint32_t)time(nullptr) - interruptedSnap.epoch > RESUME_MAX_AGE_S) return false;
+  return true;
+}
+
+uint32_t resumeLeftS() {
+  if (!resumeAvailable()) return 0;
+  return (RESUME_OFFER_MS - (millis() - interruptedAtMs)) / 1000UL;
+}
+
+bool requestResume() {
+  if (!resumeAvailable()) return false;
+  remoteResumeRequested = true;
+  return true;
+}
+
+bool takeResumeRequest(int& state) {
+  if (!remoteResumeRequested) return false;
+  remoteResumeRequested = false;
+  if (!resumeAvailable() || inStart) return false;   // a START on the panel in the same pass wins
+  const CycleSnapshot& s = interruptedSnap;
+  state = s.state < stFill1 ? stFill1 : s.state;     // cut while starting: begin at step 1
+  // What Start does (handleRunStateEntry), with the saved cycle.
+  cycleStarted = true;
+  cycleActive  = true;
+  cycleStartMillis = millis() - s.cycleS * 1000UL;   // the duration leaves out the time without power
+  interruptedFlag = false;
+  cycleNoSave = s.noSave != 0;
+  startNoSave = false;
+  cycleTapL = s.tapL; cycleReusedL = s.reusedL; cycleSavedL = s.savedL;
+  pumpResetForCycle();
+  pumpDryAlertSent = false;
+  tankFullAlertSent = false;
+  resuming = true;
+  resumeFilledStep = s.filled && (state == stFill1 || state == stFill2);
+  logEvent("Cycle resumed: step %d/4%s%s", state - 1, cycleNoSave ? ", reuse only" : "",
+           resumeFilledStep ? ", was filled" : "");
+  displayShowNotice(TRS("RESUMED", "REANUDADO"), TRS("Cycle resumed", "Ciclo reanudado"), NOTICE_DURATION);
   return true;
 }
 

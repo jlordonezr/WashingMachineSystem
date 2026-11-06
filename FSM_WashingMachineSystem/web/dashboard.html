@@ -300,7 +300,11 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     <section class="panel intr" id="intrPanel" aria-labelledby="h-intr" hidden>
       <h2 id="h-intr">The last cycle was interrupted</h2>
       <p id="intrText"></p>
-      <div class="actions admin-only"><button type="button" class="btn" id="btnIntrOk">OK, I checked the machine</button></div>
+      <p id="intrResume" hidden></p>
+      <div class="actions admin-only">
+        <button type="button" class="btn primary" id="btnIntrResume" hidden>Resume cycle</button>
+        <button type="button" class="btn" id="btnIntrOk">OK, I checked the machine</button>
+      </div>
     </section>
     <div class="grid">
       <section class="panel" aria-labelledby="headline">
@@ -612,6 +616,16 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       <button type="submit" class="btn primary">Save passwords</button>
     </div>
   </form>
+</dialog>
+<dialog id="resumeDlg" aria-labelledby="resumeTitle" aria-describedby="resumeBody">
+  <h3 id="resumeTitle">Resume the interrupted cycle?</h3>
+  <p id="resumeBody"></p>
+  <div class="actions">
+    <button type="button" class="btn" id="resumeNo">Don't resume</button>
+    <span class="spacer"></span>
+    <button type="button" class="btn" id="resumeLater">Not now</button>
+    <button type="button" class="btn primary" id="resumeYes">Resume cycle</button>
+  </div>
 </dialog>
 <dialog id="dlg" aria-labelledby="dlgTitle">
   <h3 id="dlgTitle"></h3>
@@ -963,15 +977,39 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     return '. '+t('Usually about {0}',m<60?t('{0} min',m):t('{0} h {1} min',Math.floor(m/60),m%60));
   }
 
-  // A cycle cut short by a power cut, a crash or a watchdog restart.
+  // A cycle cut short by a power cut, a crash or a watchdog restart. From 3.10
+  // the controller can resume it for 30 min after power-up: a popup asks once
+  // per interruption (admin only), and the panel keeps a Resume button.
+  var resumeAsked='';
+  function intrWhen(i){
+    return (i.epoch?(' '+t('at {0}',new Date(i.epoch*1000).toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'}))):'')+
+      (i.step?' '+t('during step {0} of 4, {1}',i.step,t(STEP_NAMES[i.step+1])):'');
+  }
   function renderInterrupted(s){
-    var i=s.interrupted||{};
+    var i=s.interrupted||{},can=!!(i.active&&i.resume&&s.allowRemoteStart&&s.role!=='viewer');
     $('intrPanel').hidden=!i.active;
-    if(i.active){
-      var when=i.epoch?(' '+t('at {0}',new Date(i.epoch*1000).toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'}))):'';
-      $('intrText').textContent=t('It stopped')+when+(i.step?' '+t('during step {0} of 4, {1}',i.step,t(STEP_NAMES[i.step+1])):'')+
-        ' ('+(s.boot||t('restart'))+'). '+t('The controller is back to Ready. Check the washing machine: it may still be running, or may still hold water. Start a new cycle if needed.');
-    }
+    $('btnIntrResume').hidden=!can;
+    $('intrResume').hidden=!(i.active&&i.resume);
+    var d=$('resumeDlg');
+    if(!can&&d.open)d.close();
+    if(!i.active)return;
+    $('intrText').textContent=t('It stopped')+intrWhen(i)+' ('+(s.boot||t('restart'))+'). '+
+      t('The controller is back to Ready. Check the washing machine: it may still be running, or may still hold water. Start a new cycle if needed.');
+    var min=Math.max(1,Math.ceil((i.resumeLeftS||0)/60));
+    $('intrResume').textContent=s.allowRemoteStart?t('You can resume this cycle for {0} more min.',min)
+      :t('Resuming from the app is off in Settings (Start from the dashboard). Use the START button on the controller for a new cycle.');
+    if(!can)return;
+    $('resumeBody').textContent=t('It stopped')+intrWhen(i)+(i.noSave?' ('+t('Reuse only')+')':'')+'. '+
+      t('Check the washing machine first: it may have finished, started again or still hold water. Resume continues from the start of that step, with the same choice of where the rinse water goes.')+' '+
+      t('You can resume this cycle for {0} more min.',min);
+    var key=i.epoch+'/'+i.step;
+    if(resumeAsked!==key&&typeof d.showModal==='function'){resumeAsked=key;d.showModal();$('resumeLater').focus();}
+  }
+  function resumeCycle(){
+    var d=$('resumeDlg');if(d.open)d.close();
+    api('/api/interrupted/resume',{method:'POST'}).then(function(){
+      $('intrPanel').hidden=true;toast(t('Cycle resumed'));poll();
+    }).catch(function(e){toast(e.message,true)});
   }
 
   // Service tab: event log, fetched every 5 s while the tab is open.
@@ -1184,9 +1222,14 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       toast(t('History file downloaded'));
     });
   });
-  $('btnIntrOk').addEventListener('click',function(){
+  function dismissIntr(){
     api('/api/interrupted/dismiss',{method:'POST'}).then(function(){$('intrPanel').hidden=true}).catch(function(e){toast(e.message,true)});
-  });
+  }
+  $('btnIntrOk').addEventListener('click',dismissIntr);
+  $('btnIntrResume').addEventListener('click',resumeCycle);
+  $('resumeYes').addEventListener('click',resumeCycle);
+  $('resumeLater').addEventListener('click',function(){$('resumeDlg').close()});
+  $('resumeNo').addEventListener('click',function(){$('resumeDlg').close();dismissIntr()});
   // Alerts: create a hard-to-guess topic and show how to subscribe.
   function topicHelp(){
     var tp=$('f-ntfyTopic').value.trim(),sv=($('f-ntfyServer').value.trim()||'https://ntfy.sh').replace(/\/+$/,''),h=$('topicHelp');h.textContent='';

@@ -82,6 +82,8 @@ extern volatile uint32_t drainPulseCount;
 #define WIFI_SETUP_HOLD_MS 5000  // hold STOP this long while READY to open Wi-Fi setup
 #define START_HOLD_MS 2000       // hold START this long at READY for "Reuse only" (3.8); a shorter press: "Reuse and save"
 #define START_STUCK_MS 15000     // START held this long: treated as stuck, nothing starts
+#define RESUME_OFFER_MS  1800000UL // the app offers to resume a cut cycle for 30 min after power-up (3.10)
+#define RESUME_MAX_AGE_S 14400UL   // ... not if the saved step was written over 4 h before (when the clock is set)
 #define TANK_CHECK_PERIOD 10000  // ms between tank level / water age checks
 #define DEBOUNCE_DELAY 20        // Debounce delay for button presses in milliseconds
 // OLED display
@@ -270,6 +272,12 @@ const char* resetReasonText();
 const char* resetReasonTextLocal();   // same, in the language chosen in Settings
 bool interruptedInfo(int& state, uint32_t& epoch);   // last cycle was cut short (until dismissed)
 void dismissInterrupted();
+// ── 3.10: resume a cycle cut short ──
+bool interruptedNoSave();                // the cut cycle was "Reuse only"
+bool resumeAvailable();                  // Resume can be offered now (Ready, within RESUME_OFFER_MS, saved state complete)
+uint32_t resumeLeftS();                  // seconds left to resume (0 = not available)
+bool requestResume();                    // dashboard Resume; false if no longer possible
+bool takeResumeRequest(int& state);      // call in loop() after applyRemoteRequests(): true = enter this state now
 void buzzerBegin();
 // Result of a request to start the manual tank wash.
 enum ManualWashStart { washStarted, washBusy, washTankFull };

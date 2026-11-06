@@ -287,21 +287,31 @@ uint32_t currentMonthKey() {
   return (uint32_t)(t.tm_year + 1900) * 100 + (t.tm_mon + 1);
 }
 
-// ── Cycle-in-progress marker ───────────────────────────────────────────────
-struct CycleMark { uint8_t state; uint32_t epoch; };
+// ── Cycle-in-progress snapshot ─────────────────────────────────────────────
+// Firmware 2.9-3.9 stored only { uint8_t state; uint32_t epoch; } (8 bytes,
+// state in byte 0, epoch in bytes 4-7) under the same key.
+struct CycleMarkV1 { uint8_t state; uint32_t epoch; };
 
-void cycleMarkStep(int state) {
-  CycleMark m = { (uint8_t)state, timeIsValid() ? (uint32_t)time(nullptr) : 0 };
-  prefs.putBytes("cyc", &m, sizeof(m));
+void cycleSnapSave(const CycleSnapshot& s) {
+  CycleSnapshot w = s;
+  w.version = CYCLE_SNAP_VERSION;
+  prefs.putBytes("cyc", &w, sizeof(w));
 }
 
 void cycleMarkEnd() {
   if (prefs.getBytesLength("cyc") > 0) prefs.remove("cyc");
 }
 
-bool cycleWasInterrupted(int& state, uint32_t& epoch) {
-  CycleMark m;
-  if (prefs.getBytesLength("cyc") != sizeof(m) || prefs.getBytes("cyc", &m, sizeof(m)) != sizeof(m)) return false;
-  state = m.state; epoch = m.epoch;
-  return true;
+CycleSnapFound cycleSnapLoad(CycleSnapshot& s) {
+  memset(&s, 0, sizeof(s));
+  size_t len = prefs.getBytesLength("cyc");
+  if (len == 0) return snapNone;
+  if (len == sizeof(CycleSnapshot) && prefs.getBytes("cyc", &s, sizeof(s)) == sizeof(s) &&
+      s.version == CYCLE_SNAP_VERSION) return snapFull;
+  memset(&s, 0, sizeof(s));
+  CycleMarkV1 m;
+  if (len == sizeof(m) && prefs.getBytes("cyc", &m, sizeof(m)) == sizeof(m)) {
+    s.state = m.state; s.epoch = m.epoch;
+  }
+  return snapStepOnly;   // a cycle was running; it cannot be resumed
 }

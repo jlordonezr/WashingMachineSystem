@@ -1,4 +1,23 @@
-# Reuse Water System – Firmware 3.9 (Wi-Fi)
+# Reuse Water System – Firmware 3.10 (Wi-Fi)
+
+## What's new in 3.10: resume a cycle cut short, from the app
+
+Until 3.9 a power cut, crash or watchdog restart during a cycle only reported it: the controller came back in `READY` and the cycle was lost. From 3.10 the controller keeps a small **cycle snapshot** in flash, and the app can resume the cycle.
+
+- **What is saved** (`CycleSnapshot`, `GreyWaterSettings.h`, 24 bytes, flash key `cyc`): the step, the mode (*Reuse and save* or *Reuse only*), whether the machine had already filled in step 1 or 3, the cycle's running time and the litres counted so far (tap, reused, saved). It is written when a cycle starts, at each step and when the machine has filled: about six writes per cycle, as wear-free for the flash as the 2.9 marker it replaces. It is removed when the cycle ends or is stopped.
+- **At power-up nothing runs by itself.** The controller always starts in `READY` with every output off. The screen shows `INTERRUPTED` › *Check washer* › *Resume in app* (`INTERRUMPIDO` › *Revise lavadora* › *Reanude en app*), and the phone alert says the cycle can be resumed from the app.
+- **The app asks in a popup**: *Resume the interrupted cycle?*, with the time, the step, the mode and the minutes left, and three buttons:
+  - **Resume cycle** continues at the **start of the saved step**, with the same mode and the water counted so far.
+  - **Not now** closes the popup; the Overview notice keeps a *Resume cycle* button.
+  - **Don't resume** hides the notice, like *OK, I checked the machine*.
+- **Step 1 or 3 after the machine had filled** waits only for the drain that ends the step, not for a new fill. A drain already running at the resume counts.
+- **Resume is offered only when it is safe to guess**: for **30 min after power-up** (`RESUME_OFFER_MS`), while `READY` and no tank wash runs, and not when the snapshot is more than **4 h old** (`RESUME_MAX_AGE_S`, checked once the clock is set). START on the panel, or a start from the app, replaces the offer with a new cycle. The popup is shown to the admin only, and only when *Start from the dashboard* is on (Resume is a remote start, `POST /api/interrupted/resume`).
+- **Water history:** the litres from before the cut are added when the resumed cycle ends. The resumed step is not used for the typical step times. The cycle duration leaves out the time without power.
+- **Limits:** the water that flowed in the interrupted step after its last snapshot is not counted. Step 4 starts again with its full length. A snapshot from 3.9 or older (an upgrade during a cycle is blocked, so only after a downgrade) is reported as interrupted but cannot be resumed.
+- Event log: *Resume offered in the app for 30 min*, *Cycle resumed: step 1/4, reuse only, was filled*.
+- Tests: simulation F16 (Reuse only cycle cut after the fill, resumed: step 1 ends on the wash drain, mode and litres kept) and F17 (limits); unit tests S6b (step gates) and C1-C3 (snapshot storage, 3.9 marker); dashboard A14 (popup, buttons, expiry, viewer, Spanish).
+- Build: 1.39 MB flash (44%) with Espressif core 3.3.12.
+
 
 ## What's new in 3.9: one fixed letter size for every screen message
 
@@ -138,7 +157,8 @@ The screen line holds only about 15 characters in the bold font, so until 3.2 a 
 | No flow for too long | (step) | No water flow › Is washer on? › If so: STOP › Call installer | Sin flujo › Revise lavadora › Si funciona, › pulse STOP y › pida ayuda |
 | Cycle finished | `DONE` / `TERMINADO` | Wash finished › Reused 26 L › Saved 30 L | Lavado listo › Reusados 26 L › Guardados 30 L |
 | Cycle stopped | `STOPPED` / `DETENIDO` | Cycle stopped › No water saved | Ciclo detenido › Sin ahorro |
-| Power cut during a cycle | `INTERRUPTED` / `INTERRUMPIDO` | Wash cut short › Check washer › Start again | Ciclo cortado › Revise lavadora › Inicie de nuevo |
+| Power cut during a cycle | `INTERRUPTED` / `INTERRUMPIDO` | Check washer › Resume in app (3.10; *Start again* when it cannot be resumed) | Revise lavadora › Reanude en app (*Inicie de nuevo* si no se puede reanudar) |
+| Cycle resumed from the app | `RESUMED` / `REANUDADO` | Cycle resumed | Ciclo reanudado |
 | Tank wash | `TANK CLEANING` / `LIMPIEZA TANQUE` | Cleaning tank › Stops when full › or in 9:42 | Limpiando › Para al llenarse › o en 9:42 |
 | Tank wash ended | `TANK CLEANED` / `WASH STOPPED` | Tank is clean › and full / Stopped early › Tank not full / Check the tank › Call installer | Tanque limpio › y lleno / Detenido antes › Tanque no lleno / Revise tanque › Pida ayuda |
 | Wi-Fi, updates | IP / `ReuseWater-Setup` / `UPDATING` / `UPDATE FAILED` | Wi-Fi connected › App: this IP / Wi-Fi setup › Key … / Updating › Do not unplug / Not updated › Try again | Wi-Fi conectado › App: esta IP / Configurar Wi-Fi › gw-… / Actualizando › No desconecte / Sin cambios › Reintente |
@@ -254,7 +274,7 @@ In 2.9 every valve and pump decision ran in `loop()`, together with the web serv
   - logs the event,
   - shows a notice on the app's Overview until someone presses OK or starts a new cycle.
 
-  The cycle is not resumed automatically, because the machine's state is unknown after a power cut.
+  The cycle is not resumed automatically, because the machine's state is unknown after a power cut. From 3.10 the app can resume it (see *What's new in 3.10*).
 - **Watchdog.** If `loop()` freezes for 5 s, the controller restarts with every output off, and the interrupted-cycle check takes over. The watchdog is paused during wireless updates.
 - **Real valve and pump states.** The status reports what each SSR is actually set to (`outputs` bits: 1 tap, 2 drain, 4 fill, 8 pump, 16 tank wash), and the Service tab shows them.
 - **Event log.** The last 50 events are kept in RAM and shown on the Service tab (`GET /api/events`): start-up and restart reason, steps, "machine filled", pump on/off with the reason, alerts, tank wash, Wi-Fi, updates and restores.
@@ -581,6 +601,7 @@ All pages need a password (HTTP Basic). User `admin` (the dashboard password) ca
 | POST | `/api/history/restore` | Restore history (409 if history exists, unless `force=1`) |
 | GET | `/api/events` | The last 50 events |
 | POST | `/api/interrupted/dismiss` | Hide the interrupted-cycle notice |
+| POST | `/api/interrupted/resume` | Resume the cycle cut short (3.10; within 30 min of power-up, needs *Start from the dashboard*) |
 
 Full message formats, status fields and error codes: `docs/PROTOCOL.md`.
 

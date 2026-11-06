@@ -24,7 +24,7 @@
 #define WIFI_RETRY_MS           60000         // try to reconnect every minute when offline
 #define WEB_USER                "admin"
 #define WEB_VIEWER_USER         "viewer"       // view-only: Overview and Water use, cannot change anything
-#define FIRMWARE_VERSION        "3.9.0"
+#define FIRMWARE_VERSION        "3.10.0"
 #define AUTH_SLOTS              6             // devices tracked for the wrong-password lockout
 #define ALERT_RETRY_WINDOW_S    1800          // an alert that cannot be sent is tried again for 30 min
 #define ALERT_TEST_WINDOW_S     30            // ... the test alert only for 30 s (the app is waiting)

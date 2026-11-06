@@ -113,6 +113,26 @@ int main(){
   CHECK(cfg.saveMinLpm==1.5f && cfg.language==LANG_EN && !strcmp(cfg.viewerPassword,"family-view-2"), "version 9 values lost in the migration");
   { Settings saved; memcpy(&saved, st["cfg"].data(), sizeof(saved)); CHECK(saved.version==SETTINGS_VERSION, "version 9 migration not saved"); }
 
+  printf("C1 cycle snapshot: saved and read back whole; removed at the end (3.10)\n");
+  st.clear(); boot();
+  { CycleSnapshot w; memset(&w,0,sizeof(w)); w.version=99; w.state=4; w.noSave=1; w.filled=1; w.epoch=1762400000; w.cycleS=1234;
+    w.tapL=1.5f; w.reusedL=22.5f; w.savedL=0; cycleSnapSave(w);
+    CycleSnapshot r; CHECK(cycleSnapLoad(r)==snapFull, "snapshot not read back as complete");
+    CHECK(r.version==CYCLE_SNAP_VERSION && r.state==4 && r.noSave==1 && r.filled==1 && r.epoch==1762400000 && r.cycleS==1234 && r.reusedL==22.5f,
+          "snapshot fields changed in flash");
+    cycleMarkEnd(); CHECK(cycleSnapLoad(r)==snapNone && st.count("cyc")==0, "snapshot not removed"); }
+
+  printf("C2 marker from firmware 2.9-3.9: reported with its step, cannot be resumed\n");
+  st.clear(); boot();
+  { struct { uint8_t state; uint32_t epoch; } old = { 4, 1762400000 }; st["cyc"]=std::vector<uint8_t>((uint8_t*)&old,(uint8_t*)&old+sizeof(old));
+    CycleSnapshot r; CHECK(cycleSnapLoad(r)==snapStepOnly && r.state==4 && r.epoch==1762400000, "3.9 marker not read as step only"); }
+
+  printf("C3 snapshot of another version or damaged: still reported as interrupted, not resumed\n");
+  st.clear(); boot();
+  { CycleSnapshot w; memset(&w,0x5A,sizeof(w)); w.version=CYCLE_SNAP_VERSION+1; st["cyc"]=std::vector<uint8_t>((uint8_t*)&w,(uint8_t*)&w+sizeof(w));
+    CycleSnapshot r; CHECK(cycleSnapLoad(r)==snapStepOnly && r.state==0 && r.reusedL==0, "other snapshot version not read as step only");
+    st["cyc"].resize(5); CHECK(cycleSnapLoad(r)==snapStepOnly, "damaged snapshot not reported"); }
+
   printf("\n%d checks passed, %d failed\n", pass, fail);
   return fail?1:0;
 }

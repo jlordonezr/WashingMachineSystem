@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.2
+# Communication protocol – firmware 3.10
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -32,6 +32,7 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 | POST | `/api/history/restore` | history fields, `force=1` to replace | `{"ok":true}` | 400 (invalid), 409 (history exists) |
 | GET | `/api/events` | — | array of `{epoch, uptimeS, text}`, newest first, up to 50 | 403 (viewer) |
 | POST | `/api/interrupted/dismiss` | — | `{"ok":true}` | — |
+| POST | `/api/interrupted/resume` | — | `{"ok":true}` = request accepted; the cycle continues at the start of the saved step on the next `loop()` pass (3.10) | 403 (*Start from the dashboard* off, or viewer), 409 `The cycle can no longer be resumed.` (no complete snapshot, more than 30 min after power-up, snapshot over 4 h old, not Ready, tank wash running, dismissed, or a cycle started) |
 
 Errors are JSON: `{"error":"<sentence for the user>"}`, always in English; the app translates them (`web/es.json`). Settings values outside their ranges are clamped (README, *Settings*), not refused, except the rules that return 400.
 
@@ -72,7 +73,7 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `tankAgeH`, `tankMaxAgeH` | number | Age of the oldest tank water (−1 empty/unknown), limit |
 | `cycle`, `month`, `prevMonth`, `total`, `last` | objects | Water statistics, litres (`tap`, `reused`, `saved`, `cycles`); `cycle.noSave` is true while a *Reuse only* cycle runs (3.7) |
 | `history` | object | `source` (where the history was loaded from), `hasData` |
-| `interrupted` | object | `active`, `step` (0 = before step 1, else 1–4), `epoch` of the last cycle cut short |
+| `interrupted` | object | `active`, `step` (0 = before step 1, else 1–4), `epoch` of the last cycle cut short (time of its last snapshot, 0 if the clock was not set); 3.10: `noSave` (it was *Reuse only*), `resume` (`/api/interrupted/resume` would be accepted now, ignoring the Settings switch), `resumeLeftS` (seconds left to resume, 0 when `resume` is false) |
 | `boot` | string | Last restart reason |
 | `updatesAllowed` | bool | Wireless updates accepted now (Ready, no tank wash) |
 | `defaultPasswords` | bool | A password is still `greywater` (the app then asks for new ones); always `false` for the viewer (3.5) |
