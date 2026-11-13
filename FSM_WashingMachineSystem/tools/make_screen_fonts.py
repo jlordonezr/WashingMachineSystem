@@ -3,7 +3,7 @@
 
 From 3.9 each style has one size, used for every message: the largest in
 which every screen text fits the 128 px line (tools/check_screen_text.py
-checks it, and that every glyph stays on rows 12-31). ASCII 0x20-0x7E,
+checks it, and that both message lines stay on the blue rows 17-63). ASCII 0x20-0x7E,
 1 bit per pixel. The source files are not stored in this repository; download
 them into one folder first (all are free to embed):
 

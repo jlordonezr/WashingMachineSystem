@@ -8,23 +8,27 @@
 #define BLACK 0
 #define SSD1306_SWITCHCAPVCC 2
 #define SSD1306_SETCONTRAST 0x81
-extern bool oledFailBegin;   // tests: the screen does not answer
+// The real library's begin() does not notice a missing screen; the firmware
+// probes the I2C address first (Wire.h: oledAddress).
 struct Adafruit_SSD1306 {
   std::vector<std::string> frame, shown;
-  Adafruit_SSD1306(int, int, TwoWire*, int) {}
-  bool begin(int, int) { return !oledFailBegin; }
+  std::vector<int> frameY, shownY;      // the row (cursor y) each text was printed at
+  int height = 0, beginAddress = 0, cursorY = 0;
+  Adafruit_SSD1306(int, int h, TwoWire*, int) : height(h) {}
+  bool begin(int, int address) { beginAddress = address; return true; }
   void ssd1306_command(uint8_t) {}
   void setFont(const GFXfont* = nullptr) {}
   void setTextSize(int) {}
   void setTextWrap(bool) {}
   void setTextColor(int) {}
-  void setCursor(int16_t, int16_t) {}
+  void setCursor(int16_t, int16_t y) { cursorY = y; }
   void setRotation(int) {}
-  void print(const char* s) { frame.push_back(s); }
-  void print(char c) { frame.push_back(std::string(1, c)); }
-  void println(const char* s) { frame.push_back(s); }
-  void clearDisplay() { frame.clear(); }
-  void display() { shown = frame; }
+  void print(const char* s) { frame.push_back(s); frameY.push_back(cursorY); }
+  void print(char c) { print(std::string(1, c).c_str()); }
+  void println(const char* s) { print(s); }
+  void clearDisplay() { frame.clear(); frameY.clear(); }
+  void display() { shown = frame; shownY = frameY; displays++; }
+  int displays = 0;                     // frames sent
   void getTextBounds(const char* s, int16_t, int16_t, int16_t* x1, int16_t* y1, uint16_t* w, uint16_t* h) {
     *x1 = 0; *y1 = -13; *w = (uint16_t)(strlen(s) * 8); *h = 13; }
   void drawRect(int16_t, int16_t, int16_t, int16_t, int) {}

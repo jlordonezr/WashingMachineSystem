@@ -60,7 +60,7 @@ extern volatile uint32_t drainPulseCount;
 #define PUMP_NO_FLOW_MS     300  // pump stops when no tap-sensor pulse arrives for this long
 #define PUMP_DRY_ALERT      3    // alert after this many pump starts without flow in one cycle
 #define OLED_WIDTH 128           // Width of the OLED display
-#define OLED_HEIGHT 32           // Height of the OLED display
+#define OLED_HEIGHT 64           // Height of the OLED display (3.12: 0.96" 128x64, rows 0-15 yellow, 16-63 blue)
 #define OPERATION_DELAY 250      // Delay of * miliseconds to operate each state.
 #define CONTRL_SSR_DELAY 0     // Delay of * miliseconds to control SSR.
 // Factory defaults for the settings below. At run time the values come from
@@ -88,7 +88,7 @@ extern volatile uint32_t drainPulseCount;
 #define DEBOUNCE_DELAY 20        // Debounce delay for button presses in milliseconds
 // OLED display
 #define DISPLAY_FRAME_MS 40      // ms between display frames (25 fps) while scrolling
-#define DISPLAY_PAGE_MS 3000     // ms each page of a screen message stays on ("Reusing water", "from the tank", ...)
+#define DISPLAY_PAGE_MS 3000     // ms each later page of a screen message stays on the bottom line ("Using tap water", "25 min left", ...)
 #define SCROLL_SPEED_PX 2        // px the message moves per frame (2 px x 25 fps = 50 px/s)
 #define SCROLL_PAUSE_MS 1500     // ms a long message rests at the start before scrolling
 #define SCROLL_GAP_PX 40         // px of blank space between the end and the repeat

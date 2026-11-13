@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.11
+# Communication protocol – firmware 3.12
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -82,7 +82,7 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `defaultPasswords` | bool | A password is still `greywater` (the app then asks for new ones); always `false` for the viewer (3.5) |
 | `role` | `admin` / `viewer` | Who signed in (3.5). The app hides the controls and the Service and Settings tabs for `viewer` |
 | `allowRemoteStart`, `alerts` | bool | Settings in effect |
-| `screen` | bool | OLED answered at start-up (3.0) |
+| `screen` | bool | OLED answered at start-up (3.0; from 3.12 an I2C probe at 0x3C, then 0x3D) |
 | `loop` | object | `maxMs` since start-up, `lastMinMaxMs` in the last full minute (3.0) |
 | `heap` | object | `free`, `min` bytes (3.0) |
 | `alert` | object | `seq` (results received), `ok`, `code`: HTTP status; −100 no Wi-Fi for 5 min; −101 bad server address; other negative values (HTTPClient −1 … −11): could not connect (3.0; −2 / −3 until 3.2.0) |

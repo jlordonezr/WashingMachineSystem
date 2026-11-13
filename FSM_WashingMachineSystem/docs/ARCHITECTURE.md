@@ -1,4 +1,4 @@
-# Architecture – firmware 3.11
+# Architecture – firmware 3.12
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -18,7 +18,7 @@ One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensor
 | D10 | 21 | STOP button, active LOW, internal pull-up | `STOP_BUTTON` |
 | D11 | 38 | START button, active LOW, internal pull-up | `START_BUTTON` |
 | D1 / TX0 | 43 | Optional active buzzer (do not use `Serial0`; may chirp briefly at power-on) | `BUZZER_PIN` |
-| I2C 0x3C | — | SSD1306 128×32 OLED, 400 kHz | `oled` |
+| I2C 0x3C (or 0x3D) | — | SSD1306 128×64 OLED, rows 0-15 yellow and 16-63 blue (3.12), 400 kHz | `oled` |
 
 SSRs are on when their pin is HIGH (`ssrON`). Wiring details are in the Runbook.
 
@@ -43,7 +43,7 @@ FSM_WashingMachineSystem.ino   setup(), loop(), state machine wiring (AgileState
 │    requests modes ──► GreyWaterOutputs   only writer of the SSR pins; interlocks; PumpGuard; TankLevel
 │                         ▲  safetyTick() every 20 ms from GreyWaterTask (FreeRTOS)
 ├─ GreyWaterSensors     flow interrupts + FlowMeter (rate, flowing, starts, litres)
-├─ GreyWaterDisplay     OLED: status / notices in pages ("a|b|c", 3 s each), frame-timed, only redraws on change
+├─ GreyWaterDisplay     OLED 128x64: header in the yellow rows, message on one or two blue lines ("top|bottom"); start-up animation: Border Collie chasing a butterfly (BootAnimation.h), frame-timed, only redraws on change
 ├─ GreyWaterDiagnostics event log (50, RAM), loop timing, buzzer, restart reason
 ├─ GreyWaterSettings    settings + history in NVS (versioned structs, history twice + kept-aside copy)
 └─ GreyWaterNet         Wi-Fi (WiFiManager), web server + API, OTA, mDNS, NTP, alert task

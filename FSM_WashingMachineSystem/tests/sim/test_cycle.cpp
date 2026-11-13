@@ -14,7 +14,7 @@
 void setup();
 void loop();
 SerialStub Serial;
-bool oledFailBegin = false;
+int oledAddress = 0x3C;      // the screen answers here (0 = no screen)
 TwoWire Wire;
 
 // ── simulated hardware ──
@@ -124,6 +124,8 @@ static void pressStop()  { stopHeldUntil  = simUs + 150000; }
 // Holds START for the given time; the washer program starts when it is released (3.8).
 static void holdStart(double s) { startHeldUntil = simUs + (uint64_t)(s * 1e6); startAt = now() + s; }
 static bool onScreen(const char* t) { for (auto& x : oled.shown) if (x == t) return true; return false; }
+// Row (cursor y) a text on the screen was printed at, -1 if it is not there.
+static int rowOf(const char* t) { for (size_t i = 0; i < oled.shown.size(); ++i) if (oled.shown[i] == t) return oled.shownY[i]; return -1; }
 static double stateAt(int st) { for (auto& s : rec.states) if (s.first == st) return s.second; return -1; }
 // True if any screen message had m as one of its pages ("a|b|c").
 static bool sawMsg(const char* m) {
@@ -167,7 +169,7 @@ int main(int argc, char** argv) {
     CHECK(rec.worstDeadHeadMs <= 350, "pump ran %u ms against the closed inlet", rec.worstDeadHeadMs);
     CHECK(!rec.pumpWhileTap, "pump and tap valve were on together");
     CHECK(rec.savedWhileSaving, "rinse water was never saved to the tank");
-    const char* expected[] = {"Waiting to fill", "Reusing water", "Washing...", "Draining", "Rinsing...", "Filling tank"};
+    const char* expected[] = {"Waiting to fill", "Reusing water", "Washing...", "Soapy water", "Rinsing...", "Saving water"};
     for (const char* m : expected) CHECK(sawMsg(m), "screen never showed \"%s\"", m);
     CHECK(stats.totalCycles == 1 && stats.totalReusedL > 10 && stats.totalSavedL > 10, "stats: cycles %u, reused %.1f, saved %.1f",
           (unsigned)stats.totalCycles, stats.totalReusedL, stats.totalSavedL);
@@ -209,7 +211,7 @@ int main(int argc, char** argv) {
   }
   else if (sc == "F4b") {
     printf("F4 power cut during the rinse (part 2: power back)\n");
-    Preferences::loadFile(flash); simReset = ESP_RST_POWERON; boot(); runFor(7);   // after the start-up animation and "System ready"
+    Preferences::loadFile(flash); simReset = ESP_RST_POWERON; boot(); runFor(11);  // after the start-up animation (7.4 s) and "System ready"
     int st; uint32_t ep; bool intr = interruptedInfo(st, ep);
     CHECK(intr && st == stFill2, "interruption not detected (flag %d, step %d)", intr, st);
     CHECK(activeState == stIdle && pinOut[OUT_MOTOR] == LOW, "not safely in Ready after power-up");
@@ -227,7 +229,7 @@ int main(int argc, char** argv) {
     CHECK(!interruptedInfo(st, ep) && alerts.empty(), "false interruption alert at a normal power-up");
     CHECK(eventSeen("Controller started (Switched on or power cut)"), "start-up not in the event log");
     // Every screen font from Settings redraws the Ready screen at once, with the same text (3.4).
-    runFor(8);                                             // past the start-up animation and notice
+    runFor(11);                                            // past the start-up animation (7.4 s) and notice
     auto shownText = []() { return oled.shown.empty() ? std::string() : oled.shown.back(); };
     std::string before = shownText();
     for (int f = 1; f < SCREEN_FONT_COUNT; ++f) {
@@ -259,7 +261,7 @@ int main(int argc, char** argv) {
   }
   else if (sc == "F9") {
     printf("F9 screen missing at start-up\n");
-    oledFailBegin = true; typicalProgram(); boot();
+    oledAddress = 0; typicalProgram(); boot();
     CHECK(!displayAvailable(), "missing screen not detected");
     CHECK(alertSeen("Reuse Water: screen not working"), "no screen alert");
     CHECK(eventSeen("Screen not found"), "missing screen not in the event log");
@@ -370,7 +372,7 @@ int main(int argc, char** argv) {
     pressStop(); runFor(6);
     // Short press: the screen says what a release starts; the cycle starts on release and saves.
     holdStart(1.0); runFor(0.3);
-    CHECK(onScreen("REUSE AND SAVE") && onScreen("Release to start"), "short press: screen does not show REUSE AND SAVE / Release to start");
+    CHECK(onScreen("REUSE AND SAVE") && onScreen("Release to start") && onScreen("Hold: reuse only"), "short press: screen does not show REUSE AND SAVE / Release to start / Hold: reuse only");
     CHECK(activeState == stIdle, "the cycle started while START was still held");
     runFor(1.0);
     SystemStatus snap; getSystemStatus(snap);
@@ -382,7 +384,7 @@ int main(int argc, char** argv) {
     holdStart(3.0); runFor(1.8);
     CHECK(onScreen("REUSE AND SAVE"), "at 1.8 s the screen should still show REUSE AND SAVE");
     runFor(0.4);
-    CHECK(onScreen("REUSE ONLY") && onScreen("Release to start"), "at 2.2 s the screen does not show REUSE ONLY / Release to start");
+    CHECK(onScreen("REUSE ONLY") && onScreen("Release to start") && onScreen("Rinse not saved"), "at 2.2 s the screen does not show REUSE ONLY / Release to start / Rinse not saved");
     CHECK(activeState == stIdle, "the cycle started before START was released");
     runFor(1.5);
     getSystemStatus(snap);
@@ -391,7 +393,7 @@ int main(int argc, char** argv) {
     pressStop(); runFor(6);
     // Held 20 s: stuck; nothing starts, before or after the release.
     holdStart(20.0); runFor(16);
-    CHECK(onScreen("START BUTTON") && onScreen("Stuck"), "a stuck START is not reported on the screen");
+    CHECK(onScreen("START BUTTON") && onScreen("Button stuck"), "a stuck START is not reported on the screen");
     runFor(6);
     CHECK(activeState == stIdle, "a 20 s hold started a cycle (state %d)", activeState);
     CHECK(eventSeen("START held 15 s: treated as stuck"), "stuck START not in the event log");
@@ -452,9 +454,55 @@ int main(int argc, char** argv) {
     CHECK(alertSeen("Reuse Water: cycle complete"), "no cycle-complete alert");
     Preferences p; CHECK(p.getBytesLength("cyc") == 0, "snapshot left behind after the resumed cycle ended");
   }
+  else if (sc == "F18") {
+    printf("F18 128x64 two-colour screen: header in the yellow rows, two message lines in the blue rows (3.12)\n");
+    boot(); runFor(11);                                    // past the start-up animation (7.4 s) and notice
+    CHECK(oled.height == 64, "screen height is %d rows, not 64", oled.height);
+    int title = rowOf("READY"), top = rowOf("Start washer"), bottom = rowOf("Press START");
+    CHECK(title >= 0 && title + 8 <= 16, "header at row %d: not inside the yellow rows 0-15", title);
+    CHECK(top >= 16 && bottom > top && bottom < 64, "the two pages are not on two lines in the blue rows (%d, %d)", top, bottom);
+    // Three pages: the first stays on the top line, the others take turns under it.
+    displayShowNotice("TEST", "One|Two|Three", 1000);
+    runFor(0.2);
+    CHECK(rowOf("TEST") == title && rowOf("One") == top && rowOf("Two") == bottom && rowOf("Three") < 0, "3 pages: first screen is not One / Two");
+    runFor(DISPLAY_PAGE_MS / 1000.0);
+    CHECK(rowOf("One") == top && rowOf("Three") == bottom && rowOf("Two") < 0, "3 pages: second screen is not One / Three (notice too short, or the top line moved)");
+    runFor(DISPLAY_PAGE_MS / 1000.0 + 0.2);
+    CHECK(rowOf("Start washer") == top && rowOf("One") < 0, "notice did not end after showing every page");
+    // One page: alone, half-way between the two lines.
+    displayShowNotice("TEST", "Alone", 2000); runFor(0.2);
+    int alone = rowOf("Alone");
+    CHECK(alone > top && alone < bottom, "a one-page message is at row %d, not between the two lines (%d, %d)", alone, top, bottom);
+    // A countdown on the bottom line does not restart the pages.
+    displayShowNotice("TEST", "One|Two|9 min left", 20000); runFor(DISPLAY_PAGE_MS / 1000.0 + 0.2);
+    CHECK(rowOf("9 min left") == bottom, "third page not shown after one page time");
+    displayShowNotice("TEST", "One|Two|8 min left", 20000); runFor(0.2);
+    CHECK(rowOf("8 min left") == bottom && rowOf("Two") < 0, "a new number in the countdown restarted the pages");
+  }
+  else if (sc == "F20") {
+    printf("F20 start-up: the collie and the butterfly (about 4.5 s, 25 fps), then System ready with the version, every message on two lines at most (3.12)\n");
+    typicalProgram(); int sent0 = oled.displays; boot();   // boot() runs 1 s: the scene is playing
+    CHECK(oled.shown.empty(), "text on the screen during the start-up scene");
+    runFor(2.5); CHECK(oled.shown.empty(), "the scene ended before 3.5 s");
+    int frames = oled.displays - sent0;
+    CHECK(frames >= 3.5 * 25 * 0.9 && frames <= 3.5 * 25 * 1.1, "%d frames sent in 3.5 s: not 25 per second", frames);
+    runFor(2.0);
+    CHECK(onScreen("REUSE WATER") && onScreen("System ready") && onScreen("Version " FIRMWARE_VERSION),
+          "after the scene the screen does not show REUSE WATER / System ready / Version " FIRMWARE_VERSION);
+    pressStart(); runFor(1800);
+    for (auto& m : rec.msgs) CHECK(std::count(m.begin(), m.end(), '|') <= 1, "message with more than two lines: \"%s\"", m.c_str());
+    CHECK(stats.totalCycles == 1, "cycle did not complete");
+  }
+  else if (sc == "F19") {
+    printf("F19 screen at the other I2C address, 0x3D (3.12)\n");
+    oledAddress = 0x3D; typicalProgram(); boot();
+    CHECK(displayAvailable() && oled.beginAddress == 0x3D, "screen at 0x3D not found (started at 0x%02X)", oled.beginAddress);
+    CHECK(!alertSeen("Reuse Water: screen not working") && !eventSeen("Screen not found"), "false missing-screen alert");
+    runFor(11); CHECK(onScreen("READY"), "nothing drawn on the screen at 0x3D");
+  }
   else if (sc == "F17") {
     printf("F17 Resume limits: 3.9 marker, tank wash, 30 min, dismiss, START, old snapshot (3.10)\n");
-    typicalProgram(); boot(); runFor(7);
+    typicalProgram(); boot(); runFor(11);
     Preferences p; int st; uint32_t ep;
     auto cut = [&](uint8_t state, uint32_t epoch) {     // as if the power had just come back with this snapshot
       CycleSnapshot s; memset(&s, 0, sizeof(s)); s.version = CYCLE_SNAP_VERSION; s.state = state; s.epoch = epoch; s.cycleS = 900; s.reusedL = 12;
@@ -494,18 +542,15 @@ int main(int argc, char** argv) {
     runFor(0.5);
     bool doneShown = false; for (auto& t : oled.shown) if (t == "TERMINADO") doneShown = true;
     CHECK(doneShown, "end-of-cycle screen is not TERMINADO");
-    for (const char* m : {"Esperando agua", "Reusando agua", "Lavando...", "Desaguando", "Enjuagando...", "Agua al tanque"})
+    for (const char* m : {"Esperando agua", "Reusando agua", "Lavando...", "Agua jabonosa", "Enjuagando...", "Guardando agua"})
       CHECK(sawMsg(m), "screen never showed \"%s\"", m);
     CHECK(activeState == stIdle && stats.totalCycles == 1, "cycle did not complete");
     int prio = 0;
     CHECK(alertSeen("Reúso de Agua: ciclo completo", &prio) && prio == 2, "Spanish cycle-complete alert missing");
     CHECK(eventSeen("Cycle complete"), "event log should stay in English");
-    bool reused = false, saved = false;   // the end notice shows its pages one after the other
-    for (int i = 0; i < 100; ++i) {
-      runFor(0.1);
-      for (auto& t : oled.shown) { if (t.rfind("Reusados ", 0) == 0) reused = true; if (t.rfind("Guardados ", 0) == 0) saved = true; }
-    }
-    CHECK(reused && saved, "end-of-cycle screen does not page \"Reusados ... L\" and \"Guardados ... L\"");
+    bool reused = false, saved = false;   // the end notice shows both lines at once (3.12)
+    for (auto& t : oled.shown) { if (t.rfind("Reusados ", 0) == 0) reused = true; if (t.rfind("Guardados ", 0) == 0) saved = true; }
+    CHECK(reused && saved, "end-of-cycle screen does not show \"Reusados ... L\" and \"Guardados ... L\" together");
   }
   else if (sc == "F6") {
     printf("F6 watchdog restart while Ready (no cycle)\n");

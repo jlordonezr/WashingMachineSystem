@@ -98,9 +98,10 @@ void setup() {
   allSSROff();
   outputsBegin();    // the outputs module owns the SSRs from here on (interlocks, see GreyWaterOutputs.h)
 
-  Wire.setClock(400000);  // I2C Fast Mode: a full frame takes ~13 ms instead of ~50 ms
-                           // at the default 100 kHz, so scrolling stays smooth and the
-                           // loop() is not held up while the OLED is being refreshed.
+  Wire.begin();
+  Wire.setClock(400000);  // I2C Fast Mode: a full 128x64 frame takes ~25 ms instead of
+                           // ~100 ms at the default 100 kHz, so loop() is not held up
+                           // for long while the OLED is being refreshed.
 
   // No screen is not a reason to stop: the cycle, buttons and app still work.
   // bootChecks() logs it and sends an alert once Wi-Fi is up.
@@ -108,8 +109,11 @@ void setup() {
     DEBUG_PRINT("SSD1306 not found: running without a screen");
   }
 
-  // Border Collie chasing a butterfly (about 4 s), then "System ready" for 2 s.
-  displayStartIntro(TRS("REUSE WATER", "REUSO DE AGUA"), TRS("System ready", "Sistema listo"), 2000);
+  // A Border Collie herding sheep (about 4.5 s), then "System ready" and the
+  // firmware version for 2 s.
+  static char ready[48];
+  snprintf(ready, sizeof(ready), TRS("System ready|Version %s", "Sistema listo|Version %s"), FIRMWARE_VERSION);
+  displayStartIntro(TRS("REUSE WATER", "REUSO DE AGUA"), ready, 2000);
   displayUpdate();
   setupStateMachine();
   netBegin();        // Wi-Fi connects in the background; the cycle never waits for it

@@ -15,51 +15,56 @@ Adafruit_SSD1306 oled(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 static bool displayOk = true;        // false if the OLED did not answer at start-up
 
 // ── OLED display ───────────────────────────────────────────────────────────
-// Layout on the 128x32 screen:
+// The screen (3.12) is a 0.96" 128x64 SSD1306 with two fixed colours: rows
+// 0-15 light up yellow, rows 16-63 blue (the glass decides, not the firmware).
+// The layout follows the colours:
 //
-//   y  0-9   header : step/title (built-in 6x8 font, x 0-95) | tank level (x 98-114) | wash valve (x 117-127)
-//   y 10     separator line
-//   y 12-31  message: the font chosen in Settings (Screen font), one fixed
-//            size for every message, centred
+//   y  0-15  yellow, header : step/title (built-in 6x8 font, x 0-95) | tank level (x 98-114) | wash valve (x 117-127)
+//   y 16-63  blue, message  : two lines in the font chosen in Settings (Screen
+//            font), one fixed size for every message, each line centred
 //
 // A message may have several pages separated by '|', for example
-// "Reusing water|from the tank|25 min left". One line holds only about 15
+// "Tank low|Using tap water|25 min left". One line holds only about 15
 // characters, so pages let the screen say what is happening, what it means
-// and what to do. Pages change every DISPLAY_PAGE_MS.
+// and what to do. The first page stays on the top line; the other pages take
+// turns on the bottom line, changing every DISPLAY_PAGE_MS. A message of two
+// pages is shown whole and never changes; a message of one page sits alone in
+// the middle of the blue area.
 //
 //   +--------------------------------------------------+
-//   |1/4 FILL                            [###] [W]     |
-//   |--------------------------------------------------|
-//   |            Using tank water                      |
+//   |WASH 1 OF 4                         [###] [W]     |  yellow
+//   |                                                  |
+//   |                  Tank low                        |  blue
+//   |              Using tap water                     |  blue (then "25 min left")
 //   +--------------------------------------------------+
 //
 // State logic only *sets* the text (displaySetStatus / displayShowNotice);
-// displayUpdate(), called every loop() pass, does all drawing. That keeps the
-// scroll smooth (it no longer depends on the 250 ms state timer) and only
-// sends a frame over I2C when something on screen actually changed.
+// displayUpdate(), called every loop() pass, does all drawing and only sends a
+// frame over I2C when something on screen actually changed.
 
 #define DISP_TITLE_LEN   22
 #define DISP_MSG_LEN     96    // all pages of a message
-#define HEADER_TEXT_Y    1
-#define SEPARATOR_Y      10
-// Message fonts, chosen in Settings -> Screen font (cfg.screenFont). From 3.9
-// each font has ONE size for every message, so the letters never change size
-// between pages or screens: the largest size in which every screen text fits
-// the 128 px line (tools/check_screen_text.py fails otherwise). The baseline
-// centres the letters in the message area, rows 12-31 under the separator,
-// with descenders inside the screen.
-struct ScreenFont { const GFXfont* font; int16_t baseline; };
+#define HEADER_H         16    // the yellow rows
+#define HEADER_TEXT_Y    4     // 8 px letters on rows 4-11, centred in the yellow band
+// Message fonts, chosen in Settings -> Screen font (cfg.screenFont). Each font
+// has ONE size for every message, so the letters never change size between
+// pages or screens: the largest size in which every screen text fits the
+// 128 px line (tools/check_screen_text.py fails otherwise). The two baselines
+// place the top and the bottom line in the blue area, rows 17-63, clear of the
+// yellow rows and of each other; a one-page message is drawn half-way between.
+struct ScreenFont { const GFXfont* font; int16_t baseline1, baseline2; };
 static const ScreenFont SCREEN_FONTS[SCREEN_FONT_COUNT] = {
-  { &Hyperlegible12, 26 },   // 0 hyperlegible (default): capitals 12 px, letters on rows 13-29
-  { &PlainSans13,    27 },   // 1 plain sans: capitals 13 px, every glyph on rows 12-30
-  { &Terminal16,     26 },   // 2 terminal bold: capitals 12 px, rows 14-29
-  { &Schoolbook10,   26 },   // 3 schoolbook bold: capitals 11 px, rows 14-28
+  { &Hyperlegible12, 33, 57 },   // 0 hyperlegible (default): capitals 12 px, rows 20-36 and 44-60
+  { &PlainSans13,    34, 58 },   // 1 plain sans: capitals 13 px, rows 19-37 and 43-61
+  { &Terminal16,     33, 57 },   // 2 terminal bold: capitals 12 px, rows 21-36 and 45-60
+  { &Schoolbook10,   33, 57 },   // 3 schoolbook bold: capitals 11 px, rows 21-35 and 45-59
 };
 #define TANK_ICON_X      98    // titles are at most 16 characters (96 px), see tools/check_screen_text.py
 #define TANK_ICON_W      17
 #define WASH_ICON_X      117
 #define WASH_ICON_W      11
-#define ICON_H           10    // full header height, down to the separator
+#define ICON_Y           1     // icons on rows 1-14 of the yellow band
+#define ICON_H           14
 
 static char statusTitle[DISP_TITLE_LEN]   = "";
 static char statusMessage[DISP_MSG_LEN]   = "";
@@ -70,8 +75,24 @@ static unsigned long noticeStart    = 0;
 static unsigned long noticeDuration = 0;   // 0 = no notice
 static bool displayDirty = true;
 
+// True if a device answers at this I2C address.
+static bool i2cAnswers(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
+}
+
+// These modules answer at 0x3C or, with the address jumper on the back moved
+// ("0x7A"), at 0x3D. The library's begin() does not notice a missing screen,
+// so the address is probed first.
 bool displayBegin() {
-  displayOk = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  static const uint8_t ADDRESSES[] = { 0x3C, 0x3D };
+  Wire.begin();
+  displayOk = false;
+  for (uint8_t address : ADDRESSES) {
+    if (!i2cAnswers(address)) continue;
+    displayOk = oled.begin(SSD1306_SWITCHCAPVCC, address);
+    break;
+  }
   if (displayOk) {                        // full brightness (the library starts at 0xCF): easier to read from a distance
     oled.ssd1306_command(SSD1306_SETCONTRAST);
     oled.ssd1306_command(0xFF);
@@ -164,7 +185,10 @@ static bool drawIntroFrame() {
   float want = 18.0f + 8.0f * sinf(intro.frame * 0.09f);
   float flyStep = v * (gap < want ? 1.35f : 0.8f);
   intro.flyX -= flyStep;
-  float flyY = 7.0f + 5.0f * sinf(intro.frame * 0.21f) + 2.0f * sinf(intro.frame * 0.53f);
+  // 128x64 (3.12): the collie runs along the bottom of the blue rows; the
+  // butterfly flutters from its head height up into the yellow band (rows 4-46;
+  // on the 128x32 screen it was rows 0-14, the collie's head height).
+  float flyY = 19.0f + 11.0f * sinf(intro.frame * 0.21f) + 3.0f * sinf(intro.frame * 0.53f);
 
   // Gallop in; the butterfly hovers and the collie drops into its stalk and
   // creeps; then the butterfly darts off and the collie sprints after it.
@@ -205,7 +229,8 @@ void displayShowNotice(const char* title, const char* message, unsigned long dur
   setText(noticeTitle, sizeof(noticeTitle), title);
   setText(noticeMessage, sizeof(noticeMessage), message);
   noticeStart    = millis();
-  unsigned long allPages = (unsigned long)pageCount(message) * DISPLAY_PAGE_MS;
+  uint8_t n = pageCount(message);             // the first page stays; the others take turns under it
+  unsigned long allPages = (unsigned long)(n > 1 ? n - 1 : 1) * DISPLAY_PAGE_MS;
   noticeDuration = durationMs > allPages ? durationMs : allPages;   // long enough to show every page once
   displayDirty   = true;
 }
@@ -222,13 +247,13 @@ void displayClearNotice() {
 // reads as a tank and "half" is easy to tell from "full".
 static void drawTankIcon(WaterLevel level) {
   const int16_t innerH = ICON_H - 2;
-  oled.drawRect(TANK_ICON_X, 0, TANK_ICON_W, ICON_H, WHITE);
+  oled.drawRect(TANK_ICON_X, ICON_Y, TANK_ICON_W, ICON_H, WHITE);
   int16_t fillH = (level == high) ? innerH : (level == medium) ? innerH / 2 : 0;
   if (fillH > 0) {
-    oled.fillRect(TANK_ICON_X + 1, ICON_H - 1 - fillH, TANK_ICON_W - 2, fillH, WHITE);
+    oled.fillRect(TANK_ICON_X + 1, ICON_Y + ICON_H - 1 - fillH, TANK_ICON_W - 2, fillH, WHITE);
   }
   if (level != high) {
-    int16_t tickY = ICON_H - 1 - innerH / 2 - 1;   // just above the half-way fill line
+    int16_t tickY = ICON_Y + ICON_H - 1 - innerH / 2 - 1;   // just above the half-way fill line
     oled.drawFastHLine(TANK_ICON_X + 1, tickY, 2, WHITE);
     oled.drawFastHLine(TANK_ICON_X + TANK_ICON_W - 3, tickY, 2, WHITE);
   }
@@ -237,10 +262,10 @@ static void drawTankIcon(WaterLevel level) {
 // Wash icon: "W" in an outline when the valve is closed, inverted when open.
 static void drawWashIcon(bool open) {
   if (open) {
-    oled.fillRoundRect(WASH_ICON_X, 0, WASH_ICON_W, ICON_H, 2, WHITE);
+    oled.fillRoundRect(WASH_ICON_X, ICON_Y, WASH_ICON_W, ICON_H, 2, WHITE);
     oled.setTextColor(BLACK);
   } else {
-    oled.drawRoundRect(WASH_ICON_X, 0, WASH_ICON_W, ICON_H, 2, WHITE);
+    oled.drawRoundRect(WASH_ICON_X, ICON_Y, WASH_ICON_W, ICON_H, 2, WHITE);
     oled.setTextColor(WHITE);
   }
   oled.setCursor(WASH_ICON_X + 3, HEADER_TEXT_Y);   // 5 px glyph centred in the 11 px box, on the title line
@@ -252,23 +277,64 @@ const char* displayGetTitle()   { return statusTitle; }
 const char* displayGetMessage() { return statusMessage; }
 const char* displayGetDetail()  { return statusDetail; }
 
+// One line of the message area: its text, measured once when it changes.
+struct MsgLine {
+  char text[DISP_MSG_LEN];
+  int16_t width, offsetX, scrollX;
+  unsigned long scrollStart;
+};
+
+// Stores a line's new text and measures it in the current font. Returns true
+// if the line changed (or `remeasure`: a new font from Settings).
+static bool setLine(MsgLine& line, const char* text, bool remeasure) {
+  if (!setText(line.text, sizeof(line.text), text) && !remeasure) return false;
+  int16_t x1 = 0, y1;
+  uint16_t w = 0, h;
+  if (line.text[0]) oled.getTextBounds(line.text, 0, 0, &x1, &y1, &w, &h);
+  line.width       = w;
+  line.offsetX     = x1;
+  line.scrollX     = 0;          // restart the scroll from the left
+  line.scrollStart = millis();
+  return true;
+}
+
+// A line wider than the screen (none today, see tools/check_screen_text.py) scrolls.
+static bool lineScrolls(const MsgLine& line) { return line.width > OLED_WIDTH; }
+static bool lineMoving(const MsgLine& line)  { return lineScrolls(line) && millis() - line.scrollStart >= SCROLL_PAUSE_MS; }
+
+static void drawLine(MsgLine& line, int16_t baseline) {
+  if (!line.text[0]) return;
+  if (!lineScrolls(line)) {
+    oled.setCursor((OLED_WIDTH - line.width) / 2 - line.offsetX, baseline);
+    oled.print(line.text);
+    return;
+  }
+  // Draw the text twice so the start follows the end around seamlessly.
+  int16_t loopLen = line.width + SCROLL_GAP_PX;
+  oled.setCursor(-line.scrollX - line.offsetX, baseline);
+  oled.print(line.text);
+  oled.setCursor(-line.scrollX + loopLen - line.offsetX, baseline);
+  oled.print(line.text);
+  if (lineMoving(line)) {
+    line.scrollX += SCROLL_SPEED_PX;
+    if (line.scrollX >= loopLen) {    // one full loop done: rest again at the start
+      line.scrollX = 0;
+      line.scrollStart = millis();
+    }
+  }
+}
+
 void displayUpdate(bool force) {
   static unsigned long lastFrame   = 0;
   static char shownTitle[DISP_TITLE_LEN] = "";
   static char shownMessage[DISP_MSG_LEN] = "\x01";  // never matches: forces first measure
-  static char shownPage[DISP_MSG_LEN]    = "\x01";  // the page on screen now
   static char firstPage[DISP_MSG_LEN]    = "";
-  static uint8_t shownFont = 0xFF;      // cfg.screenFont the page was measured with
-  static uint8_t pages = 1, pageIndex = 0;
+  static MsgLine lines[2] = { { "\x01", 0, 0, 0, 0 }, { "\x01", 0, 0, 0, 0 } };   // top and bottom line on screen now
+  static uint8_t shownFont = 0xFF;      // cfg.screenFont the lines were measured with
+  static uint8_t pages = 1, pageIndex = 1;   // pageIndex: the page on the bottom line (1 .. pages-1)
   static unsigned long pageStart = 0;
   static WaterLevel shownLevel = low;
   static bool shownWash        = false;
-  static int16_t msgWidth      = 0;
-  static int16_t msgOffsetX    = 0;
-  static const GFXfont* msgFont = &Hyperlegible12;
-  static int16_t msgBaseline   = 26;
-  static int16_t scrollX       = 0;
-  static unsigned long scrollStart = 0;
 
   if (!displayOk) return;   // no screen: everything else keeps running
   if (!force && millis() - lastFrame < DISPLAY_FRAME_MS) return;
@@ -292,8 +358,8 @@ void displayUpdate(bool force) {
   const char* title   = noticeActive ? noticeTitle   : statusTitle;
   const char* message = noticeActive ? noticeMessage : statusMessage;
 
-  // New message: start again at its first page, unless only a number in a
-  // later page changed (a countdown), so the pages keep their rhythm.
+  // New message: the bottom line starts again at the second page, unless only
+  // a number in a later page changed (a countdown), so the pages keep their rhythm.
   if (setText(shownMessage, sizeof(shownMessage), message)) {
     char first[DISP_MSG_LEN];
     pageText(first, sizeof(first), message, 0);
@@ -301,38 +367,28 @@ void displayUpdate(bool force) {
     if (n != pages || strcmp(first, firstPage) != 0) {
       strlcpy(firstPage, first, sizeof(firstPage));
       pages = n;
-      pageIndex = 0;
+      pageIndex = 1;
       pageStart = millis();
     }
   }
-  if (pages > 1 && millis() - pageStart >= DISPLAY_PAGE_MS) {
-    pageIndex = (pageIndex + 1) % pages;
+  if (pages > 2 && millis() - pageStart >= DISPLAY_PAGE_MS) {
+    pageIndex = pageIndex + 1 < pages ? pageIndex + 1 : 1;
     pageStart = millis();
   }
-  char page[DISP_MSG_LEN];
-  pageText(page, sizeof(page), message, pageIndex);
+  char top[DISP_MSG_LEN], bottom[DISP_MSG_LEN] = "";
+  pageText(top, sizeof(top), message, 0);
+  if (pages > 1) pageText(bottom, sizeof(bottom), message, pageIndex);
 
-  // New page or a new font from Settings: pick the font and measure the page
-  // once, restart the scroll from the left. One size per font; a page wider
-  // than the screen (none today, see tools/check_screen_text.py) would scroll.
+  // New text on a line or a new font from Settings: measure the line once.
   uint8_t fontIndex = cfg.screenFont < SCREEN_FONT_COUNT ? cfg.screenFont : 0;
   bool fontChanged = fontIndex != shownFont;
   shownFont = fontIndex;
-  if (setText(shownPage, sizeof(shownPage), page) || fontChanged) {
-    message = page;
-    oled.setTextSize(1);
-    oled.setTextWrap(false);
-    int16_t x1, y1;
-    uint16_t w, h;
-    msgFont = SCREEN_FONTS[shownFont].font;  msgBaseline = SCREEN_FONTS[shownFont].baseline;
-    oled.setFont(msgFont);
-    oled.getTextBounds(message, 0, msgBaseline, &x1, &y1, &w, &h);
-    msgWidth    = w;
-    msgOffsetX  = x1;
-    scrollX     = 0;
-    scrollStart = millis();
-    displayDirty = true;
-  }
+  const ScreenFont& sf = SCREEN_FONTS[shownFont];
+  oled.setTextSize(1);
+  oled.setTextWrap(false);
+  oled.setFont(sf.font);
+  if (setLine(lines[0], top, fontChanged))    displayDirty = true;
+  if (setLine(lines[1], bottom, fontChanged)) displayDirty = true;
   if (setText(shownTitle, sizeof(shownTitle), title)) displayDirty = true;
 
   WaterLevel level = tankLevel();
@@ -340,48 +396,29 @@ void displayUpdate(bool force) {
   if (level != shownLevel)              { shownLevel = level;           displayDirty = true; }
   if (washOpen != shownWash)            { shownWash = washOpen;          displayDirty = true; }
 
-  bool scrolling = msgWidth > OLED_WIDTH;
-  bool moving    = scrolling && (millis() - scrollStart >= SCROLL_PAUSE_MS);
+  bool moving = lineMoving(lines[0]) || lineMoving(lines[1]);
   if (!displayDirty && !moving) return;   // nothing changed: skip the I2C transfer
   displayDirty = false;
 
   oled.clearDisplay();
-  oled.setTextWrap(false);
 
-  // Header
+  // Header, in the yellow rows
   oled.setFont();          // built-in 6x8 font
-  oled.setTextSize(1);
   oled.setTextColor(WHITE);
   oled.setCursor(0, HEADER_TEXT_Y);
   oled.print(title);
   drawTankIcon(level);
   drawWashIcon(washOpen);
-  oled.drawFastHLine(0, SEPARATOR_Y, OLED_WIDTH, WHITE);
 
-  // Message
-  oled.setFont(msgFont);
+  // Message, in the blue rows: two lines, or one line half-way between them
+  oled.setFont(sf.font);
   oled.setTextColor(WHITE);
-  message = page;
-  if (!scrolling) {
-    oled.setCursor((OLED_WIDTH - msgWidth) / 2 - msgOffsetX, msgBaseline);
-    oled.print(message);
+  if (lines[1].text[0]) {
+    drawLine(lines[0], sf.baseline1);
+    drawLine(lines[1], sf.baseline2);
   } else {
-    // Draw the text twice so the start follows the end around seamlessly.
-    int16_t loopLen = msgWidth + SCROLL_GAP_PX;
-    oled.setCursor(-scrollX - msgOffsetX, msgBaseline);
-    oled.print(message);
-    oled.setCursor(-scrollX + loopLen - msgOffsetX, msgBaseline);
-    oled.print(message);
-
-    if (moving) {
-      scrollX += SCROLL_SPEED_PX;
-      if (scrollX >= loopLen) {       // one full loop done: rest again at the start
-        scrollX = 0;
-        scrollStart = millis();
-      }
-    }
+    drawLine(lines[0], (sf.baseline1 + sf.baseline2) / 2);
   }
 
   oled.display();
 }
-

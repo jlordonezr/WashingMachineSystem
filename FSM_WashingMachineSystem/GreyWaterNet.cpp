@@ -800,11 +800,11 @@ static void startServices() {
     logEvent("Wireless firmware update started");
     outputsAllOff();   // never leave a valve open while the firmware is replaced
     statsSave();       // write the latest water history before the update
-    displayShowNotice(TRS("UPDATING", "ACTUALIZANDO"), TRS("Do not unplug", "No desconecte"), 600000UL);
+    displayShowNotice(TRS("UPDATING", "ACTUALIZANDO"), TRS("Do not unplug|Please wait", "No desconecte|Espere por favor"), 600000UL);
     displayUpdate(true);
   });
   ArduinoOTA.onEnd([]() {
-    displayShowNotice(TRS("UPDATED", "ACTUALIZADO"), TRS("Restarting", "Reiniciando"), 5000);
+    displayShowNotice(TRS("UPDATED", "ACTUALIZADO"), TRS("Restarting|Please wait", "Reiniciando|Espere por favor"), 5000);
     displayUpdate(true);
   });
   ArduinoOTA.onError([](ota_error_t) {
