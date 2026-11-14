@@ -67,6 +67,21 @@ extern volatile uint32_t drainPulseCount;
 // `cfg` (GreyWaterSettings.h) and can be changed on the web dashboard.
 #define TRANSITION_DELAY 1200000 // Length of step 4 (20 minutes) before returning to Idle
 #define EDGE_DETECTION_DELAY 4000 // Flow must last this long (ms) to count as "flow seen"
+// Estimated tank volume (3.13, TankVolume.h). The marks are where the float
+// switches sit; measure them on the installed tank and adjust.
+#ifndef TANK_CAPACITY_L
+#define TANK_CAPACITY_L 100.0f   // litres the storage tank holds
+#endif
+#ifndef TANK_LOW_MARK_L
+#define TANK_LOW_MARK_L 15.0f    // litres at the low float (below it the pump is not used)
+#endif
+#ifndef TANK_HIGH_MARK_L
+#define TANK_HIGH_MARK_L 90.0f   // litres at the high float (tank full: nothing more goes in)
+#endif
+#define TANK_WASH_LPM 6.0f       // assumed tank-wash valve flow (not measured), litres per minute
+#define TANK_SAVE_STEP_L 5.0f    // write the estimate to flash after a change this big...
+#define TANK_SAVE_MIN_MS 600000UL  // ...at most every 10 min (and at the end of a cycle or tank wash)
+#define TANK_ANIM_MS 100         // ms between tank-gauge animation steps on the screen (10 per second at most)
 #define TANK_WASH_PERIOD 10000   // ms between tank-wash valve openings while the machine
                                  // fills with tank water (valve opens every 10 s)
 #define TANK_WASH_OPEN_TIME 2000 // ms the tank-wash valve stays open in each period.
@@ -168,6 +183,9 @@ void noSavingWater(); // Function for "No Saving Water" mode
 // Water level detection (debounced; see TankLevel.h)
 WaterLevel getWaterLevelTank(int inPinLow, int inPinHigh); // kept for compatibility: returns tankLevel(), the pins are not read again
 WaterLevel tankLevel();     // low / medium / high from the debounced float switches; high whenever the high float is wet
+float tankLitres();         // estimated litres in the tank, 0 .. TANK_CAPACITY_L (3.13)
+int8_t tankTrend();         // +1 filling, -1 draining, 0 steady
+bool tankEmptyFloat();      // the low float is dry: no water the pump can use
 bool tankHasWater();        // low float wet: the pump may draw from the tank
 bool tankFull();            // high float wet: nothing may add water to the tank
 bool tankFault();           // high float wet but low float dry: check the switches
@@ -225,6 +243,8 @@ struct SystemStatus {
   const char* title;           // OLED header
   const char* message;         // OLED message
   WaterLevel tankLevel;
+  float      tankL;            // estimated litres in the tank (3.13)
+  int8_t     tankTrend;        // +1 filling, -1 draining, 0 steady
   bool       washValveOpen;
   uint32_t   tapPulses, drainPulses;   // running pulse totals (sensor check)
   bool       tapFlowing, drainFlowing; // debounced flow state

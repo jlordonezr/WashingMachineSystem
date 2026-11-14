@@ -36,6 +36,7 @@ struct Adafruit_SSD1306 {
   void drawRoundRect(int16_t, int16_t, int16_t, int16_t, int16_t, int) {}
   void fillRoundRect(int16_t, int16_t, int16_t, int16_t, int16_t, int) {}
   void drawFastHLine(int16_t, int16_t, int16_t, int) {}
+  void drawFastVLine(int16_t, int16_t, int16_t, int) {}
   void drawPixel(int16_t, int16_t, int) {}
   void drawBitmap(int16_t, int16_t, const uint8_t*, int16_t, int16_t, int) {}
 };

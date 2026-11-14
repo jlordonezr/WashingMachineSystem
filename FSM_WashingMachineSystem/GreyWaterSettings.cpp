@@ -323,3 +323,15 @@ CycleSnapFound cycleSnapLoad(CycleSnapshot& s) {
   }
   return snapStepOnly;   // a cycle was running; it cannot be resumed
 }
+
+// Estimated tank volume (3.13): 4 bytes under "tankL", written at the end of a
+// cycle or tank wash and after a change of TANK_SAVE_STEP_L (at most every
+// TANK_SAVE_MIN_MS), so the flash is written a few times a day at most.
+bool tankVolumeLoad(float& litres) {
+  float v;
+  if (prefs.getBytesLength("tankL") != sizeof(v) || prefs.getBytes("tankL", &v, sizeof(v)) != sizeof(v)) return false;
+  if (!(v >= 0.0f && v <= 1000.0f)) return false;   // not a number, or not plausible
+  litres = v;
+  return true;
+}
+void tankVolumeSave(float litres) { prefs.putBytes("tankL", &litres, sizeof(litres)); }

@@ -4,8 +4,8 @@
 Screen texts are the TRS("English", "Español") pairs in the firmware
 (TR() is used for app and alert texts). For each one it checks:
   - plain ASCII only: the screen fonts have no accents or ñ,
-  - headers (ALL CAPS, the small 6 px font): at most 16 characters, with
-    "%lu:%02lu" counted as "18:42", so the tank and wash icons stay clear,
+  - headers (ALL CAPS, the small 6 px font): at most 12 characters (3.13), with
+    "%lu:%02lu" counted as "18:42", so the tank litres, arrow and gauge stay clear,
   - messages: at most two parts ("a|b", one per line, 3.12), each at most 128 px
     wide in every screen font in Settings, measured as the firmware does
     (Adafruit GFX getTextBounds, from the font headers). From 3.9 each font
@@ -84,8 +84,8 @@ for en, es in pairs:
                 continue
             checked += 1
             if page.upper() == page and any(c.isalpha() for c in page):
-                if len(page) > 16:
-                    bad.append(f'{lang} header "{page}": {len(page)} characters (max 16)')
+                if len(page) > 12:
+                    bad.append(f'{lang} header "{page}": {len(page)} characters (max 12, beside the tank litres)')
                 continue
             messages.append(page)
             for name, font in SCREEN_FONTS:

@@ -96,6 +96,7 @@ static void stepWorld(uint32_t dtMs) {
   double drainFlow = drain ? 18.0 : 0.0;
   for (auto& r : prog.rates) if (t >= r.from && t < r.to) drainFlow = r.lpm;
   if (drainFlow > 0 && pinOut[OUT_FILL_EV] == HIGH && pinOut[OUT_DRAIN_EV] == LOW) { tankL = std::min(45.0, tankL + drainFlow * dtMs / 60000.0); rec.savedWhileSaving = true; }
+  if (pinOut[OUT_WASH_EV] == HIGH) tankL = std::min(45.0, tankL + 6.0 * dtMs / 60000.0);   // tank-wash water (3.13: 6 L/min, as the firmware assumes)
   if (pumpOn && tapOpen) rec.pumpWhileTap = true;
   static int lastFill = LOW;
   if (pinOut[OUT_FILL_EV] != lastFill) { lastFill = pinOut[OUT_FILL_EV]; rec.fillSwitches++; }
@@ -366,13 +367,13 @@ int main(int argc, char** argv) {
     typicalProgram(); boot();                             // the start-up animation is still running
     // During the start-up animation a press ends it and shows the choice; the release starts the cycle.
     holdStart(0.5); runFor(0.2);
-    CHECK(onScreen("REUSE AND SAVE"), "a press during the start-up animation does not show REUSE AND SAVE");
+    CHECK(onScreen("REUSE & SAVE"), "a press during the start-up animation does not show REUSE AND SAVE");
     runFor(1);
     CHECK(activeState != stIdle, "a short press during the start-up animation did not start the cycle");
     pressStop(); runFor(6);
     // Short press: the screen says what a release starts; the cycle starts on release and saves.
     holdStart(1.0); runFor(0.3);
-    CHECK(onScreen("REUSE AND SAVE") && onScreen("Release to start") && onScreen("Hold: reuse only"), "short press: screen does not show REUSE AND SAVE / Release to start / Hold: reuse only");
+    CHECK(onScreen("REUSE & SAVE") && onScreen("Release to start") && onScreen("Hold: reuse only"), "short press: screen does not show REUSE AND SAVE / Release to start / Hold: reuse only");
     CHECK(activeState == stIdle, "the cycle started while START was still held");
     runFor(1.0);
     SystemStatus snap; getSystemStatus(snap);
@@ -382,7 +383,7 @@ int main(int argc, char** argv) {
     runFor(5);                                             // past the STOPPED notice
     // Held 2 s: the screen switches to REUSE ONLY at 2 s; the release starts Reuse only.
     holdStart(3.0); runFor(1.8);
-    CHECK(onScreen("REUSE AND SAVE"), "at 1.8 s the screen should still show REUSE AND SAVE");
+    CHECK(onScreen("REUSE & SAVE"), "at 1.8 s the screen should still show REUSE AND SAVE");
     runFor(0.4);
     CHECK(onScreen("REUSE ONLY") && onScreen("Release to start") && onScreen("Rinse not saved"), "at 2.2 s the screen does not show REUSE ONLY / Release to start / Rinse not saved");
     CHECK(activeState == stIdle, "the cycle started before START was released");
@@ -492,6 +493,44 @@ int main(int argc, char** argv) {
     pressStart(); runFor(1800);
     for (auto& m : rec.msgs) CHECK(std::count(m.begin(), m.end(), '|') <= 1, "message with more than two lines: \"%s\"", m.c_str());
     CHECK(stats.totalCycles == 1, "cycle did not complete");
+  }
+  else if (sc == "F21a") {
+    printf("F21 estimated tank litres (part 1: a cycle, the gauge, FULL and EMPTY; 3.13)\n");
+    tankL = 30.0; typicalProgram(); boot(); runFor(11);
+    CHECK(fabsf(tankLitres() - 25.0f) < 0.6f, "no saved estimate: start guess %.1f L, expected 25 (between the floats)", tankLitres());
+    CHECK(onScreen("25L"), "the header does not show 25L");
+    pressStart();
+    float minErr = 0, maxErr = 0; bool sawDown = false, sawUp = false, sawUpArrowState = false;
+    double prevTank = tankL;
+    for (int i = 0; i < 1700 * 4; i++) {
+      runFor(0.25);
+      float err = tankLitres() - (float)tankL;
+      if (err < minErr) minErr = err;
+      if (err > maxErr) maxErr = err;
+      if (tankTrend() < 0 && tankL < prevTank) sawDown = true;
+      if (tankTrend() > 0 && tankL > prevTank) { sawUp = true; if (activeState == stDrain2) sawUpArrowState = true; }
+      prevTank = tankL;
+      if (activeState == stIdle && i > 40) break;
+    }
+    printf("    estimate minus real tank: %.1f to %.1f L; real tank at the end %.1f L, estimate %.1f L\n", minErr, maxErr, tankL, tankLitres());
+    CHECK(maxErr - minErr < 12.0f, "the estimate drifts %.1f L from the real tank", maxErr - minErr);
+    CHECK(fabsf(tankLitres() - (float)tankL) < 3.0f, "at the end of the cycle the estimate is %.1f L, the tank %.1f L", tankLitres(), tankL);
+    CHECK(sawDown, "the trend never showed draining while the pump drew from the tank");
+    CHECK(sawUp && sawUpArrowState, "the trend never showed filling while rinse water was saved");
+    { Preferences q; float e = tankLitres(); q.putBytes("simExpect", &e, sizeof(e)); }
+    Preferences::saveFile(flash);
+    // FULL and EMPTY come from the floats.
+    tankL = 43.0; runFor(3);
+    CHECK(tankLitres() >= TANK_HIGH_MARK_L - 0.01f && onScreen("FULL"), "high float wet: estimate %.1f L, header does not say FULL", tankLitres());
+    tankL = 5.0; runFor(6);
+    CHECK(tankLitres() <= TANK_LOW_MARK_L + 0.01f && onScreen("EMPTY"), "low float dry: estimate %.1f L, header does not say EMPTY", tankLitres());
+  }
+  else if (sc == "F21b") {
+    printf("F21 estimated tank litres (part 2: power cut, the estimate is kept)\n");
+    Preferences::loadFile(flash);
+    float expect = -1; { Preferences q; q.getBytes("simExpect", &expect, sizeof(expect)); }
+    tankL = expect; boot(); runFor(1);
+    CHECK(expect >= 0 && fabsf(tankLitres() - expect) < 0.6f, "after a power cut the estimate is %.1f L, saved %.1f L", tankLitres(), expect);
   }
   else if (sc == "F19") {
     printf("F19 screen at the other I2C address, 0x3D (3.12)\n");

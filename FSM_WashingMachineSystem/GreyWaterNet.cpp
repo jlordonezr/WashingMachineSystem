@@ -397,7 +397,7 @@ static void handleStatus() {
   char buf[2840];
   snprintf(buf, sizeof(buf),
     "{\"fw\":\"%s\",\"state\":%d,\"stateName\":\"%s\",\"title\":\"%s\",\"message\":\"%s\","
-    "\"tank\":\"%s\",\"wash\":%s,\"tapLpm\":%.2f,\"drainLpm\":%.2f,"
+    "\"tank\":\"%s\",\"tankL\":%.1f,\"tankTrend\":%d,\"wash\":%s,\"tapLpm\":%.2f,\"drainLpm\":%.2f,"
     "\"stepElapsedS\":%lu,\"drain2LeftS\":%lu,\"stuck\":%s,\"tankAgeH\":%.2f,\"tankMaxAgeH\":%u,"
     "\"allowRemoteStart\":%s,\"alerts\":%s,"
     "\"manualWash\":%s,\"manualWashLeftS\":%lu,\"manualWashMaxMin\":%lu,\"manualWashResult\":\"%s\","
@@ -415,7 +415,7 @@ static void handleStatus() {
     "\"lang\":\"%s\",\"tankFault\":%s,\"screen\":%s,\"loop\":{\"maxMs\":%lu,\"lastMinMaxMs\":%lu},"
     "\"heap\":{\"free\":%lu,\"min\":%lu},\"alert\":{\"seq\":%lu,\"ok\":%s,\"code\":%d},\"role\":\"%s\"}",
     FIRMWARE_VERSION, s.state, s.stateName, title, message,
-    levelName(s.tankLevel), s.washValveOpen ? "true" : "false", s.tapLpm, s.drainLpm,
+    levelName(s.tankLevel), s.tankL, (int)s.tankTrend, s.washValveOpen ? "true" : "false", s.tapLpm, s.drainLpm,
     (unsigned long)s.stepElapsedS, (unsigned long)s.drain2LeftS, s.stuck ? "true" : "false",
     s.tankAgeH, (unsigned)cfg.tankMaxAgeHours,
     cfg.allowRemoteStart ? "true" : "false", cfg.ntfyTopic[0] ? "true" : "false",
@@ -810,7 +810,7 @@ static void startServices() {
   ArduinoOTA.onError([](ota_error_t) {
     enableLoopWDT();
     logEvent("Wireless firmware update failed");
-    displayShowNotice(TRS("UPDATE FAILED", "NO ACTUALIZADO"), TRS("Try again", "Reintente"), NOTICE_DURATION);
+    displayShowNotice(TRS("NOT UPDATED", "NO ACTUALIZO"), TRS("Try again", "Reintente"), NOTICE_DURATION);
     displayUpdate(true);
   });
   ArduinoOTA.begin();

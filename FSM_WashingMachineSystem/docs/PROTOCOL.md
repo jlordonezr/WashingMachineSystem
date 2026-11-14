@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.12
+# Communication protocol – firmware 3.13
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -64,6 +64,8 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `state`, `stateName` | int, string | 0 Ready, 1 Starting, 2 Fill (wash), 3 Drain (soapy), 4 Rinse, 5 Save |
 | `title`, `message` | string | Screen header and the longer status sentence |
 | `tank` | `low` / `medium` / `high` | Debounced level; `high` whenever the high float is wet |
+| `tankL` | number | Estimated litres in the tank, 0-100, one decimal (3.13; `TankVolume.h`) |
+| `tankTrend` | -1 / 0 / 1 | Tank emptying / steady / filling (3.13) |
 | `tankFault` | bool | High float wet, low float dry for 3 s (3.0) |
 | `wash` | bool | Tank-wash valve output on |
 | `outputs` | int | Pins as written: 1 tap, 2 drain, 4 fill, 8 pump, 16 tank wash |

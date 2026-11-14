@@ -1,4 +1,4 @@
-# Architecture – firmware 3.12
+# Architecture – firmware 3.13
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -42,8 +42,9 @@ FSM_WashingMachineSystem.ino   setup(), loop(), state machine wiring (AgileState
 ├─ GreyWaterSystem      cycle: step logic, manual tank wash, statistics, tank age, status snapshot
 │    requests modes ──► GreyWaterOutputs   only writer of the SSR pins; interlocks; PumpGuard; TankLevel
 │                         ▲  safetyTick() every 20 ms from GreyWaterTask (FreeRTOS)
+├─ TankVolume.h       estimated tank litres: flow in/out, wash water at an assumed rate, float corrections (3.13)
 ├─ GreyWaterSensors     flow interrupts + FlowMeter (rate, flowing, starts, litres)
-├─ GreyWaterDisplay     OLED 128x64: header in the yellow rows, message on one or two blue lines ("top|bottom"); start-up animation: Border Collie chasing a butterfly (BootAnimation.h), frame-timed, only redraws on change
+├─ GreyWaterDisplay     OLED 128x64: header in the yellow rows (title, tank litres, arrow, gauge; 3.13), message on one or two blue lines ("top|bottom"); start-up animation: Border Collie chasing a butterfly (BootAnimation.h), frame-timed, only redraws on change
 ├─ GreyWaterDiagnostics event log (50, RAM), loop timing, buzzer, restart reason
 ├─ GreyWaterSettings    settings + history in NVS (versioned structs, history twice + kept-aside copy)
 └─ GreyWaterNet         Wi-Fi (WiFiManager), web server + API, OTA, mDNS, NTP, alert task
@@ -105,4 +106,4 @@ events ─► notify() ─► queue ─► alert task ─► ntfy ─► result 
 
 ## Storage
 
-NVS namespace `greywater`: `cfg` (Settings v7 from 3.1, adds `language`), `stats` and `stats_bak` (WaterStats v3), `stats_keep` (an unreadable record kept aside), `cyc` (cycle snapshot from 3.10: `CycleSnapshot`, 24 bytes, version `CYCLE_SNAP_VERSION`; written at Start, at each step and when the machine has filled in step 1 or 3, removed when the cycle ends; read and removed by `bootChecks()` at power-up. The 8-byte marker of 2.9–3.9 is still recognised: reported, not resumable), `authkey` (3.11: 32 random bytes that sign the `gwsid` sign-in cookies, see `AuthToken.h`; made at the first sign-in, replaced by *Sign out other devices*). Settings v6 (3.0) is upgraded to v7 at start-up; history is unchanged.
+NVS namespace `greywater`: `tankL` (estimated tank litres, float, 3.13), `cfg` (Settings v7 from 3.1, adds `language`), `stats` and `stats_bak` (WaterStats v3), `stats_keep` (an unreadable record kept aside), `cyc` (cycle snapshot from 3.10: `CycleSnapshot`, 24 bytes, version `CYCLE_SNAP_VERSION`; written at Start, at each step and when the machine has filled in step 1 or 3, removed when the cycle ends; read and removed by `bootChecks()` at power-up. The 8-byte marker of 2.9–3.9 is still recognised: reported, not resumable), `authkey` (3.11: 32 random bytes that sign the `gwsid` sign-in cookies, see `AuthToken.h`; made at the first sign-in, replaced by *Sign out other devices*). Settings v6 (3.0) is upgraded to v7 at start-up; history is unchanged.

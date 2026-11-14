@@ -1,18 +1,31 @@
-# Reuse Water System – Firmware 3.12 (Wi-Fi)
+# Reuse Water System – Firmware 3.13 (Wi-Fi)
+
+## What's new in 3.13: the tank gauge shows the litres
+
+Until 3.12 the tank icon on the screen showed only what the two float switches say: empty, half or full. From 3.13 the controller **estimates the litres in the 100 L tank** and the yellow header shows them all the time: a gauge filled to the estimate, the number (`63L`), and an arrow up while the tank fills or down while it empties.
+
+- **How it is worked out** (`TankVolume.h`): the tank has no level gauge, so the controller counts the water it moves. Out: what the pump draws for the machine (tap flow sensor, YF-B1). In: rinse water saved in step 4 (drain flow sensor, YF-B10), and tank-wash water while the wash valve is open, at an assumed 6 L/min (that water is not measured). Every loop pass, timed by `millis()`.
+- **Corrected by the floats** whenever they say something definite: high float wet → at least 90 L (exactly 90 L the moment it gets wet); low float dry → at most 15 L (exactly 15 L the moment it goes dry); the other two cases bound it the other way. The estimate always stays within 0-100 L.
+- **On the screen:** the gauge (x 111-127) rises and falls smoothly toward the estimate, with a ripple on the surface while water moves; the litres and the arrow sit beside it. `FULL` (`LLENO`) when the high float is wet, `EMPTY` (`VACIO`) when the low float is dry (nothing the pump can use). The gauge animates at most 10 times a second (`TANK_ANIM_MS`), and the screen is still sent only when something on it changed.
+- **The `W` wash-valve icon is gone** from the header (the valve is still shown in the app, Service → Valves and pump). Titles are now at most **12 characters** so they fit beside the litres; the Spanish step titles became `LAVADO 1/4`, `DESAGUE 2/4`, `ENJUAGUE 3/4`, `AHORRO 4/4`, `DESAGUE 4/4`, and a few others were shortened: `REUSE & SAVE` / `REUSO+AHORRO`, `TANK WASH` / `LAVA TANQUE`, `LIMPIEZA OK`, `PARO LAVADO`, `NOT UPDATED` / `NO ACTUALIZO`, `REUSO AGUA`. A title that is data, the Wi-Fi network name or the IP address, keeps its full width and the litres are left out on that screen.
+- **Kept through a power cut:** the estimate is written to flash (`tankL`) at the end of each cycle and tank wash, and after a change of 5 L or more at most every 10 minutes. With nothing saved yet, it starts from the floats (7.5 L, 52.5 L or 90 L).
+- **Tunable** in `GreyWaterSystem.h`: `TANK_CAPACITY_L` (100), `TANK_LOW_MARK_L` (15) and `TANK_HIGH_MARK_L` (90), where the floats sit: measure them on the installed tank and adjust; `TANK_WASH_LPM` (6).
+- **App:** `/api/status` adds `tankL` and `tankTrend`.
+- Tests: `tests/test_tank_volume.cpp` (21 checks); simulation **F21** (a whole cycle: the estimate stays within 5 L of the simulated tank and ends within 3 L; the arrow follows the water; FULL and EMPTY from the floats; the estimate survives a power cut).
 
 ## What's new in 3.12: a larger, two-colour screen
 
 The controller's screen is now a **0.96" 128x64 OLED** (SSD1306, I2C) instead of the 128x32 one. It is twice as tall and has two fixed colours: the top 16 rows light up **yellow**, the other 48 **blue** (the glass decides the colour, not the firmware). The cycle, the safety logic, the app and the water history are unchanged from 3.11.
 
 - **Header in yellow:** the step (`WASH 1 OF 4`), the tank icon and the wash-valve `W` sit in the yellow rows; the icons are taller (14 px). The colour change replaces the separator line.
-- **Two message lines in blue, every message rewritten for them:** each screen says everything at once and nothing changes while you read it (until 3.11 a message came in parts that took turns every 3 s). The second line adds what used to need a page or was missing, for example *Release to start / Hold: reuse only*, *Release to start / Rinse not saved*, *Cycle cancelled / Everything off*, *Tank full / Valve closed*, *System ready / Version 3.12.0*. During steps 1-3 the bottom line is *25 min left* once the times are known. A message with nothing more to say sits alone in the middle (*Cycle resumed*, *Try again*).
+- **Two message lines in blue, every message rewritten for them:** each screen says everything at once and nothing changes while you read it (until 3.11 a message came in parts that took turns every 3 s). The second line adds what used to need a page or was missing, for example *Release to start / Hold: reuse only*, *Release to start / Rinse not saved*, *Cycle cancelled / Everything off*, *Tank full / Valve closed*, *System ready / Version 3.13.0*. During steps 1-3 the bottom line is *25 min left* once the times are known. A message with nothing more to say sits alone in the middle (*Cycle resumed*, *Try again*).
 - **Shorter where three parts did not fit:** *No water flow / Check washer* (the phone alert still says to call the installer); *Using tap water / Tank is low* (no minutes in this case; the empty tank icon shows it too); *Low flow / Ends in 9:05* and *Not saving / Ends in 18:42* (the drain is implied).
 - **Same letters:** the four screen fonts and their sizes are as in 3.9; every text still fits the 128 px line in both languages.
-- **Start-up animation:** the same Border Collie chasing a butterfly as before (`BootAnimation.h` and the drawing logic unchanged). On the taller screen the collie runs along the bottom of the blue rows and the butterfly flutters from its head height up into the yellow band, so it turns yellow as it rises. Then *System ready / Version 3.12.0*. START skips it.
+- **Start-up animation:** the same Border Collie chasing a butterfly as before (`BootAnimation.h` and the drawing logic unchanged). On the taller screen the collie runs along the bottom of the blue rows and the butterfly flutters from its head height up into the yellow band, so it turns yellow as it rises. Then *System ready / Version 3.13.0*. START skips it.
 - **Either I2C address:** the screen is found at `0x3C` or `0x3D` (modules with the address jumper moved). The controller now asks the I2C bus whether a screen answers, so a missing screen is reported reliably (the library alone does not notice).
 - **Wiring is the same four wires** (3V3, GND, A4 = SDA, A5 = SCL), but **read the labels on the new module**: the pin order differs between makers. A full frame is 1,024 bytes, about 25 ms at 400 kHz, and is still sent only when something on the screen changes.
 - `tools/check_screen_text.py` fails a message with more than two parts, and checks the two baselines of every font: all glyphs on rows 17-63, and the two lines at least 2 rows apart.
-- Tests: simulation **F18** (header in the yellow rows, two lines, one-part messages, countdowns), **F19** (screen at `0x3D`) and **F20** (the start-up scene, *Version 3.12.0*, no message of more than two lines in a whole cycle).
+- Tests: simulation **F18** (header in the yellow rows, two lines, one-part messages, countdowns), **F19** (screen at `0x3D`) and **F20** (the start-up scene, *Version 3.13.0*, no message of more than two lines in a whole cycle).
 
 The old 128x32 screen is no longer supported: on it only every second row of this layout would show.
 
@@ -777,7 +790,7 @@ The 128x64 two-colour screen (3.12) is split into a yellow header (rows 0-15) an
 
 ```
 +--------------------------------+
-|WASH 1 OF 4            [##] [W] |   yellow: step + tank level + wash valve
+|WASH 1 OF 4       63L ^ [~~~]   |   yellow: step + tank litres, arrow, gauge (3.13)
 |                                |
 |         Reusing water          |   blue, top line: what is happening
 |          52 min left           |   blue, bottom line: what it means or how long
@@ -786,9 +799,8 @@ The 128x64 two-colour screen (3.12) is split into a yellow header (rows 0-15) an
 
 Until 3.11 the screen was 128x32, with the header above a separator line and one message line.
 
-- **Header (small built-in font, yellow):** the step, for example `WASH 1 OF 4`, or the event, for example `DONE`. At most 16 characters.
-- **Tank icon:** empty when the tank is low, half filled at medium, full at high. It reads the level sensors directly, so it is always live.
-- **Wash icon `W`:** outlined when the tank-wash valve is closed, filled when it is open. During the tank-water fill it lights up every 10 seconds.
+- **Header (small built-in font, yellow):** the step, for example `WASH 1 OF 4`, or the event, for example `DONE`. At most 12 characters (3.13).
+- **Tank gauge (3.13):** filled to the estimated litres, with the number (`63L`) and an arrow (up: filling, down: emptying) beside it; `FULL` / `EMPTY` from the floats. See *What's new in 3.13*. The `W` wash-valve icon of 3.0-3.12 is gone.
 - **Message (blue, the font chosen in Settings → Screen font):** Hyperlegible (default), Plain sans, Terminal bold or Schoolbook bold, one size for every message (3.9). From 3.12 every message is one or two lines (`"top|bottom"`), each fitting 128 px in all four fonts and both languages (`tools/check_screen_text.py`). One line sits alone in the middle. Lines are centred and still; a longer one would pause for 1.5 s, then scroll.
 
 ### Messages
@@ -796,9 +808,9 @@ Until 3.11 the screen was 128x32, with the header above a separator line and one
 | State | Header | Message (top / bottom line) |
 |---|---|---|
 | Boot (about 4 s) | — | Start-up animation, full screen: a Border Collie chases a butterfly (`BootAnimation.h`); the collie along the bottom, the butterfly up into the yellow band. START or a tank wash ends it; notices that arrive meanwhile are shown after "System ready" |
-| Boot (2 s) | `REUSE WATER` | System ready / Version 3.12.0 |
+| Boot (2 s) | `REUSE WATER` (`REUSO AGUA`) | System ready / Version 3.13.0 |
 | Idle | `READY` | Start washer / Press START |
-| START pressed / held 2 s | `REUSE AND SAVE` / `REUSE ONLY` | Release to start / Hold: reuse only — Release to start / Rinse not saved |
+| START pressed / held 2 s | `REUSE & SAVE` / `REUSE ONLY` | Release to start / Hold: reuse only — Release to start / Rinse not saved |
 | START held 15 s | `START BUTTON` | Button stuck / Release START |
 | Starting | `STARTING` | Getting ready... / Reuse and save (or Reuse only) |
 | Step 1 | `WASH 1 OF 4` | Waiting to fill, Reusing water, Using tap water, Washing... / 52 min left; tank too low: Using tap water / Tank is low |
@@ -810,8 +822,8 @@ Until 3.11 the screen was 128x32, with the header above a separator line and one
 | After a full cycle | `DONE` | Reused 26 L / Saved 30 L (or Cycle complete) |
 | After Stop | `STOPPED` | Cycle cancelled / Everything off |
 | Power back during a cycle | `INTERRUPTED` | Check washer / Resume in app (or Start again) |
-| Tank wash | `TANK CLEANING` / `TANK CLEANED` / `WASH STOPPED` | Rinsing the tank / 9:42 left — Tank full / Valve closed — Tank not full / Stopped early — Check the tank / Call installer |
-| Wi-Fi, updates | `ReuseWater-Setup` / IP / `UPDATING` / `UPDATED` / `UPDATE FAILED` | Wi-Fi setup / Key gw-… — Wi-Fi connected / App: this IP — Do not unplug / Please wait — Restarting / Please wait — Try again |
+| Tank wash | `TANK WASH` / `TANK CLEANED` / `WASH STOPPED` | Rinsing the tank / 9:42 left — Tank full / Valve closed — Tank not full / Stopped early — Check the tank / Call installer |
+| Wi-Fi, updates | `ReuseWater-Setup` / IP / `UPDATING` / `UPDATED` / `NOT UPDATED` | Wi-Fi setup / Key gw-… — Wi-Fi connected / App: this IP — Do not unplug / Please wait — Restarting / Please wait — Try again |
 
 The trailing spaces that were used as padding in the old messages have been removed; spacing is now handled by the layout.
 
@@ -861,8 +873,8 @@ For faster scrolling, raise `SCROLL_SPEED_PX` to 3. Lowering `DISPLAY_FRAME_MS` 
 4. Fill1 switching from tank water to tap water: the wash valve closes within 250 ms.
 5. Fill2 (rinse) and Drain2: the wash valve must stay closed.
 6. Press Stop during any state: the system returns to Idle and the wash valve closes within 250 ms.
-7. Power on: the screen shows the Border Collie chasing a butterfly (about 4 s), then `REUSE WATER / System ready / Version 3.12.0` for 2 s, then `READY / Start washer / Press START`, with no "Cycle complete" message.
+7. Power on: the screen shows the Border Collie chasing a butterfly (about 4 s), then `REUSE WATER / System ready / Version 3.13.0` for 2 s, then `READY / Start washer / Press START`, with no "Cycle complete" message.
 8. During each step, the header shows the right step (`1/4` to `4/4`) and long messages scroll smoothly without jumping.
-9. During the tank-water fill, the `W` icon turns white every 10 s and the tank icon follows the level sensors.
+9. During the tank-water fill, the tank litres fall and the arrow points down; in step 4, while saving, they rise and the arrow points up.
 10. In Drain2, the countdown decreases every second.
 11. Press Stop: `STOPPED / Cycle stopped` stays for 4 s, then `READY / Press START`.

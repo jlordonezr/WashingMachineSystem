@@ -101,6 +101,8 @@ void     settingsSanitize(Settings& s);  // clamp to safe ranges
 bool     settingsSave();
 bool     statsRollMonth();               // start a new month if the calendar month changed; true if it did
 void     statsSave();                    // writes the history and its backup copy
+bool     tankVolumeLoad(float& litres);  // the last saved tank estimate (3.13); false if none
+void     tankVolumeSave(float litres);
 
 // Water history protection (2.8). The history is stored twice in flash
 // ("stats" and "stats_bak"); a record that cannot be read is kept aside

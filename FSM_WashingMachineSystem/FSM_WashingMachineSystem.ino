@@ -113,7 +113,7 @@ void setup() {
   // firmware version for 2 s.
   static char ready[48];
   snprintf(ready, sizeof(ready), TRS("System ready|Version %s", "Sistema listo|Version %s"), FIRMWARE_VERSION);
-  displayStartIntro(TRS("REUSE WATER", "REUSO DE AGUA"), ready, 2000);
+  displayStartIntro(TRS("REUSE WATER", "REUSO AGUA"), ready, 2000);
   displayUpdate();
   setupStateMachine();
   netBegin();        // Wi-Fi connects in the background; the cycle never waits for it

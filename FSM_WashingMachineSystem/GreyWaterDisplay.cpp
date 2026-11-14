@@ -6,6 +6,7 @@
 #include "FontTerminal16.h"
 #include "FontSchoolbook10.h"
 #include <math.h>
+#include <ctype.h>
 
 // OLED display. State logic only sets the text (displaySetStatus /
 // displayShowNotice); displayUpdate(), called every loop() pass, does all the
@@ -19,7 +20,8 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 // 0-15 light up yellow, rows 16-63 blue (the glass decides, not the firmware).
 // The layout follows the colours:
 //
-//   y  0-15  yellow, header : step/title (built-in 6x8 font, x 0-95) | tank level (x 98-114) | wash valve (x 117-127)
+//   y  0-15  yellow, header : step/title (built-in 6x8 font, x 0-71, 12 characters) | tank litres or FULL/EMPTY (x 73-108)
+//                            | fill/drain arrow (x 104-108) | tank gauge (x 111-127, 3.13)
 //   y 16-63  blue, message  : two lines in the font chosen in Settings (Screen
 //            font), one fixed size for every message, each line centred
 //
@@ -32,7 +34,7 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 // the middle of the blue area.
 //
 //   +--------------------------------------------------+
-//   |WASH 1 OF 4                         [###] [W]     |  yellow
+//   |WASH 1 OF 4                    63L ^ [~~~]        |  yellow
 //   |                                                  |
 //   |                  Tank low                        |  blue
 //   |              Using tap water                     |  blue (then "25 min left")
@@ -59,12 +61,13 @@ static const ScreenFont SCREEN_FONTS[SCREEN_FONT_COUNT] = {
   { &Terminal16,     33, 57 },   // 2 terminal bold: capitals 12 px, rows 21-36 and 45-60
   { &Schoolbook10,   33, 57 },   // 3 schoolbook bold: capitals 11 px, rows 21-35 and 45-59
 };
-#define TANK_ICON_X      98    // titles are at most 16 characters (96 px), see tools/check_screen_text.py
+#define TITLE_MAX_CHARS  12    // 72 px: titles fit beside the tank litres (tools/check_screen_text.py)
+#define TANK_ICON_X      111   // tank gauge: x 111-127, rows 1-14 of the yellow band
 #define TANK_ICON_W      17
-#define WASH_ICON_X      117
-#define WASH_ICON_W      11
-#define ICON_Y           1     // icons on rows 1-14 of the yellow band
+#define ICON_Y           1
 #define ICON_H           14
+#define TANK_ARROW_X     104   // fill/drain arrow: x 104-108
+#define TANK_TEXT_END    103   // the litres end here (right-aligned); FULL/EMPTY may use the arrow's place
 
 static char statusTitle[DISP_TITLE_LEN]   = "";
 static char statusMessage[DISP_MSG_LEN]   = "";
@@ -242,35 +245,53 @@ void displayClearNotice() {
   deferredNotice = false;
 }
 
-// Tank icon: outline, filled bottom-up according to the level sensors.
-// Half-way ticks on both sides mark the low float, so an empty tank still
-// reads as a tank and "half" is easy to tell from "full".
-static void drawTankIcon(WaterLevel level) {
+// Tank gauge (3.13): the outline filled from the bottom to the estimated
+// litres (TankVolume.h), eased so it rises and falls smoothly, with a ripple
+// on the surface while water moves. Beside it: the litres ("63L") and an
+// arrow, up while the tank fills and down while it drains; FULL when the high
+// float is wet, EMPTY when the low float is dry (nothing the pump can use).
+// A title longer than TITLE_MAX_CHARS (the Wi-Fi network name, an IP address)
+// keeps its full width: the litres and the arrow are left out on that screen.
+struct TankGauge { int16_t fill; int8_t trend; uint8_t phase; char label[8]; };
+
+static void tankGaugeState(TankGauge& g, float litres) {
   const int16_t innerH = ICON_H - 2;
-  oled.drawRect(TANK_ICON_X, ICON_Y, TANK_ICON_W, ICON_H, WHITE);
-  int16_t fillH = (level == high) ? innerH : (level == medium) ? innerH / 2 : 0;
-  if (fillH > 0) {
-    oled.fillRect(TANK_ICON_X + 1, ICON_Y + ICON_H - 1 - fillH, TANK_ICON_W - 2, fillH, WHITE);
-  }
-  if (level != high) {
-    int16_t tickY = ICON_Y + ICON_H - 1 - innerH / 2 - 1;   // just above the half-way fill line
-    oled.drawFastHLine(TANK_ICON_X + 1, tickY, 2, WHITE);
-    oled.drawFastHLine(TANK_ICON_X + TANK_ICON_W - 3, tickY, 2, WHITE);
-  }
+  g.fill = (int16_t)floorf(litres / TANK_CAPACITY_L * innerH + 0.5f);
+  if (g.fill < 0) g.fill = 0;
+  if (g.fill > innerH) g.fill = innerH;
+  g.trend = tankTrend();
+  if (tankFull()) { strlcpy(g.label, TRS("FULL", "LLENO"), sizeof(g.label)); g.trend = 0; }
+  else if (tankEmptyFloat() && g.trend <= 0) { strlcpy(g.label, TRS("EMPTY", "VACIO"), sizeof(g.label)); g.trend = 0; }
+  else snprintf(g.label, sizeof(g.label), "%dL", (int)floorf(litres + 0.5f));
+  g.phase = g.trend ? (uint8_t)((millis() / (TANK_ANIM_MS * 2)) % 4) : 0;
 }
 
-// Wash icon: "W" in an outline when the valve is closed, inverted when open.
-static void drawWashIcon(bool open) {
-  if (open) {
-    oled.fillRoundRect(WASH_ICON_X, ICON_Y, WASH_ICON_W, ICON_H, 2, WHITE);
-    oled.setTextColor(BLACK);
-  } else {
-    oled.drawRoundRect(WASH_ICON_X, ICON_Y, WASH_ICON_W, ICON_H, 2, WHITE);
-    oled.setTextColor(WHITE);
+static void drawTankGauge(const TankGauge& g, bool withText) {
+  const int16_t innerH = ICON_H - 2, innerW = TANK_ICON_W - 2, x0 = TANK_ICON_X + 1;
+  oled.drawRect(TANK_ICON_X, ICON_Y, TANK_ICON_W, ICON_H, WHITE);
+  if (g.fill > 0) {
+    int16_t top = ICON_Y + ICON_H - 1 - g.fill;
+    oled.fillRect(x0, top, innerW, g.fill, WHITE);
+    if (g.trend && g.fill < innerH) {                 // ripple: troughs in the surface, crests just above it
+      for (int16_t i = 0; i < innerW; i++) {
+        uint8_t w = (uint8_t)(i + (g.trend > 0 ? 4 - g.phase : g.phase)) % 4;
+        if (w == 0) oled.drawPixel(x0 + i, top, BLACK);
+        if (w == 2) oled.drawPixel(x0 + i, top - 1, WHITE);
+      }
+    }
   }
-  oled.setCursor(WASH_ICON_X + 3, HEADER_TEXT_Y);   // 5 px glyph centred in the 11 px box, on the title line
-  oled.print('W');
-  oled.setTextColor(WHITE);
+  if (!withText) return;
+  bool word = !isdigit((unsigned char)g.label[0]);      // FULL / EMPTY: no arrow, so it may use the arrow's place
+  int16_t end = word ? TANK_ARROW_X + 5 : TANK_TEXT_END;
+  oled.setCursor(end - 6 * (int16_t)strlen(g.label) + 1, HEADER_TEXT_Y);
+  oled.print(g.label);
+  if (g.trend) {                                         // arrow: a shaft and a head, rows 4-10
+    const int16_t ax = TANK_ARROW_X + 2;
+    oled.drawFastVLine(ax, HEADER_TEXT_Y, 7, WHITE);
+    int16_t tip = g.trend > 0 ? HEADER_TEXT_Y : HEADER_TEXT_Y + 6, d = g.trend > 0 ? 1 : -1;
+    oled.drawPixel(ax - 1, tip + d, WHITE);     oled.drawPixel(ax + 1, tip + d, WHITE);
+    oled.drawPixel(ax - 2, tip + 2 * d, WHITE); oled.drawPixel(ax + 2, tip + 2 * d, WHITE);
+  }
 }
 
 const char* displayGetTitle()   { return statusTitle; }
@@ -333,8 +354,9 @@ void displayUpdate(bool force) {
   static uint8_t shownFont = 0xFF;      // cfg.screenFont the lines were measured with
   static uint8_t pages = 1, pageIndex = 1;   // pageIndex: the page on the bottom line (1 .. pages-1)
   static unsigned long pageStart = 0;
-  static WaterLevel shownLevel = low;
-  static bool shownWash        = false;
+  static TankGauge shownGauge = { -1, 0, 0, "" };
+  static float shownL = -1.0f;          // litres on the gauge, eased toward the estimate
+  static unsigned long tankAnimAt = 0;
 
   if (!displayOk) return;   // no screen: everything else keeps running
   if (!force && millis() - lastFrame < DISPLAY_FRAME_MS) return;
@@ -391,10 +413,20 @@ void displayUpdate(bool force) {
   if (setLine(lines[1], bottom, fontChanged)) displayDirty = true;
   if (setText(shownTitle, sizeof(shownTitle), title)) displayDirty = true;
 
-  WaterLevel level = tankLevel();
-  bool washOpen = outputsWashOpen();
-  if (level != shownLevel)              { shownLevel = level;           displayDirty = true; }
-  if (washOpen != shownWash)            { shownWash = washOpen;          displayDirty = true; }
+  // Tank gauge: one step every TANK_ANIM_MS (so at most 10 redraws a second for it).
+  if (shownL < 0 || millis() - tankAnimAt >= TANK_ANIM_MS) {
+    tankAnimAt = millis();
+    float target = tankLitres();
+    shownL = shownL < 0 ? target : shownL + (target - shownL) * 0.3f;
+    if (fabsf(target - shownL) < 0.05f) shownL = target;
+    TankGauge g;
+    tankGaugeState(g, shownL);
+    if (g.fill != shownGauge.fill || g.trend != shownGauge.trend || g.phase != shownGauge.phase ||
+        strcmp(g.label, shownGauge.label) != 0) {
+      shownGauge = g;
+      displayDirty = true;
+    }
+  }
 
   bool moving = lineMoving(lines[0]) || lineMoving(lines[1]);
   if (!displayDirty && !moving) return;   // nothing changed: skip the I2C transfer
@@ -407,8 +439,7 @@ void displayUpdate(bool force) {
   oled.setTextColor(WHITE);
   oled.setCursor(0, HEADER_TEXT_Y);
   oled.print(title);
-  drawTankIcon(level);
-  drawWashIcon(washOpen);
+  drawTankGauge(shownGauge, strlen(title) <= TITLE_MAX_CHARS);
 
   // Message, in the blue rows: two lines, or one line half-way between them
   oled.setFont(sf.font);
