@@ -5,6 +5,7 @@
 #include "FontPlainSans13.h"
 #include "FontTerminal16.h"
 #include "FontSchoolbook10.h"
+#include "ScreenWrap.h"
 #include <math.h>
 #include <ctype.h>
 
@@ -22,8 +23,10 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 //
 //   y  0-15  yellow, header : step/title (built-in 6x8 font, x 0-71, 12 characters) | tank litres or FULL/EMPTY (x 73-108)
 //                            | fill/drain arrow (x 104-108) | tank gauge (x 111-127, 3.13)
-//   y 16-63  blue, message  : two lines in the font chosen in Settings (Screen
-//            font), one fixed size for every message, each line centred
+//   y 16-63  blue, message  : in the font chosen in Settings (Screen font).
+//            Large (3.14, the default): the built-in font at twice its size,
+//            up to three centred lines of 10 characters (ScreenWrap.h). The
+//            four other fonts: two centred lines, one fixed size each.
 //
 // A message may have several pages separated by '|', for example
 // "Tank low|Using tap water|25 min left". One line holds only about 15
@@ -31,7 +34,8 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 // and what to do. The first page stays on the top line; the other pages take
 // turns on the bottom line, changing every DISPLAY_PAGE_MS. A message of two
 // pages is shown whole and never changes; a message of one page sits alone in
-// the middle of the blue area.
+// the middle of the blue area. In Large every page starts on a new line and
+// is wrapped at word boundaries ("Start washer|Push START" is three lines).
 //
 //   +--------------------------------------------------+
 //   |WASH 1 OF 4                    63L ^ [~~~]        |  yellow
@@ -45,17 +49,19 @@ static bool displayOk = true;        // false if the OLED did not answer at star
 // frame over I2C when something on screen actually changed.
 
 #define DISP_TITLE_LEN   22
-#define DISP_MSG_LEN     96    // all pages of a message
+#define DISP_MSG_LEN     SCREEN_MSG_LEN   // all pages of a message
 #define HEADER_H         16    // the yellow rows
 #define HEADER_TEXT_Y    4     // 8 px letters on rows 4-11, centred in the yellow band
-// Message fonts, chosen in Settings -> Screen font (cfg.screenFont). Each font
+// Message fonts, chosen in Settings -> Screen font (cfg.screenFont). Large
+// (SCREEN_FONT_LARGE, the default) has no entry: it is the built-in font, laid
+// out by drawLargeMessage(). Each font here
 // has ONE size for every message, so the letters never change size between
 // pages or screens: the largest size in which every screen text fits the
 // 128 px line (tools/check_screen_text.py fails otherwise). The two baselines
 // place the top and the bottom line in the blue area, rows 17-63, clear of the
 // yellow rows and of each other; a one-page message is drawn half-way between.
 struct ScreenFont { const GFXfont* font; int16_t baseline1, baseline2; };
-static const ScreenFont SCREEN_FONTS[SCREEN_FONT_COUNT] = {
+static const ScreenFont SCREEN_FONTS[SCREEN_FONT_LARGE] = {
   { &Hyperlegible12, 33, 57 },   // 0 hyperlegible (default): capitals 12 px, rows 20-36 and 44-60
   { &PlainSans13,    34, 58 },   // 1 plain sans: capitals 13 px, rows 19-37 and 43-61
   { &Terminal16,     33, 57 },   // 2 terminal bold: capitals 12 px, rows 21-36 and 45-60
@@ -112,20 +118,9 @@ static bool setText(char* dst, size_t size, const char* src) {
   return true;
 }
 
-// Pages in a message ("a|b|c" = 3).
-static uint8_t pageCount(const char* m) {
-  uint8_t n = 1;
-  for (; *m; ++m) if (*m == '|') ++n;
-  return n;
-}
-
-// Copies page `index` of message m into dst.
-static void pageText(char* dst, size_t size, const char* m, uint8_t index) {
-  for (uint8_t i = 0; i < index && *m; ++m) if (*m == '|') ++i;
-  size_t o = 0;
-  while (*m && *m != '|' && o + 1 < size) dst[o++] = *m++;
-  dst[o] = '\0';
-}
+// Pages of a message: see ScreenWrap.h.
+static uint8_t pageCount(const char* m) { return screenPageCount(m); }
+static void pageText(char* dst, size_t size, const char* m, uint8_t index) { screenPageText(dst, size, m, index); }
 
 void displaySetStatus(const char* title, const char* message, const char* detail) {
   if (detail) {
@@ -345,16 +340,92 @@ static void drawLine(MsgLine& line, int16_t baseline) {
   }
 }
 
+// The Large font (3.14): the built-in font at twice its size in the blue rows,
+// up to three lines of 10 characters, wrapped at word boundaries and centred
+// (measured with getTextBounds). A message that does not fit drops to size 1
+// for that message only (six lines of 21 characters). Rows 16-63 only, so no
+// letter crosses into the yellow rows. `pageIndex` is the part shown under the
+// first one (messages of more than two parts take turns there).
+static void drawLargeMessage(const char* message, uint8_t pageIndex) {
+  uint8_t firstLines = 0, restLines = 0;
+  const uint8_t size  = screenMessageSize(message, &firstLines, &restLines);
+  const bool    large = size == SCREEN_LARGE_SIZE;
+  const uint8_t cols  = large ? SCREEN_LARGE_COLS : SCREEN_SMALL_COLS;
+  const uint8_t maxLines = large ? SCREEN_LARGE_LINES : SCREEN_SMALL_LINES;
+
+  WrapLines w;
+  w.count = 0;
+  char page[DISP_MSG_LEN];
+  pageText(page, sizeof(page), message, 0);
+  screenWrapAppend(w, page, cols, maxLines, !large);
+  if (pageCount(message) > 1) {
+    pageText(page, sizeof(page), message, pageIndex);
+    screenWrapAppend(w, page, cols, maxLines, !large);
+  }
+
+  // The block (first part + the longest other part) is centred in the blue
+  // rows, so the first part does not move when the part under it changes.
+  const int16_t lineH = 8 * size;
+  const int16_t top   = HEADER_H + ((OLED_HEIGHT - HEADER_H) - (firstLines + restLines) * lineH) / 2;
+  oled.setFont();
+  oled.setTextSize(size);
+  for (uint8_t i = 0; i < w.count; i++) {
+    int16_t x1, y1;
+    uint16_t bw, bh;
+    oled.getTextBounds(w.line[i], 0, 0, &x1, &y1, &bw, &bh);
+    int16_t inkW = (int16_t)bw - size;          // without the blank column after the last letter
+    oled.setCursor((OLED_WIDTH - inkW) / 2 - x1, top + i * lineH);
+    oled.print(w.line[i]);
+  }
+  oled.setTextSize(1);
+}
+
+// What is on screen now. displayUpdate() decides the text, the page and the
+// gauge; showMessage() draws them.
+static MsgLine   shownLines[2] = { { "\x01", 0, 0, 0, 0 }, { "\x01", 0, 0, 0, 0 } };   // top and bottom line (two-line fonts)
+static uint8_t   shownFont = 0xFF;          // cfg.screenFont the lines were measured with
+static uint8_t   shownPage = 1;             // the page under the first one (1 .. pages-1)
+static TankGauge shownGauge = { -1, 0, 0, "" };
+
+// Draws one whole screen and sends it: clears, the title and the tank gauge in
+// the yellow rows, the message sized, wrapped and centred in the blue rows.
+// The only place that draws a message.
+static void showMessage(const char* title, const char* body) {
+  oled.clearDisplay();
+
+  // Header, in the yellow rows
+  oled.setFont();          // built-in 6x8 font
+  oled.setTextSize(1);
+  oled.setTextWrap(false);
+  oled.setTextColor(WHITE);
+  oled.setCursor(0, HEADER_TEXT_Y);
+  oled.print(title);
+  drawTankGauge(shownGauge, strlen(title) <= TITLE_MAX_CHARS);
+
+  // Message, in the blue rows
+  if (shownFont == SCREEN_FONT_LARGE) {
+    drawLargeMessage(body, shownPage);
+  } else {                 // two lines, or one line half-way between them
+    const ScreenFont& sf = SCREEN_FONTS[shownFont];
+    oled.setFont(sf.font);
+    if (shownLines[1].text[0]) {
+      drawLine(shownLines[0], sf.baseline1);
+      drawLine(shownLines[1], sf.baseline2);
+    } else {
+      drawLine(shownLines[0], (sf.baseline1 + sf.baseline2) / 2);
+    }
+  }
+
+  oled.display();
+}
+
 void displayUpdate(bool force) {
   static unsigned long lastFrame   = 0;
   static char shownTitle[DISP_TITLE_LEN] = "";
   static char shownMessage[DISP_MSG_LEN] = "\x01";  // never matches: forces first measure
   static char firstPage[DISP_MSG_LEN]    = "";
-  static MsgLine lines[2] = { { "\x01", 0, 0, 0, 0 }, { "\x01", 0, 0, 0, 0 } };   // top and bottom line on screen now
-  static uint8_t shownFont = 0xFF;      // cfg.screenFont the lines were measured with
-  static uint8_t pages = 1, pageIndex = 1;   // pageIndex: the page on the bottom line (1 .. pages-1)
+  static uint8_t pages = 1;
   static unsigned long pageStart = 0;
-  static TankGauge shownGauge = { -1, 0, 0, "" };
   static float shownL = -1.0f;          // litres on the gauge, eased toward the estimate
   static unsigned long tankAnimAt = 0;
 
@@ -389,28 +460,28 @@ void displayUpdate(bool force) {
     if (n != pages || strcmp(first, firstPage) != 0) {
       strlcpy(firstPage, first, sizeof(firstPage));
       pages = n;
-      pageIndex = 1;
+      shownPage = 1;
       pageStart = millis();
     }
   }
   if (pages > 2 && millis() - pageStart >= DISPLAY_PAGE_MS) {
-    pageIndex = pageIndex + 1 < pages ? pageIndex + 1 : 1;
+    shownPage = shownPage + 1 < pages ? shownPage + 1 : 1;
     pageStart = millis();
   }
   char top[DISP_MSG_LEN], bottom[DISP_MSG_LEN] = "";
   pageText(top, sizeof(top), message, 0);
-  if (pages > 1) pageText(bottom, sizeof(bottom), message, pageIndex);
+  if (pages > 1) pageText(bottom, sizeof(bottom), message, shownPage);
 
   // New text on a line or a new font from Settings: measure the line once.
-  uint8_t fontIndex = cfg.screenFont < SCREEN_FONT_COUNT ? cfg.screenFont : 0;
+  uint8_t fontIndex = cfg.screenFont < SCREEN_FONT_COUNT ? cfg.screenFont : SCREEN_FONT_DEFAULT;
   bool fontChanged = fontIndex != shownFont;
   shownFont = fontIndex;
-  const ScreenFont& sf = SCREEN_FONTS[shownFont];
+  const bool large = shownFont == SCREEN_FONT_LARGE;    // wrapped and measured when drawn, never scrolls
   oled.setTextSize(1);
   oled.setTextWrap(false);
-  oled.setFont(sf.font);
-  if (setLine(lines[0], top, fontChanged))    displayDirty = true;
-  if (setLine(lines[1], bottom, fontChanged)) displayDirty = true;
+  oled.setFont(large ? nullptr : SCREEN_FONTS[shownFont].font);
+  if (setLine(shownLines[0], top, fontChanged))    displayDirty = true;
+  if (setLine(shownLines[1], bottom, fontChanged)) displayDirty = true;
   if (setText(shownTitle, sizeof(shownTitle), title)) displayDirty = true;
 
   // Tank gauge: one step every TANK_ANIM_MS (so at most 10 redraws a second for it).
@@ -428,28 +499,9 @@ void displayUpdate(bool force) {
     }
   }
 
-  bool moving = lineMoving(lines[0]) || lineMoving(lines[1]);
+  bool moving = !large && (lineMoving(shownLines[0]) || lineMoving(shownLines[1]));
   if (!displayDirty && !moving) return;   // nothing changed: skip the I2C transfer
   displayDirty = false;
 
-  oled.clearDisplay();
-
-  // Header, in the yellow rows
-  oled.setFont();          // built-in 6x8 font
-  oled.setTextColor(WHITE);
-  oled.setCursor(0, HEADER_TEXT_Y);
-  oled.print(title);
-  drawTankGauge(shownGauge, strlen(title) <= TITLE_MAX_CHARS);
-
-  // Message, in the blue rows: two lines, or one line half-way between them
-  oled.setFont(sf.font);
-  oled.setTextColor(WHITE);
-  if (lines[1].text[0]) {
-    drawLine(lines[0], sf.baseline1);
-    drawLine(lines[1], sf.baseline2);
-  } else {
-    drawLine(lines[0], (sf.baseline1 + sf.baseline2) / 2);
-  }
-
-  oled.display();
+  showMessage(title, message);
 }

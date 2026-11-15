@@ -15,6 +15,6 @@ g++ -std=gnu++17 -O1 -w -DTANK_CAPACITY_L=45.0f -DTANK_LOW_MARK_L=10.0f -DTANK_H
     ../../GreyWaterSystem.cpp ../../GreyWaterSettings.cpp ../../GreyWaterOutputs.cpp ../../GreyWaterSensors.cpp \
     ../../GreyWaterDisplay.cpp ../../GreyWaterDiagnostics.cpp "$AGILE"/*.cpp
 FAIL=0
-for s in F1 F2 F3 F4a F4b F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15 F16a F16b F17 F18 F19 F20 F21a F21b; do "$B/test_cycle" $s "$B/flash.bin" || FAIL=1; done
+for s in F1 F2 F3 F4a F4b F5 F6 F7 F8 F9 F10 F11 F12 F13 F14 F15 F16a F16b F17 F18 F19 F20 F21a F21b F22; do "$B/test_cycle" $s "$B/flash.bin" || FAIL=1; done
 rm -rf "$B"
 [ $FAIL -eq 0 ] && echo "All simulation scenarios passed." || { echo "Simulation FAILED."; exit 1; }

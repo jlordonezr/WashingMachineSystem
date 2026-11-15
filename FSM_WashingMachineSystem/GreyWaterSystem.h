@@ -90,7 +90,7 @@ extern volatile uint32_t drainPulseCount;
 #define TANK_MAX_AGE_HOURS 48    // Alert when tank water is older than 48 hours
 #define MANUAL_WASH_TIME 600000UL // Manual tank wash: safety time limit (10 min). The valve
                                  // normally closes earlier, when the high-level switch reports full
-#define DEFAULT_NTFY_SERVER  "https://ntfy.sh"
+#define DEFAULT_NTFY_SERVER  "https://ntfy.hostux.net"   // 3.14 (was https://ntfy.sh, which was down for hours on 2026-11-03)
 #define DEFAULT_TIME_ZONE    "<-05>5"     // POSIX TZ string: UTC-5, no daylight saving
 #define DEFAULT_WEB_PASSWORD "greywater"  // change on first use (dashboard user: admin)
 #define DEFAULT_OTA_PASSWORD "greywater"  // change on first use

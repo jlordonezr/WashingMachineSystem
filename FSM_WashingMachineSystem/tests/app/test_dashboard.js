@@ -36,7 +36,7 @@ let lastStartBody = null;      // form body of the last /api/start
 let onTestAlert = () => {};
 let settings = { language: 'en', buzzerOn: false, minFillLitres: 3, saveMinLpm: 0.5, flowOnLpm: 1, washPeriodS: 10, washOpenS: 2,
     drain2Min: 20, edgeS: 4, stepAlertMin: 90, tankMaxAgeH: 48, manualWashMaxMin: 10, allowRemoteStart: true,
-    ntfyServer: 'https://ntfy.sh', ntfyTopic: 'x', screenFont: 0, screenFontCount: 4, timeZone: '<-05>5' };
+    ntfyServer: 'https://ntfy.hostux.net', ntfyTopic: 'x', screenFont: 4, screenFontCount: 5, timeZone: '<-05>5' };
 let lastSettingsPost = null;
 let resumeCalls = 0, dismissCalls = 0;
 let signedIn = true, lastLoginBody = null, logoutBodies = [];   // sign-in (3.11)
@@ -198,8 +198,12 @@ async function fresh(browser, base) {
     const { ctx, page } = await fresh(browser, base);
     await page.click('#tab-settings'); await tick(page, 500);
     await page.selectOption('#f-language', 'en');
+    // Screen font (3.14): five choices, Large first and selected; it is sent with the settings.
+    check((await page.locator('#f-screenFont option').count()) === 5, 'A9 the screen font list does not have five fonts');
+    check((await page.inputValue('#f-screenFont')) === '4', 'A9 the Large screen font (4) is not selected');
     await page.click('#btnSave'); await tick(page, 1000);
     check(lastSettingsPost && lastSettingsPost.get('language') === 'en', 'A9 language not sent with the settings');
+    check(lastSettingsPost && lastSettingsPost.get('screenFont') === '4', 'A9 screen font 4 (Large) not sent with the settings');
     { const tx = (await page.innerText('#tab-settings')).trim(); check(tx === 'Settings', 'A9 page did not switch to English: ' + tx); }
     await ctx.close();
     settings.language = 'en';

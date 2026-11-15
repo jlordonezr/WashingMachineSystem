@@ -7,22 +7,24 @@ T=$(mktemp -d)
 FAIL=0
 run() { name="$1"; shift; out=$("$@" 2>&1); rc=$?; echo "$out" | tail -1; [ $rc -eq 0 ] || { echo "$out" | grep -E "FAIL|error" | head -20; echo "!! $name FAILED"; FAIL=1; }; }
 echo "== Flow meter, step gates and pump protection =="
-g++ -std=c++17 -O1 -Wall test_flow.cpp -o "$T/test_flow" && run flow "$T/test_flow"
+g++ -std=c++17 -O1 -Wall test_flow.cpp -o "$T/test_flow" && run flow "$T/test_flow" || { echo "!! flow did not compile"; FAIL=1; }
 echo "== Tank level switches =="
-g++ -std=c++17 -O1 -Wall test_level.cpp -o "$T/test_level" && run level "$T/test_level"
+g++ -std=c++17 -O1 -Wall test_level.cpp -o "$T/test_level" && run level "$T/test_level" || { echo "!! level did not compile"; FAIL=1; }
 echo "== Estimated tank litres: in, out, wash water, float corrections, trend =="
-g++ -std=c++17 -O1 -Wall test_tank_volume.cpp -o "$T/test_tank_volume" && run tankvolume "$T/test_tank_volume"
+g++ -std=c++17 -O1 -Wall test_tank_volume.cpp -o "$T/test_tank_volume" && run tankvolume "$T/test_tank_volume" || { echo "!! tankvolume did not compile"; FAIL=1; }
 echo "== Phone alerts: topic, server address, JSON message, retries =="
-g++ -std=c++17 -O1 -Wall test_ntfy.cpp -o "$T/test_ntfy" && run ntfy "$T/test_ntfy"
+g++ -std=c++17 -O1 -Wall test_ntfy.cpp -o "$T/test_ntfy" && run ntfy "$T/test_ntfy" || { echo "!! ntfy did not compile"; FAIL=1; }
 echo "== Remember-this-device sign-in: SHA-256, HMAC, tokens, cookie =="
-g++ -std=c++17 -O1 -Wall test_auth.cpp -o "$T/test_auth" && run auth "$T/test_auth"
+g++ -std=c++17 -O1 -Wall test_auth.cpp -o "$T/test_auth" && run auth "$T/test_auth" || { echo "!! auth did not compile"; FAIL=1; }
+echo "== Large screen font: word wrap, three lines of 10, size 1 only when it does not fit =="
+g++ -std=c++17 -O1 -Wall -I.. test_screen_wrap.cpp -o "$T/test_screen_wrap" && run screenwrap "$T/test_screen_wrap" || { echo "!! screenwrap did not compile"; FAIL=1; }
 echo "== Screen texts fit the OLED (both languages) =="
 if command -v python3 >/dev/null 2>&1; then run screen python3 ../tools/check_screen_text.py; else echo "skipped: python3 not found"; fi
 echo "== Every dashboard text has a Spanish translation (web/es.json) =="
 if command -v python3 >/dev/null 2>&1; then run translations python3 ../tools/i18n_keys.py; else echo "skipped: python3 not found"; fi
 echo "== Water history storage =="
 mkdir -p "$T/h" && cp stubs/* "$T/h/" && cp ../GreyWaterSettings.cpp ../GreyWaterSettings.h "$T/h/"
-g++ -std=c++17 -O1 -Wall -I"$T/h" test_history.cpp "$T/h/GreyWaterSettings.cpp" -o "$T/test_history" && run history "$T/test_history"
+g++ -std=c++17 -O1 -Wall -I"$T/h" test_history.cpp "$T/h/GreyWaterSettings.cpp" -o "$T/test_history" && run history "$T/test_history" || { echo "!! history did not compile"; FAIL=1; }
 echo "== Full cycle simulation of the real firmware =="
 run simulation sh sim/run_sim.sh
 echo "== Dashboard in a headless browser (needs Node.js + Playwright; axe-core optional) =="

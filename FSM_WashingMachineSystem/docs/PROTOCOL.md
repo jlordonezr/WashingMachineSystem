@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.13
+# Communication protocol – firmware 3.14
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -22,7 +22,7 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 | GET | `/` | — | page | 401, 429 |
 | GET | `/api/status` | — | status JSON (below) | 401, 429 |
 | GET | `/api/settings` | — | settings JSON (no passwords; `viewerOn` says whether the viewer user is on, 3.5) | 401, 403 (viewer), 429 |
-| POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–3: Hyperlegible, Plain sans, Terminal bold, Schoolbook bold; 3.6), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword`, `viewerOn` (0 turns the viewer off and forgets its password; 1 needs a password, 3.5), `viewerPassword` (8–32, not the dashboard password, 3.5) | the saved settings JSON | 400 (message says which field), 403 (viewer), 500 (flash write failed) |
+| POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–3: Hyperlegible, Plain sans, Terminal bold, Schoolbook bold, 3.6; 4: Large, the default, 3.14), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword`, `viewerOn` (0 turns the viewer off and forgets its password; 1 needs a password, 3.5), `viewerPassword` (8–32, not the dashboard password, 3.5) | the saved settings JSON | 400 (message says which field), 403 (viewer), 500 (flash write failed) |
 | POST | `/api/start` | optional `save`: `1` *Reuse and save* (the default), `0` *Reuse only*, step 4 sends the rinse water to the drain (3.7) | `{"ok":true}` = request accepted | 400 (`save` not 0 or 1), 403 (turned off in Settings, or viewer), 409 (not Ready) |
 | POST | `/api/stop` | — | `{"ok":true}` = request accepted | 409 `No cycle is running.` (3.0) |
 | POST | `/api/wash` | — | `{"ok":true}` = started | 409 (cycle running, or tank already full) |

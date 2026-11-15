@@ -800,11 +800,11 @@ static void startServices() {
     logEvent("Wireless firmware update started");
     outputsAllOff();   // never leave a valve open while the firmware is replaced
     statsSave();       // write the latest water history before the update
-    displayShowNotice(TRS("UPDATING", "ACTUALIZANDO"), TRS("Do not unplug|Please wait", "No desconecte|Espere por favor"), 600000UL);
+    displayShowNotice(TRS("UPDATING", "ACTUALIZANDO"), TRS("Do not unplug|Wait", "No desconecte|Espere"), 600000UL);
     displayUpdate(true);
   });
   ArduinoOTA.onEnd([]() {
-    displayShowNotice(TRS("UPDATED", "ACTUALIZADO"), TRS("Restarting|Please wait", "Reiniciando|Espere por favor"), 5000);
+    displayShowNotice(TRS("UPDATED", "ACTUALIZADO"), TRS("Restarting|Please wait", "Reinicio|Espere"), 5000);
     displayUpdate(true);
   });
   ArduinoOTA.onError([](ota_error_t) {
@@ -822,7 +822,7 @@ static void startServices() {
 
   char ip[20];
   strlcpy(ip, WiFi.localIP().toString().c_str(), sizeof(ip));
-  displayShowNotice(ip, TRS("Wi-Fi connected|App: this IP", "Wi-Fi conectado|App: esta IP"), 6000);   // the header is the address of the app
+  displayShowNotice(ip, TRS("Wi-Fi OK|App: this IP", "Wi-Fi OK|App: esta IP"), 6000);   // the header is the address of the app
   logEvent("Wi-Fi connected: %s", ip);
   DEBUG_PRINT("Dashboard: http://reusewater.local");
 }
@@ -915,7 +915,7 @@ void netStartConfigPortal() {
   wm.startConfigPortal(WIFI_AP_NAME, pw);   // blockSetupPages() runs inside, before WiFiManager's own pages
   portalActive = true;
   char msg[48];
-  snprintf(msg, sizeof(msg), TRS("Wi-Fi setup|Key %s", "Configurar Wi-Fi|%s"), pw);
+  snprintf(msg, sizeof(msg), TRS("Wi-Fi key|%s", "Clave Wi-Fi|%s"), pw);
   displayShowNotice(WIFI_AP_NAME, msg, (unsigned long)CONFIG_PORTAL_TIMEOUT_S * 1000UL);
   logEvent("Wi-Fi setup page opened");
   Serial.printf("Wi-Fi setup: join \"%s\", password %s\n", WIFI_AP_NAME, pw);

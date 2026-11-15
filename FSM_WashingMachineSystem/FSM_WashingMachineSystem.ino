@@ -112,7 +112,7 @@ void setup() {
   // A Border Collie herding sheep (about 4.5 s), then "System ready" and the
   // firmware version for 2 s.
   static char ready[48];
-  snprintf(ready, sizeof(ready), TRS("System ready|Version %s", "Sistema listo|Version %s"), FIRMWARE_VERSION);
+  snprintf(ready, sizeof(ready), TRS("System ready|v%s", "Sistema listo|v%s"), FIRMWARE_VERSION);
   displayStartIntro(TRS("REUSE WATER", "REUSO AGUA"), ready, 2000);
   displayUpdate();
   setupStateMachine();

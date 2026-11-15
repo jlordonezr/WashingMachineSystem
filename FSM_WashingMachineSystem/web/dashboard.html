@@ -551,8 +551,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       </fieldset>
       <fieldset>
         <legend>Screen</legend>
-        <div class="field"><span><label for="f-screenFont">Screen font</label><small id="h-screenFont">Letters of the messages on the controller screen. Save settings, then look at the screen; choose the one that is easiest to read from where you stand.</small></span>
-          <span class="inp"><select id="f-screenFont" name="screenFont" aria-describedby="h-screenFont"><option value="0">Hyperlegible</option><option value="1">Plain sans</option><option value="2">Terminal bold</option><option value="3">Schoolbook bold</option></select></span></div>
+        <div class="field"><span><label for="f-screenFont">Screen font</label><small id="h-screenFont">Letters of the messages on the controller screen. Large shows the biggest letters, on up to three lines; the others show two lines. Save settings, then look at the screen; choose the one that is easiest to read from where you stand.</small></span>
+          <span class="inp"><select id="f-screenFont" name="screenFont" aria-describedby="h-screenFont"><option value="4">Large</option><option value="0">Hyperlegible</option><option value="1">Plain sans</option><option value="2">Terminal bold</option><option value="3">Schoolbook bold</option></select></span></div>
       </fieldset>
       <fieldset>
         <legend>Tank wash</legend>
@@ -586,7 +586,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           <span class="inp"><input id="f-stepAlertMin" aria-describedby="h-stepAlertMin e-stepAlertMin" type="number" name="stepAlertMin" min="10" max="600" step="5" required><em aria-hidden="true">min</em></span><p class="ferr" id="e-stepAlertMin" hidden></p></div>
         <div class="field"><span><label for="f-tankMaxAgeH">Tank water age limit</label><small id="h-tankMaxAgeH">Alert when stored water is older than this (in hours)</small></span>
           <span class="inp"><input id="f-tankMaxAgeH" aria-describedby="h-tankMaxAgeH e-tankMaxAgeH" type="number" name="tankMaxAgeH" min="1" max="240" step="1" required><em aria-hidden="true">h</em></span><p class="ferr" id="e-tankMaxAgeH" hidden></p></div>
-        <div class="field wide-in"><span><label for="f-ntfyServer">Alert server</label><small id="h-ntfyServer">Usually https://ntfy.sh</small></span>
+        <div class="field wide-in"><span><label for="f-ntfyServer">Alert server</label><small id="h-ntfyServer">Usually https://ntfy.hostux.net</small></span>
           <span class="inp"><input id="f-ntfyServer" aria-describedby="h-ntfyServer e-ntfyServer" type="text" name="ntfyServer" maxlength="63" autocomplete="off" spellcheck="false"></span><p class="ferr" id="e-ntfyServer" hidden></p></div>
         <div class="field wide-in"><span><label for="f-ntfyTopic">Alert topic</label><small id="h-ntfyTopic">Subscribe to the same topic in the ntfy app. Leave empty to turn alerts off. Use a long, hard-to-guess name.</small></span>
           <span class="inp"><input id="f-ntfyTopic" aria-describedby="h-ntfyTopic e-ntfyTopic" type="text" name="ntfyTopic" maxlength="63" autocomplete="off" spellcheck="false"></span><p class="ferr" id="e-ntfyTopic" hidden></p>
@@ -1261,7 +1261,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   $('resumeNo').addEventListener('click',function(){$('resumeDlg').close();dismissIntr()});
   // Alerts: create a hard-to-guess topic and show how to subscribe.
   function topicHelp(){
-    var tp=$('f-ntfyTopic').value.trim(),sv=($('f-ntfyServer').value.trim()||'https://ntfy.sh').replace(/\/+$/,''),h=$('topicHelp');h.textContent='';
+    var tp=$('f-ntfyTopic').value.trim(),sv=($('f-ntfyServer').value.trim()||'https://ntfy.hostux.net').replace(/\/+$/,''),h=$('topicHelp');h.textContent='';
     if(tp&&sv.slice(-tp.length-1)==='/'+tp&&sv.indexOf('://')+3<sv.length-tp.length-1)sv=sv.slice(0,-tp.length-1).replace(/\/+$/,'');   // a pasted subscribe link, as the controller does
     if(!tp){h.textContent=t('No topic: phone alerts are off.');return;}
     var url=sv+'/'+encodeURIComponent(tp),a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=url;
@@ -1310,8 +1310,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
             var c=h.settings,b=new URLSearchParams();
             ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','saveMinLpm','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','language']
               .forEach(function(k){if(c[k]!==undefined)b.append(k,c[k])});
-            // Files from before 3.6 number other screen fonts: keep the current one.
-            if(c.screenFont!==undefined&&c.screenFontCount===4)b.append('screenFont',c.screenFont);
+            // Files from before 3.6 number other screen fonts: keep the current one. (3.6-3.13 files have fonts 0-3, 3.14 adds 4 = Large.)
+            if(c.screenFont!==undefined&&(c.screenFontCount===4||c.screenFontCount===5))b.append('screenFont',c.screenFont);
             b.append('allowRemoteStart',c.allowRemoteStart?'1':'0');b.append('buzzerOn',c.buzzerOn?'1':'0');
             return api('/api/settings',{method:'POST',body:b}).then(function(nc){fill(nc);toast(t('Water history and settings restored'))});
           }).catch(function(e){toast(e.message,true)});
@@ -1355,7 +1355,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     form.allowRemoteStart.checked=!!c.allowRemoteStart;form.ntfyServer.value=c.ntfyServer;
     form.ntfyTopic.value=c.ntfyTopic;form.timeZone.value=c.timeZone;form.buzzerOn.checked=!!c.buzzerOn;
     form.language.value=c.language==='en'?'en':'es';setLang(form.language.value);
-    form.screenFont.value=String(c.screenFont>=0&&c.screenFont<=3?c.screenFont:0);
+    form.screenFont.value=String(c.screenFont>=0&&c.screenFont<=4?c.screenFont:4);
     var sel=$('f-tzSel'),found=false;
     for(var i=0;i<sel.options.length;i++)if(sel.options[i].value===c.timeZone){sel.selectedIndex=i;found=true;}
     if(!found)sel.value='custom';$('tzCustomRow').hidden=found;topicHelp();form.webPassword.value='';form.otaPassword.value='';
