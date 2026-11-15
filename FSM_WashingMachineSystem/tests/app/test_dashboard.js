@@ -36,7 +36,7 @@ let lastStartBody = null;      // form body of the last /api/start
 let onTestAlert = () => {};
 let settings = { language: 'en', buzzerOn: false, minFillLitres: 3, saveMinLpm: 0.5, flowOnLpm: 1, washPeriodS: 10, washOpenS: 2,
     drain2Min: 20, edgeS: 4, stepAlertMin: 90, tankMaxAgeH: 48, manualWashMaxMin: 10, allowRemoteStart: true,
-    ntfyServer: 'https://ntfy.hostux.net', ntfyTopic: 'x', screenFont: 4, screenFontCount: 5, timeZone: '<-05>5' };
+    ntfyServer: 'https://ntfy.hostux.net', ntfyTopic: 'x', screenFont: 0, screenFontCount: 4, timeZone: '<-05>5' };
 let lastSettingsPost = null;
 let resumeCalls = 0, dismissCalls = 0;
 let signedIn = true, lastLoginBody = null, logoutBodies = [];   // sign-in (3.11)
@@ -198,26 +198,25 @@ async function fresh(browser, base) {
     const { ctx, page } = await fresh(browser, base);
     await page.click('#tab-settings'); await tick(page, 500);
     await page.selectOption('#f-language', 'en');
-    // Screen font (3.14): five choices, Large first and selected; it is sent with the settings.
-    check((await page.locator('#f-screenFont option').count()) === 5, 'A9 the screen font list does not have five fonts');
-    check((await page.inputValue('#f-screenFont')) === '4', 'A9 the Large screen font (4) is not selected');
     await page.click('#btnSave'); await tick(page, 1000);
     check(lastSettingsPost && lastSettingsPost.get('language') === 'en', 'A9 language not sent with the settings');
-    check(lastSettingsPost && lastSettingsPost.get('screenFont') === '4', 'A9 screen font 4 (Large) not sent with the settings');
     { const tx = (await page.innerText('#tab-settings')).trim(); check(tx === 'Settings', 'A9 page did not switch to English: ' + tx); }
     await ctx.close();
     settings.language = 'en';
   }
 
-  // A10 View-only user (3.5): only Overview and Water use, no buttons that change anything.
+  // A10 Viewer user: only Overview and Water use (3.5); from 3.15 with every Overview control, still no history restore.
   {
     status = baseStatus(); status.role = 'viewer';
     const { ctx, page } = await fresh(browser, base);
     check(!(await page.isVisible('#tab-service')) && !(await page.isVisible('#tab-settings')), 'A10 viewer sees the Service or Settings tab');
     check(await page.isVisible('#tab-overview') && await page.isVisible('#tab-water'), 'A10 viewer cannot see Overview and Water use');
-    for (const id of ['#btnStart', '#btnStop', '#btnWash', '#btnUpload'])
-      check(!(await page.isVisible(id)), 'A10 viewer sees ' + id);
-    check(await page.isVisible('#viewNote'), 'A10 view-only note not shown');
+    for (const id of ['#btnStart', '#btnReuse', '#btnStop', '#btnWash'])
+      check(await page.isVisible(id), 'A10 viewer does not see ' + id + ' on Overview (3.15)');
+    check(await page.isVisible('#viewNote'), 'A10 viewer note not shown');
+    await page.click('#tab-water'); await tick(page, 300);
+    check(!(await page.isVisible('#btnUpload')), 'A10 viewer sees the history restore');
+    await page.click('#tab-overview'); await tick(page, 300);
     await page.click('#tab-water'); await tick(page, 300);
     check(await page.isVisible('#view-water') && await page.isVisible('#btnDownload'), 'A10 Water use tab or history download missing');
     await page.focus('#tab-water'); await page.keyboard.press('ArrowRight'); await tick(page, 300);
@@ -313,7 +312,12 @@ async function fresh(browser, base) {
       'A14 Resume still offered after it expired');
     await ctx.close();
 
-    for (const [what, set] of [['viewer', s => { s.role = 'viewer'; }], ['start from the dashboard off', s => { s.allowRemoteStart = false; }]]) {
+    // The viewer may resume too (3.15).
+    status = baseStatus(); status.interrupted = intr(); status.role = 'viewer';
+    ({ ctx, page } = await fresh(browser, base));
+    check(await page.isVisible('#btnIntrResume') && await page.isVisible('#btnIntrOk'), 'A14 Resume and OK not offered to the viewer (3.15)');
+    await ctx.close();
+    for (const [what, set] of [['start from the dashboard off', s => { s.allowRemoteStart = false; }]]) {
       status = baseStatus(); status.interrupted = intr(); set(status);
       ({ ctx, page } = await fresh(browser, base));
       check(!(await page.isVisible('#resumeDlg')) && !(await page.isVisible('#btnIntrResume')), 'A14 Resume offered to ' + what);

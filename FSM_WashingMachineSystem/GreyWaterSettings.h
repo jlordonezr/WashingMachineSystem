@@ -10,21 +10,18 @@
 // Bump SETTINGS_VERSION / STATS_VERSION whenever a field is added, removed or
 // reordered: stored data with a different version is ignored and replaced by
 // defaults instead of being read into the wrong fields.
-#define SETTINGS_VERSION 11  // 11: Large screen font, the new default (versions 4 to 10 are migrated)
+#define SETTINGS_VERSION 12  // 12: the Large screen font of 3.14 (version 11) is removed; the old default alert server moves to the new one (versions 4 to 11 are migrated)
 
 // Language of the screen, the app and the alerts (Settings: Idioma / Language).
 // Spanish is 0 so that settings migrated from older versions start in Spanish.
 #define LANG_ES 0
 #define LANG_EN 1
 
-// Font of the screen messages (Settings: Screen font): 0 Hyperlegible,
-// 1 Plain sans, 2 Terminal bold, 3 Schoolbook bold (3.6), 4 Large (3.14, the
-// default: the built-in font at twice its size, up to three lines of 10
-// characters). Settings migrated from older versions start in Large.
+// Font of the screen messages (Settings: Screen font), 3.6: 0 Hyperlegible
+// (default), 1 Plain sans, 2 Terminal bold, 3 Schoolbook bold. The numbers of
+// 3.4-3.5 named other fonts, so migrated settings start at 0.
 // See GreyWaterDisplay.cpp and licenses/.
-#define SCREEN_FONT_COUNT 5
-#define SCREEN_FONT_LARGE 4
-#define SCREEN_FONT_DEFAULT SCREEN_FONT_LARGE
+#define SCREEN_FONT_COUNT 4
 #define STATS_VERSION    3   // 3: adds typical step times (1 and 2 are migrated)
 
 struct Settings {
@@ -53,7 +50,7 @@ struct Settings {
   uint8_t  screenFont;        // 0 .. SCREEN_FONT_COUNT-1 (sits in what was padding)
   float    saveMinLpm;        // step 4 saves to the tank only while the drain flow is above this (L/min)
   // ── added in SETTINGS_VERSION 9; must stay last so version 8 data migrates ──
-  char     viewerPassword[33]; // view-only dashboard user "viewer" (Overview and Water use); empty = off
+  char     viewerPassword[33]; // dashboard user "viewer" (Overview and Water use, with the Overview controls); empty = off
 };
 
 extern Settings   cfg;
@@ -62,13 +59,9 @@ extern Settings   cfg;
 // Screen texts must be plain ASCII (the screen font has no accents);
 // texts for the app and alerts may use UTF-8.
 inline const char* TR(const char* en, const char* es) { return cfg.language == LANG_EN ? en : es; }
-// The same, for text shown on the OLED: plain ASCII, headers up to 12 characters,
-// messages up to 128 px per part in the four two-line fonts and up to three
-// lines of 10 characters in Large. tools/check_screen_text.py checks every TRS().
+// The same, for text shown on the OLED: plain ASCII, headers up to 16 characters,
+// messages up to 128 px in every screen font (one fixed size each). tools/check_screen_text.py checks every TRS().
 inline const char* TRS(const char* en, const char* es) { return TR(en, es); }
-// A screen message that gets the time left added under it ("Washing..." +
-// "25 min left"): the check then measures the two together.
-inline const char* TRS_TIMED(const char* en, const char* es) { return TR(en, es); }
 
 struct WaterStats {
   uint16_t version;

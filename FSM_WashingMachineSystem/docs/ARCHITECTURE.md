@@ -1,4 +1,4 @@
-# Architecture – firmware 3.14
+# Architecture – firmware 3.15
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -43,9 +43,8 @@ FSM_WashingMachineSystem.ino   setup(), loop(), state machine wiring (AgileState
 │    requests modes ──► GreyWaterOutputs   only writer of the SSR pins; interlocks; PumpGuard; TankLevel
 │                         ▲  safetyTick() every 20 ms from GreyWaterTask (FreeRTOS)
 ├─ TankVolume.h       estimated tank litres: flow in/out, wash water at an assumed rate, float corrections (3.13)
-├─ ScreenWrap.h       Large screen font: word wrap, three lines of 10 characters, size 1 only for a message that does not fit (3.14)
 ├─ GreyWaterSensors     flow interrupts + FlowMeter (rate, flowing, starts, litres)
-├─ GreyWaterDisplay     OLED 128x64: header in the yellow rows (title, tank litres, arrow, gauge; 3.13), message in the blue rows ("top|bottom"): Large font, up to three lines of 10 large letters, wrapped and centred (3.14, the default), or one of four two-line fonts; showMessage() is the one function that draws a screen; start-up animation: Border Collie chasing a butterfly (BootAnimation.h), frame-timed, only redraws on change
+├─ GreyWaterDisplay     OLED 128x64: header in the yellow rows (title, tank litres, arrow, gauge; 3.13), message on one or two blue lines ("top|bottom"); start-up animation: Border Collie chasing a butterfly (BootAnimation.h), frame-timed, only redraws on change
 ├─ GreyWaterDiagnostics event log (50, RAM), loop timing, buzzer, restart reason
 ├─ GreyWaterSettings    settings + history in NVS (versioned structs, history twice + kept-aside copy)
 └─ GreyWaterNet         Wi-Fi (WiFiManager), web server + API, OTA, mDNS, NTP, alert task

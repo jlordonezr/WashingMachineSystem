@@ -66,6 +66,12 @@ int main() {
   CHECK(!authCookieValue("xgwsid=abc; gwsidx=def", v), "a cookie with a similar name was taken");
   CHECK(!authCookieValue("gwsid=short", v) && !authCookieValue("", v) && !authCookieValue(nullptr, v), "a bad cookie was taken");
 
+  printf("R1 roles: the viewer may use the Overview controls and nothing else (3.15)\n");
+  CHECK(authRoleAllows('a', true) && authRoleAllows('a', false), "the admin is refused something");
+  CHECK(authRoleAllows('v', true), "the viewer cannot use the Overview controls");
+  CHECK(!authRoleAllows('v', false), "the viewer may change settings or use admin actions");
+  CHECK(!authRoleAllows(0, true) && !authRoleAllows(0, false) && !authRoleAllows('x', true), "an unknown role is allowed something");
+
   printf("\n%d checks passed, %d failed\n", pass, fail);
   return fail ? 1 : 0;
 }

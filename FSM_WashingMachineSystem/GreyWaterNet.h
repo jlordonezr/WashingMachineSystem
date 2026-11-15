@@ -11,7 +11,7 @@
 //    WIFI_AP_NAME. Join it with a phone and pick the home Wi-Fi.
 //  - Dashboard at http://reusewater.local (or the IP shown on the OLED),
 //    user "admin", password from the settings (default "greywater").
-//    Optional view-only user "viewer" (Overview and Water use only, no changes),
+//    Optional user "viewer" (Overview and Water use only: may start, stop and wash the tank, no settings),
 //    turned on by giving it a password in Settings.
 //  - Wireless firmware updates (ArduinoOTA), host name "reusewater".
 //  - Phone alerts through ntfy (https://ntfy.sh) when a topic is set.
@@ -23,8 +23,8 @@
 #define CONFIG_PORTAL_TIMEOUT_S 180           // setup page closes after 3 minutes
 #define WIFI_RETRY_MS           60000         // try to reconnect every minute when offline
 #define WEB_USER                "admin"
-#define WEB_VIEWER_USER         "viewer"       // view-only: Overview and Water use, cannot change anything
-#define FIRMWARE_VERSION        "3.14.0"
+#define WEB_VIEWER_USER         "viewer"       // Overview and Water use: may use the Overview controls (3.15), no settings
+#define FIRMWARE_VERSION        "3.15.0"
 #define AUTH_SLOTS              6             // devices tracked for the wrong-password lockout
 #define ALERT_RETRY_WINDOW_S    1800          // an alert that cannot be sent is tried again for 30 min
 #define ALERT_TEST_WINDOW_S     30            // ... the test alert only for 30 s (the app is waiting)

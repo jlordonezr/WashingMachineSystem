@@ -58,7 +58,7 @@ void settingsDefaults(Settings& s) {
   s.minFillLitres    = MIN_FILL_LITRES;
   s.buzzerOn         = 0;
   s.language         = LANG_ES;
-  s.screenFont       = SCREEN_FONT_DEFAULT;
+  s.screenFont       = 0;
   s.saveMinLpm       = SAVE_MIN_LPM;
   s.allowRemoteStart = true;   // dashboard start buttons; each asks for confirmation
   strlcpy(s.ntfyServer,  DEFAULT_NTFY_SERVER,  sizeof(s.ntfyServer));
@@ -94,7 +94,16 @@ void settingsSanitize(Settings& s) {
   if (s.webPassword[0] == '\0') strlcpy(s.webPassword, DEFAULT_WEB_PASSWORD, sizeof(s.webPassword));
   if (s.otaPassword[0] == '\0') strlcpy(s.otaPassword, DEFAULT_OTA_PASSWORD, sizeof(s.otaPassword));
   if (s.language != LANG_EN) s.language = LANG_ES;
-  if (s.screenFont >= SCREEN_FONT_COUNT) s.screenFont = SCREEN_FONT_DEFAULT;
+  if (s.screenFont >= SCREEN_FONT_COUNT) s.screenFont = 0;
+}
+
+// 3.15: the default alert server is https://ntfy.hostux.net. Settings saved by
+// an older version that still hold the old default (https://ntfy.sh, which was
+// down for hours on 2026-11-03) move to the new one; any other server chosen
+// in Settings is kept.
+static void useNewDefaultAlertServer(Settings& s) {
+  s.ntfyServer[sizeof(s.ntfyServer) - 1] = '\0';
+  if (strcmp(s.ntfyServer, OLD_DEFAULT_NTFY_SERVER) == 0) strlcpy(s.ntfyServer, DEFAULT_NTFY_SERVER, sizeof(s.ntfyServer));
 }
 
 void settingsBegin() {
@@ -108,12 +117,23 @@ void settingsBegin() {
     cfg = stored;
   } else if (prefs.getBytesLength("cfg") == sizeof(Settings) &&
              prefs.getBytes("cfg", &stored, sizeof(stored)) == sizeof(stored) &&
-             (stored.version == 10 || stored.version == 9)) {
-    // Versions 9 and 10 have the same fields. 3.14 adds the Large screen font
-    // and makes it the default, so the screen starts in it (version 9 numbers
-    // named the fonts removed in 3.6); the other fonts stay in Settings.
+             (stored.version == 11 || stored.version == 10)) {
+    // Versions 10 (3.6-3.13) and 11 (3.14) have the same fields and the same
+    // font numbers 0-3: the chosen font is kept. Font 4 was Large, in 3.14
+    // only (removed in 3.15): settingsSanitize() puts Hyperlegible in its place.
+    stored.version = SETTINGS_VERSION;
+    useNewDefaultAlertServer(stored);
+    cfg = stored;
+    settingsSanitize(cfg);
+    settingsSave();
+  } else if (prefs.getBytesLength("cfg") == sizeof(Settings) &&
+             prefs.getBytes("cfg", &stored, sizeof(stored)) == sizeof(stored) &&
+             stored.version == 9) {
+    // Version 9 has the same fields; its screen font numbers named the fonts
+    // removed in 3.6, so the screen starts in the new default font.
     stored.version    = SETTINGS_VERSION;
-    stored.screenFont = SCREEN_FONT_DEFAULT;
+    stored.screenFont = 0;
+    useNewDefaultAlertServer(stored);
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -123,8 +143,9 @@ void settingsBegin() {
     // Version 8 stored everything up to saveMinLpm: keep it, the view-only user starts off;
     // the screen font numbers named the fonts removed in 3.6.
     stored.version           = SETTINGS_VERSION;
-    stored.screenFont        = SCREEN_FONT_DEFAULT;
+    stored.screenFont        = 0;
     stored.viewerPassword[0] = '\0';
+    useNewDefaultAlertServer(stored);
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -133,9 +154,10 @@ void settingsBegin() {
              stored.version == 7) {
     // Version 7 stored everything up to language; screenFont sat in its padding.
     stored.version    = SETTINGS_VERSION;
-    stored.screenFont = SCREEN_FONT_DEFAULT;
+    stored.screenFont = 0;
     stored.saveMinLpm = SAVE_MIN_LPM;
     stored.viewerPassword[0] = '\0';
+    useNewDefaultAlertServer(stored);
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -145,9 +167,10 @@ void settingsBegin() {
     // Version 6 stored everything up to buzzerOn; language sat in its padding.
     stored.version    = SETTINGS_VERSION;
     stored.language   = LANG_ES;
-    stored.screenFont = SCREEN_FONT_DEFAULT;
+    stored.screenFont = 0;
     stored.saveMinLpm = SAVE_MIN_LPM;
     stored.viewerPassword[0] = '\0';
+    useNewDefaultAlertServer(stored);
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -158,9 +181,10 @@ void settingsBegin() {
     stored.version  = SETTINGS_VERSION;
     stored.buzzerOn   = 0;
     stored.language   = LANG_ES;
-    stored.screenFont = SCREEN_FONT_DEFAULT;
+    stored.screenFont = 0;
     stored.saveMinLpm = SAVE_MIN_LPM;
     stored.viewerPassword[0] = '\0';
+    useNewDefaultAlertServer(stored);
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();
@@ -172,9 +196,10 @@ void settingsBegin() {
     stored.minFillLitres = MIN_FILL_LITRES;
     stored.buzzerOn      = 0;
     stored.language      = LANG_ES;
-    stored.screenFont    = SCREEN_FONT_DEFAULT;
+    stored.screenFont    = 0;
     stored.saveMinLpm    = SAVE_MIN_LPM;
     stored.viewerPassword[0] = '\0';
+    useNewDefaultAlertServer(stored);
     cfg = stored;
     settingsSanitize(cfg);
     settingsSave();

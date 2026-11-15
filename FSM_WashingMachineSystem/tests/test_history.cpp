@@ -72,15 +72,13 @@ int main(){
     v7.screenFont=0xCD;                                   // whatever was in the padding byte
     st["cfg"]=std::vector<uint8_t>((uint8_t*)&v7,(uint8_t*)&v7+offsetof(Settings,saveMinLpm)); }   // 3.3 stored 288 bytes
   boot();
-  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==SCREEN_FONT_DEFAULT, "version 7 settings not migrated to the default screen font");
+  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==0, "version 7 settings not migrated to the default screen font");
   CHECK(cfg.language==LANG_EN && cfg.drain2DurationMs==1500000 && !strcmp(cfg.ntfyServer,"https://ntfy.envs.net"), "version 7 values lost in the migration");
   printf("S4 a chosen screen font survives a restart; a bad value falls back to the default\n");
   cfg.screenFont=3; settingsSave(); cfg.screenFont=0; boot();
   CHECK(cfg.screenFont==3, "screen font not kept after a restart");
-  cfg.screenFont=4; settingsSave(); cfg.screenFont=0; boot();
-  CHECK(cfg.screenFont==4, "screen font 4 (Large, 3.14) not kept after a restart");
-  cfg.screenFont=5; settingsSanitize(cfg);
-  CHECK(cfg.screenFont==SCREEN_FONT_LARGE, "screen font 5 accepted (3.14 has fonts 0-4), or the fallback is not Large");
+  cfg.screenFont=4; settingsSanitize(cfg);
+  CHECK(cfg.screenFont==0, "screen font 4 accepted (3.6 has fonts 0-3)");
   printf("S5 minimum save flow: 0.5 L/min after the upgrade, kept after a restart, limited to 0.5-10 (3.4)\n");
   CHECK(cfg.saveMinLpm==0.5f, "upgraded settings do not save above 0.5 L/min");
   cfg.saveMinLpm=1.5f; settingsSave(); cfg.saveMinLpm=0.5f; boot();
@@ -94,7 +92,7 @@ int main(){
     st["cfg"]=std::vector<uint8_t>((uint8_t*)&v8,(uint8_t*)&v8+offsetof(Settings,viewerPassword)); }   // 3.4 stored up to saveMinLpm
   boot();
   CHECK(cfg.version==SETTINGS_VERSION && cfg.viewerPassword[0]=='\0', "version 8 settings not migrated with the viewer off");
-  CHECK(cfg.screenFont==SCREEN_FONT_DEFAULT, "version 8 screen font kept: its number named a font removed in 3.6");
+  CHECK(cfg.screenFont==0, "version 8 screen font kept: its number named a font removed in 3.6");
   CHECK(cfg.saveMinLpm==2.0f && !strcmp(cfg.webPassword,"owner-pass-1"), "version 8 values lost in the migration");
   printf("S7 a viewer password survives a restart\n");
   strlcpy(cfg.viewerPassword,"family-view-1",sizeof(cfg.viewerPassword)); settingsSave(); cfg.viewerPassword[0]='\0'; boot();
@@ -109,29 +107,32 @@ int main(){
   printf("S9 settings from 3.5 (version 9) keep every value; the screen font is the new default (3.6)\n");
   st.clear(); { Settings v9; settingsDefaults(v9); v9.version=9; v9.screenFont=2; v9.saveMinLpm=1.5f; v9.language=LANG_EN;
     strlcpy(v9.viewerPassword,"family-view-2",sizeof(v9.viewerPassword));
-    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v9,(uint8_t*)&v9+sizeof(Settings)); }   // same size as versions 10 and 11
+    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v9,(uint8_t*)&v9+sizeof(Settings)); }   // same size as versions 10 to 12
   boot();
-  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==SCREEN_FONT_DEFAULT, "version 9 settings not migrated to the default screen font");
+  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==0, "version 9 settings not migrated to the default screen font");
   CHECK(cfg.saveMinLpm==1.5f && cfg.language==LANG_EN && !strcmp(cfg.viewerPassword,"family-view-2"), "version 9 values lost in the migration");
   { Settings saved; memcpy(&saved, st["cfg"].data(), sizeof(saved)); CHECK(saved.version==SETTINGS_VERSION, "version 9 migration not saved"); }
-  printf("S10 settings from 3.6-3.13 (version 10) keep every value; the screen starts in the Large font (3.14)\n");
-  st.clear(); { Settings v10; settingsDefaults(v10); v10.version=10; v10.screenFont=1; v10.saveMinLpm=2.5f; v10.language=LANG_EN; v10.drain2DurationMs=1500000;
-    strlcpy(v10.webPassword,"owner-pass-2",sizeof(v10.webPassword)); strlcpy(v10.ntfyTopic,"gw-private-topic",sizeof(v10.ntfyTopic));
-    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v10,(uint8_t*)&v10+sizeof(Settings)); }
+  printf("S10 settings from 3.14 (version 11) with the Large font, removed in 3.15: Hyperlegible, every other value kept\n");
+  st.clear(); { Settings v11; settingsDefaults(v11); v11.version=11; v11.screenFont=4; v11.saveMinLpm=2.5f; v11.language=LANG_EN; v11.drain2DurationMs=1500000;
+    strlcpy(v11.webPassword,"owner-pass-2",sizeof(v11.webPassword)); strlcpy(v11.ntfyTopic,"gw-private-topic",sizeof(v11.ntfyTopic));
+    strlcpy(v11.ntfyServer,"https://ntfy.envs.net",sizeof(v11.ntfyServer));
+    st["cfg"]=std::vector<uint8_t>((uint8_t*)&v11,(uint8_t*)&v11+sizeof(Settings)); }
   boot();
-  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==SCREEN_FONT_LARGE, "version 10 settings do not start in the Large screen font");
+  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==0, "version 11 settings with the Large font do not start in Hyperlegible");
   CHECK(cfg.saveMinLpm==2.5f && cfg.language==LANG_EN && cfg.drain2DurationMs==1500000 && !strcmp(cfg.webPassword,"owner-pass-2") && !strcmp(cfg.ntfyTopic,"gw-private-topic"),
-        "version 10 values lost in the migration");
-  { Settings saved; memcpy(&saved, st["cfg"].data(), sizeof(saved)); CHECK(saved.version==SETTINGS_VERSION, "version 10 migration not saved"); }
-  cfg.screenFont=0; settingsSave(); boot();
-  CHECK(cfg.screenFont==0, "a two-line font chosen after the upgrade was not kept");
-  { Settings fresh; settingsDefaults(fresh); CHECK(fresh.screenFont==SCREEN_FONT_LARGE, "factory default screen font is not Large"); }
-  printf("S11 an alert server already saved is kept through the update; an empty one is never stored (3.14 changes only the factory default)\n");
-  st.clear(); { Settings v10; settingsDefaults(v10); v10.version=10; strlcpy(v10.ntfyServer,"https://ntfy.sh",sizeof(v10.ntfyServer));
+        "version 11 values lost in the migration");
+  CHECK(!strcmp(cfg.ntfyServer,"https://ntfy.envs.net"), "an alert server chosen in Settings was changed by the update");
+  { Settings saved; memcpy(&saved, st["cfg"].data(), sizeof(saved)); CHECK(saved.version==SETTINGS_VERSION && saved.screenFont==0, "version 11 migration not saved"); }
+  printf("S11 settings from 3.6-3.13 (version 10) keep the chosen screen font; the old default alert server moves to the new one (3.15)\n");
+  st.clear(); { Settings v10; settingsDefaults(v10); v10.version=10; v10.screenFont=2; strlcpy(v10.ntfyServer,"https://ntfy.sh",sizeof(v10.ntfyServer));
+    strlcpy(v10.ntfyTopic,"gw-private-topic",sizeof(v10.ntfyTopic));
     st["cfg"]=std::vector<uint8_t>((uint8_t*)&v10,(uint8_t*)&v10+sizeof(Settings)); }
   boot();
-  CHECK(!strcmp(cfg.ntfyServer,"https://ntfy.sh"), "a saved alert server was changed by the update");
-  { Settings fresh; settingsDefaults(fresh); CHECK(!strcmp(fresh.ntfyServer,"https://ntfy.hostux.net"), "factory default alert server is not https://ntfy.hostux.net"); }
+  CHECK(cfg.version==SETTINGS_VERSION && cfg.screenFont==2, "version 10 screen font not kept");
+  CHECK(!strcmp(cfg.ntfyServer,"https://ntfy.hostux.net") && !strcmp(cfg.ntfyTopic,"gw-private-topic"), "the old default alert server did not move to https://ntfy.hostux.net, or the topic was lost");
+  { Settings fresh; settingsDefaults(fresh); CHECK(fresh.screenFont==0 && !strcmp(fresh.ntfyServer,"https://ntfy.hostux.net"), "factory defaults are not Hyperlegible and https://ntfy.hostux.net"); }
+  strlcpy(cfg.ntfyServer,"https://ntfy.sh",sizeof(cfg.ntfyServer)); settingsSave(); boot();
+  CHECK(!strcmp(cfg.ntfyServer,"https://ntfy.sh"), "https://ntfy.sh chosen again in Settings after the update was not kept");
 
   printf("C1 cycle snapshot: saved and read back whole; removed at the end (3.10)\n");
   st.clear(); boot();

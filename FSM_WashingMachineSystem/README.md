@@ -1,18 +1,18 @@
-# Reuse Water System – Firmware 3.14 (Wi-Fi)
+# Reuse Water System – Firmware 3.15 (Wi-Fi)
 
-## What's new in 3.14: larger letters on the screen
+## What's new in 3.15: the Large screen font is removed, new default alert server, the viewer can run a wash
 
-The messages in the blue part of the screen now use a new screen font, **Large** (*Grande*), which is the default. It is the display's built-in font at twice its size (`setTextSize(2)`): letters 10 px wide and 14 px tall, on up to **three lines of 10 characters**. The yellow header (step, tank litres, arrow and gauge) is unchanged from 3.13, and so are the cycle, the safety logic and the timing.
+- **The `viewer` user has every control of the Overview tab:** *Reuse and save*, *Reuse only*, *Stop cycle*, *Wash tank* (and stopping it), and *Resume cycle* / *OK, I checked the machine* after an interrupted cycle, the resume popup included. Until 3.14 the viewer could only look. The start buttons still follow Settings → *Start from the dashboard*. The viewer still has no Service or Settings tab and no history restore, and the controller still refuses those from it (`403` *The viewer user cannot do this. Sign in as admin.*): settings, the event log, history restore, test alert, restart. The rule is one function, `authRoleAllows()` in `AuthToken.h`. In Settings the switch is now called **Viewer user** (*Usuario viewer*).
+- **The screen is as in 3.13 again.** The Large screen font that 3.14 added (the built-in font at twice its size, three lines of 10 characters) is removed, with its layout code (`ScreenWrap.h`, `showMessage()`), its tests and its checks. The messages have their 3.13 wording again (*Start washer / Press START*, *Using tap water*, *Ends in 18:42*, ...), on two lines in the font chosen in Settings → Screen font.
+- **Hyperlegible is the default screen font**, as before 3.14. Settings has the four fonts: Hyperlegible, Plain sans, Terminal bold, Schoolbook bold.
+- **Default alert server: `https://ntfy.hostux.net`** instead of `https://ntfy.sh`, which was unreachable for hours on 2026-11-03.
+- **Settings version 12, every setting kept:** a controller that ran 3.14 with the Large font starts in Hyperlegible; a font chosen among the four is kept. A controller whose saved alert server is still the old default `https://ntfy.sh` moves to `https://ntfy.hostux.net`: **subscribe the phone to the topic on the new server** (ntfy app: *Use another server*), or alerts will not arrive. Any other server chosen in Settings is kept, and `https://ntfy.sh` can be chosen again.
+- `tests/run_all.sh` now fails when a test file does not compile (before, it could still print *All tests passed*).
+- Tests: `tests/test_auth.cpp` **R1** (what each role may do); browser tests **A10** and **A14** updated for the viewer (not run here: no Node.js). `tests/test_history.cpp` **S10** (3.14 settings with the Large font start in Hyperlegible, other values and a chosen server kept) and **S11** (3.6-3.13 settings keep their font; the old default server moves; `ntfy.sh` chosen again is kept); simulation **F5** checks both factory defaults.
 
-- **Layout** (`ScreenWrap.h`, drawn by `showMessage()` in `GreyWaterDisplay.cpp`): every part of a message (`"top|bottom"`) starts on a new line and is wrapped at word boundaries; each line is centred (measured with `getTextBounds()`); the block is centred in the blue rows. Three lines of 16 rows fill rows 16-63 exactly, so no letter crosses into the yellow rows.
-- **Every message was checked and, where needed, reworded** so that all of them fit at the large size in English and Spanish, with the longest values (`End 120:00`, `125 min left`, `Reused 125L`). The new wording is in the *Messages* table below; for example *Start washer / Push START*, *Tap water / 25 min left*, *Saving water / End 18:42*, *Cancelled / All off*.
-- **Never cut off:** a message that still does not fit (a word longer than 10 characters, more than three lines; today only texts that are not built in, such as a long name) is shown at the normal size for that message only: up to six lines of 21 characters. The next message is large again.
-- **The four other fonts stay** in Settings → Screen → Screen font (Hyperlegible, Plain sans, Terminal bold, Schoolbook bold), with their two-line layout as in 3.12. They show the same, reworded messages.
-- **After the update the screen starts in Large** (settings version 11; every other setting is kept). To go back, choose another font in Settings.
-- **Default alert server:** `https://ntfy.hostux.net` instead of `https://ntfy.sh`, which was unreachable for hours on 2026-11-03. This is the factory default only: a controller that already has an alert server saved keeps it, so change it in Settings → Alerts if wanted, and subscribe the phone on the same server (ntfy app: *Use another server*).
-- `showMessage(title, body)` is now the one function that clears the screen, draws the header and the message, and sends the frame; `displayUpdate()` decides what to show and when, as before.
-- `tools/check_screen_text.py` also checks every message for the Large font, `TRS_TIMED()` texts together with the time left that is added under them.
-- Tests: `tests/test_screen_wrap.cpp` (33 checks: wrapping, the size choice, limits); simulation **F22** (rows, size and centring of the Ready screen, one, two and three parts, the drop to size 1 and back, and a whole cycle with every message at size 2); `tests/test_history.cpp` **S10** (settings from 3.6-3.13 start in Large and keep every other value).
+## What's new in 3.14 (withdrawn in 3.15)
+
+3.14 added a Large screen font as the default and reworded the screen messages to fit it. It was tried on the installed controller and removed in 3.15. Only its new default alert server remains.
 
 ## What's new in 3.13: the tank gauge shows the litres
 
@@ -35,7 +35,7 @@ The controller's screen is now a **0.96" 128x64 OLED** (SSD1306, I2C) instead of
 - **Two message lines in blue, every message rewritten for them:** each screen says everything at once and nothing changes while you read it (until 3.11 a message came in parts that took turns every 3 s). The second line adds what used to need a page or was missing, for example *Release to start / Hold: reuse only*, *Release to start / Rinse not saved*, *Cycle cancelled / Everything off*, *Tank full / Valve closed*, *System ready / Version 3.13.0*. During steps 1-3 the bottom line is *25 min left* once the times are known. A message with nothing more to say sits alone in the middle (*Cycle resumed*, *Try again*).
 - **Shorter where three parts did not fit:** *No water flow / Check washer* (the phone alert still says to call the installer); *Using tap water / Tank is low* (no minutes in this case; the empty tank icon shows it too); *Low flow / Ends in 9:05* and *Not saving / Ends in 18:42* (the drain is implied).
 - **Same letters:** the four screen fonts and their sizes are as in 3.9; every text still fits the 128 px line in both languages.
-- **Start-up animation:** the same Border Collie chasing a butterfly as before (`BootAnimation.h` and the drawing logic unchanged). On the taller screen the collie runs along the bottom of the blue rows and the butterfly flutters from its head height up into the yellow band, so it turns yellow as it rises. Then *System ready* and the version. START skips it.
+- **Start-up animation:** the same Border Collie chasing a butterfly as before (`BootAnimation.h` and the drawing logic unchanged). On the taller screen the collie runs along the bottom of the blue rows and the butterfly flutters from its head height up into the yellow band, so it turns yellow as it rises. Then *System ready / Version 3.15.0*. START skips it.
 - **Either I2C address:** the screen is found at `0x3C` or `0x3D` (modules with the address jumper moved). The controller now asks the I2C bus whether a screen answers, so a missing screen is reported reliably (the library alone does not notice).
 - **Wiring is the same four wires** (3V3, GND, A4 = SDA, A5 = SCL), but **read the labels on the new module**: the pin order differs between makers. A full frame is 1,024 bytes, about 25 ms at 400 kHz, and is still sent only when something on the screen changes.
 - `tools/check_screen_text.py` fails a message with more than two parts, and checks the two baselines of every font: all glyphs on rows 17-63, and the two lines at least 2 rows apart.
@@ -684,7 +684,7 @@ Full message formats, status fields and error codes: `docs/PROTOCOL.md`.
 | Alert topic | Empty (alerts off) | — |
 | Time zone | `<-05>5` (UTC−5) | POSIX TZ string |
 | Dashboard / update passwords | `greywater` | 8–32 characters |
-| View-only user (`viewer`) | Off | On with a password of 8–32 characters, not the dashboard password |
+| Viewer user (`viewer`; Overview controls from 3.15, no settings) | Off | On with a password of 8–32 characters, not the dashboard password |
 
 The `#define`s in `GreyWaterSystem.h` are the factory defaults for first boot. Changing them later has no effect until the stored settings are reset (bump `SETTINGS_VERSION` in `GreyWaterSettings.h`).
 
@@ -806,42 +806,38 @@ The 128x64 two-colour screen (3.12) is split into a yellow header (rows 0-15) an
 +--------------------------------+
 |WASH 1 OF 4       63L ^ [~~~]   |   yellow: step + tank litres, arrow, gauge (3.13)
 |                                |
-|            Reusing             |   blue: what is happening
-|            52 min              |   blue: what it means or how long,
-|             left               |   up to three lines of 10 large letters (3.14)
+|         Reusing water          |   blue, top line: what is happening
+|          52 min left           |   blue, bottom line: what it means or how long
 +--------------------------------+
 ```
-
-With one of the four two-line fonts (Settings → Screen font) the same message is two lines: *Reusing* / *52 min left*.
 
 Until 3.11 the screen was 128x32, with the header above a separator line and one message line.
 
 - **Header (small built-in font, yellow):** the step, for example `WASH 1 OF 4`, or the event, for example `DONE`. At most 12 characters (3.13).
 - **Tank gauge (3.13):** filled to the estimated litres, with the number (`63L`) and an arrow (up: filling, down: emptying) beside it; `FULL` / `EMPTY` from the floats. See *What's new in 3.13*. The `W` wash-valve icon of 3.0-3.12 is gone.
-- **Message, Large font (3.14, the default):** the built-in font at twice its size, up to three centred lines of 10 characters; every part of a message starts on a new line and is wrapped at word boundaries (`ScreenWrap.h`). A message that does not fit that way is shown at the normal size, up to six lines of 21 characters, for that message only. `tools/check_screen_text.py` checks that every built-in message fits at the large size in both languages.
-- **Message, the four two-line fonts (Settings → Screen font):** Hyperlegible, Plain sans, Terminal bold or Schoolbook bold, one size for every message (3.9). From 3.12 every message is one or two lines (`"top|bottom"`), each fitting 128 px in all four fonts and both languages (`tools/check_screen_text.py`). One line sits alone in the middle. Lines are centred and still; a longer one would pause for 1.5 s, then scroll.
+- **Message (blue, the font chosen in Settings → Screen font):** Hyperlegible (default), Plain sans, Terminal bold or Schoolbook bold, one size for every message (3.9). From 3.12 every message is one or two lines (`"top|bottom"`), each fitting 128 px in all four fonts and both languages (`tools/check_screen_text.py`). One line sits alone in the middle. Lines are centred and still; a longer one would pause for 1.5 s, then scroll.
 
 ### Messages
 
-| State | Header | Message (parts; in Large each part starts a new line and wraps at 10 characters) |
+| State | Header | Message (top / bottom line) |
 |---|---|---|
 | Boot (about 4 s) | — | Start-up animation, full screen: a Border Collie chases a butterfly (`BootAnimation.h`); the collie along the bottom, the butterfly up into the yellow band. START or a tank wash ends it; notices that arrive meanwhile are shown after "System ready" |
-| Boot (2 s) | `REUSE WATER` (`REUSO AGUA`) | System ready / v3.14.0 |
-| Idle | `READY` | Start washer / Push START |
-| START pressed / held 2 s | `REUSE & SAVE` / `REUSE ONLY` | Let go now / Hold: reuse only — Let go now / Rinse not saved |
-| START held 15 s | `START BUTTON` | Stuck / Release START |
-| Starting | `STARTING` | Preparing / Reuse and save (or Reuse only) |
-| Step 1 | `WASH 1 OF 4` | Waiting, Reusing, Tap water, Washing... / 52 min left; tank too low: Tap water / Tank is low |
-| Step 2 | `DRAIN 2 OF 4` | Draining / soapy water |
-| Step 3 | `RINSE 3 OF 4` | Tap water, Rinsing... / 31 min left |
-| Steps 1-3, no flow for too long | (step) | No flow / Check washer |
-| Step 4 | `SAVE 4 OF 4` | Saving water, Low flow, Tank full / End 18:42 |
-| Step 4, Reuse only | `DRAIN 4 OF 4` | Not saving / End 18:42 |
-| After a full cycle | `DONE` | Reused 26L / Saved 30L (or Cycle complete) |
-| After Stop | `STOPPED` | Cancelled / All off |
-| Power back during a cycle | `INTERRUPTED` | Check washer / Resume app (or Restart) |
-| Tank wash | `TANK WASH` / `TANK CLEANED` / `WASH STOPPED` | Rinsing / 9:42 left — Tank full / Valve closed — Not full / Stopped early — Check tank / Call installer |
-| Wi-Fi, updates | `ReuseWater-Setup` / IP / `UPDATING` / `UPDATED` / `NOT UPDATED` | Wi-Fi key / gw-… — Wi-Fi OK / App: this IP — Do not unplug / Wait — Restarting / Please wait — Try again |
+| Boot (2 s) | `REUSE WATER` (`REUSO AGUA`) | System ready / Version 3.15.0 |
+| Idle | `READY` | Start washer / Press START |
+| START pressed / held 2 s | `REUSE & SAVE` / `REUSE ONLY` | Release to start / Hold: reuse only — Release to start / Rinse not saved |
+| START held 15 s | `START BUTTON` | Button stuck / Release START |
+| Starting | `STARTING` | Getting ready... / Reuse and save (or Reuse only) |
+| Step 1 | `WASH 1 OF 4` | Waiting to fill, Reusing water, Using tap water, Washing... / 52 min left; tank too low: Using tap water / Tank is low |
+| Step 2 | `DRAIN 2 OF 4` | Soapy water / to the drain |
+| Step 3 | `RINSE 3 OF 4` | Using tap water, Rinsing... / 31 min left |
+| Steps 1-3, no flow for too long | (step) | No water flow / Check washer |
+| Step 4 | `SAVE 4 OF 4` | Saving water, Low flow, Tank full / Ends in 18:42 |
+| Step 4, Reuse only | `DRAIN 4 OF 4` | Not saving / Ends in 18:42 |
+| After a full cycle | `DONE` | Reused 26 L / Saved 30 L (or Cycle complete) |
+| After Stop | `STOPPED` | Cycle cancelled / Everything off |
+| Power back during a cycle | `INTERRUPTED` | Check washer / Resume in app (or Start again) |
+| Tank wash | `TANK WASH` / `TANK CLEANED` / `WASH STOPPED` | Rinsing the tank / 9:42 left — Tank full / Valve closed — Tank not full / Stopped early — Check the tank / Call installer |
+| Wi-Fi, updates | `ReuseWater-Setup` / IP / `UPDATING` / `UPDATED` / `NOT UPDATED` | Wi-Fi setup / Key gw-… — Wi-Fi connected / App: this IP — Do not unplug / Please wait — Restarting / Please wait — Try again |
 
 The trailing spaces that were used as padding in the old messages have been removed; spacing is now handled by the layout.
 
@@ -891,7 +887,7 @@ For faster scrolling, raise `SCROLL_SPEED_PX` to 3. Lowering `DISPLAY_FRAME_MS` 
 4. Fill1 switching from tank water to tap water: the wash valve closes within 250 ms.
 5. Fill2 (rinse) and Drain2: the wash valve must stay closed.
 6. Press Stop during any state: the system returns to Idle and the wash valve closes within 250 ms.
-7. Power on: the screen shows the Border Collie chasing a butterfly (about 4 s), then `REUSE WATER / System ready / v3.14.0` for 2 s, then `READY / Start washer / Push START`, with no "Cycle complete" message.
+7. Power on: the screen shows the Border Collie chasing a butterfly (about 4 s), then `REUSE WATER / System ready / Version 3.15.0` for 2 s, then `READY / Start washer / Press START`, with no "Cycle complete" message.
 8. During each step, the header shows the right step (`1/4` to `4/4`) and long messages scroll smoothly without jumping.
 9. During the tank-water fill, the tank litres fall and the arrow points down; in step 4, while saving, they rise and the arrow points up.
 10. In Drain2, the countdown decreases every second.

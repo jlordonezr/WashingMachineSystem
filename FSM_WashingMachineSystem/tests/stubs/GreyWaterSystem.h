@@ -12,6 +12,7 @@
 #define MIN_FILL_LITRES 3.0f
 #define SAVE_MIN_LPM 0.5f
 #define DEFAULT_NTFY_SERVER "https://ntfy.hostux.net"
+#define OLD_DEFAULT_NTFY_SERVER "https://ntfy.sh"
 #define DEFAULT_TIME_ZONE "<-05>5"
 #define DEFAULT_WEB_PASSWORD "greywater"
 #define DEFAULT_OTA_PASSWORD "greywater"

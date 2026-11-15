@@ -244,9 +244,11 @@ static void sendError(int code, const char* message) {
 // Two users:
 //  - "admin" (password webPassword): everything.
 //  - "viewer" (password viewerPassword, off while empty): the Overview and
-//    Water use tabs only. It can read the status and the water history, and
-//    the controller refuses every action and setting from it (3.5), so the
-//    limit does not depend on what the page shows.
+//    Water use tabs only. It can read the status and the water history and,
+//    from 3.15, use the Overview controls: start, stop, tank wash, resume or
+//    dismiss an interrupted cycle (authRoleAllows() in AuthToken.h). The
+//    controller refuses everything else from it (settings, event log, history
+//    restore, test alert, restart), so the limit does not depend on the page.
 // Actions also need the X-GW header, which a form on another website cannot
 // send, so a malicious page cannot press Stop or change settings using the
 // password the browser remembers.
@@ -345,18 +347,23 @@ static bool authorized() {
 }
 
 
-// Admin only: settings, the event log and every action.
-static bool adminOnly() {
+// Signed in, and the role may do this. overviewAction: one of the Overview
+// controls, which the viewer may use too (3.15); otherwise admin only.
+static bool roleAllowed(bool overviewAction) {
   if (!authorized()) return false;
-  if (currentRole != roleAdmin) {
-    sendError(403, "The viewer user can only look. Sign in as admin to make changes.");
+  if (!authRoleAllows(currentRole == roleAdmin ? 'a' : 'v', overviewAction)) {
+    sendError(403, "The viewer user cannot do this. Sign in as admin.");
     return false;
   }
   return true;
 }
 
-static bool actionAllowed() {
-  if (!adminOnly()) return false;
+// Admin only: settings, the event log, history restore.
+static bool adminOnly() { return roleAllowed(false); }
+
+// An action (POST). They also need the X-GW header, see above.
+static bool actionAllowed(bool overviewAction = false) {
+  if (!roleAllowed(overviewAction)) return false;
   if (server.header("X-GW") != "1") { sendError(403, "Request blocked: use the dashboard page."); return false; }
   return true;
 }
@@ -554,7 +561,7 @@ static void handleSettingsPost() {
     strlcpy(pwTargets[i], pw.c_str(), 33);
   }
 
-  // View-only user: viewerOn=0 turns it off (forgets its password); on needs a password.
+  // Viewer user: viewerOn=0 turns it off (forgets its password); on needs a password.
   if (server.hasArg("viewerOn") && server.arg("viewerOn") != "1") next.viewerPassword[0] = '\0';
   else if (server.arg("viewerOn") == "1" && next.viewerPassword[0] == '\0') {
     sendError(400, "Enter a password for the viewer user.");
@@ -666,7 +673,7 @@ static void handleEvents() {
 }
 
 static void handleDismissInterrupted() {
-  if (!actionAllowed()) return;
+  if (!actionAllowed(true)) return;
   dismissInterrupted();
   sendJson(200, "{\"ok\":true}");
 }
@@ -674,7 +681,7 @@ static void handleDismissInterrupted() {
 // Resume the cycle cut short by a power cut (3.10): it continues at the start
 // of the saved step. Like Start, it needs "Start from the dashboard" on.
 static void handleResume() {
-  if (!actionAllowed()) return;
+  if (!actionAllowed(true)) return;
   if (!cfg.allowRemoteStart) { sendError(403, "Starting from the dashboard is turned off in Settings."); return; }
   if (!requestResume()) { sendError(409, "The cycle can no longer be resumed."); return; }
   sendJson(200, "{\"ok\":true}");
@@ -729,14 +736,14 @@ static void handleLogout() {
 }
 
 static void handleStop() {
-  if (!actionAllowed()) return;
+  if (!actionAllowed(true)) return;
   if (activeState == stIdle) { sendError(409, "No cycle is running."); return; }
   requestRemoteStop();
   sendJson(200, "{\"ok\":true}");
 }
 
 static void handleStart() {
-  if (!actionAllowed()) return;
+  if (!actionAllowed(true)) return;
   if (!cfg.allowRemoteStart) { sendError(403, "Starting from the dashboard is turned off in Settings."); return; }
   // save=0: "Reuse only" (3.7), the rinse water goes to the drain. Missing or 1: "Reuse and save".
   bool save = true;
@@ -750,7 +757,7 @@ static void handleStart() {
 }
 
 static void handleWashStart() {
-  if (!actionAllowed()) return;
+  if (!actionAllowed(true)) return;
   switch (startManualWash()) {
     case washBusy:     sendError(409, "Stop the cycle before washing the tank."); return;
     case washTankFull: sendError(409, "The tank is already full."); return;
@@ -760,7 +767,7 @@ static void handleWashStart() {
 }
 
 static void handleWashStop() {
-  if (!actionAllowed()) return;
+  if (!actionAllowed(true)) return;
   stopManualWash();
   sendJson(200, "{\"ok\":true}");
 }
@@ -800,11 +807,11 @@ static void startServices() {
     logEvent("Wireless firmware update started");
     outputsAllOff();   // never leave a valve open while the firmware is replaced
     statsSave();       // write the latest water history before the update
-    displayShowNotice(TRS("UPDATING", "ACTUALIZANDO"), TRS("Do not unplug|Wait", "No desconecte|Espere"), 600000UL);
+    displayShowNotice(TRS("UPDATING", "ACTUALIZANDO"), TRS("Do not unplug|Please wait", "No desconecte|Espere por favor"), 600000UL);
     displayUpdate(true);
   });
   ArduinoOTA.onEnd([]() {
-    displayShowNotice(TRS("UPDATED", "ACTUALIZADO"), TRS("Restarting|Please wait", "Reinicio|Espere"), 5000);
+    displayShowNotice(TRS("UPDATED", "ACTUALIZADO"), TRS("Restarting|Please wait", "Reiniciando|Espere por favor"), 5000);
     displayUpdate(true);
   });
   ArduinoOTA.onError([](ota_error_t) {
@@ -822,7 +829,7 @@ static void startServices() {
 
   char ip[20];
   strlcpy(ip, WiFi.localIP().toString().c_str(), sizeof(ip));
-  displayShowNotice(ip, TRS("Wi-Fi OK|App: this IP", "Wi-Fi OK|App: esta IP"), 6000);   // the header is the address of the app
+  displayShowNotice(ip, TRS("Wi-Fi connected|App: this IP", "Wi-Fi conectado|App: esta IP"), 6000);   // the header is the address of the app
   logEvent("Wi-Fi connected: %s", ip);
   DEBUG_PRINT("Dashboard: http://reusewater.local");
 }
@@ -915,7 +922,7 @@ void netStartConfigPortal() {
   wm.startConfigPortal(WIFI_AP_NAME, pw);   // blockSetupPages() runs inside, before WiFiManager's own pages
   portalActive = true;
   char msg[48];
-  snprintf(msg, sizeof(msg), TRS("Wi-Fi key|%s", "Clave Wi-Fi|%s"), pw);
+  snprintf(msg, sizeof(msg), TRS("Wi-Fi setup|Key %s", "Configurar Wi-Fi|%s"), pw);
   displayShowNotice(WIFI_AP_NAME, msg, (unsigned long)CONFIG_PORTAL_TIMEOUT_S * 1000UL);
   logEvent("Wi-Fi setup page opened");
   Serial.printf("Wi-Fi setup: join \"%s\", password %s\n", WIFI_AP_NAME, pw);

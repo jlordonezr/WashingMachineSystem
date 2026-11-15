@@ -173,7 +173,7 @@ table.svc td:not(:first-child),table.svc th:not(:first-child){text-align:left}
 .svc-facts{margin:0}
 .state-on{font-weight:600;color:var(--primary-ink)}
 
-/* View-only user (3.5): no buttons that change the controller */
+/* Viewer user (3.5): no Service or Settings; from 3.15 it has the Overview controls */
 body.viewer .admin-only{display:none!important}
 .view-note{font-size:0.8125rem;color:var(--muted);margin:14px 0 0}
 .restore{border-color:var(--primary);background:var(--primary-soft);margin-bottom:16px}
@@ -321,7 +321,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       <h2 id="h-intr">The last cycle was interrupted</h2>
       <p id="intrText"></p>
       <p id="intrResume" hidden></p>
-      <div class="actions admin-only">
+      <div class="actions">
         <button type="button" class="btn primary" id="btnIntrResume" hidden>Resume cycle</button>
         <button type="button" class="btn" id="btnIntrOk">OK, I checked the machine</button>
       </div>
@@ -344,7 +344,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
         <ol class="steps" id="steps" aria-label="Cycle progress">
           <li>Wash<span class="sr-only"></span></li><li>Soapy drain<span class="sr-only"></span></li><li>Rinse<span class="sr-only"></span></li><li>Save<span class="sr-only"></span></li>
         </ol>
-        <div class="controls admin-only">
+        <div class="controls">
           <div class="start-opt">
             <button class="btn primary" id="btnStart" type="button" aria-describedby="subStart ctlHint">
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
@@ -365,8 +365,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           </button>
         </div>
         <p class="mode-note" id="noSaveNote" hidden>Reuse only: this wash sends the rinse water to the drain, not to the tank.</p>
-        <p id="ctlHint" class="admin-only"></p>
-        <p class="view-note" id="viewNote" hidden>View only. Starting, stopping, the tank wash and the settings need the admin sign-in.</p>
+        <p id="ctlHint"></p>
+        <p class="view-note" id="viewNote" hidden>Signed in as viewer: you can start, stop and wash the tank here. Service and Settings need the admin sign-in.</p>
       </section>
 
       <section class="panel" aria-label="Storage tank">
@@ -388,7 +388,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
             <dt>Wash valve</dt><dd id="washState">Closed</dd>
           </dl>
         </div>
-        <div class="tank-actions admin-only">
+        <div class="tank-actions">
           <button class="btn" id="btnWash" type="button" aria-describedby="washHint">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5c2.6 3.2 4 5.5 4 7.4a4 4 0 0 1-8 0c0-1.9 1.4-4.2 4-7.4z" fill="currentColor"/></svg>
             <span>Wash tank</span>
@@ -551,8 +551,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       </fieldset>
       <fieldset>
         <legend>Screen</legend>
-        <div class="field"><span><label for="f-screenFont">Screen font</label><small id="h-screenFont">Letters of the messages on the controller screen. Large shows the biggest letters, on up to three lines; the others show two lines. Save settings, then look at the screen; choose the one that is easiest to read from where you stand.</small></span>
-          <span class="inp"><select id="f-screenFont" name="screenFont" aria-describedby="h-screenFont"><option value="4">Large</option><option value="0">Hyperlegible</option><option value="1">Plain sans</option><option value="2">Terminal bold</option><option value="3">Schoolbook bold</option></select></span></div>
+        <div class="field"><span><label for="f-screenFont">Screen font</label><small id="h-screenFont">Letters of the messages on the controller screen. Save settings, then look at the screen; choose the one that is easiest to read from where you stand.</small></span>
+          <span class="inp"><select id="f-screenFont" name="screenFont" aria-describedby="h-screenFont"><option value="0">Hyperlegible</option><option value="1">Plain sans</option><option value="2">Terminal bold</option><option value="3">Schoolbook bold</option></select></span></div>
       </fieldset>
       <fieldset>
         <legend>Tank wash</legend>
@@ -606,7 +606,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
           <span class="inp"><input id="f-webPassword" aria-describedby="h-webPassword e-webPassword" type="password" name="webPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-webPassword" hidden></p></div>
         <div class="field wide-in"><span><label for="f-otaPassword">New firmware update password</label><small id="h-otaPassword">8 to 32 characters. Leave empty to keep the current password. Takes effect at once.</small></span>
           <span class="inp"><input id="f-otaPassword" aria-describedby="h-otaPassword e-otaPassword" type="password" name="otaPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-otaPassword" hidden></p></div>
-        <div class="field"><span><label for="f-viewerOn">View-only user</label><small id="h-viewerOn">Someone who signs in with the user name viewer sees only Overview and Water use, and cannot start, stop or change anything</small></span>
+        <div class="field"><span><label for="f-viewerOn">Viewer user</label><small id="h-viewerOn">Someone who signs in with the user name viewer sees only Overview and Water use: they can start, stop and wash the tank, and cannot change the settings</small></span>
           <span class="switch"><input type="checkbox" id="f-viewerOn" aria-describedby="h-viewerOn" name="viewerOn" role="switch"><i></i></span></div>
         <div class="field wide-in"><span><label for="f-viewerPassword">New viewer password</label><small id="h-viewerPassword">8 to 32 characters, not the dashboard password. Leave empty to keep the current one.</small></span>
           <span class="inp"><input id="f-viewerPassword" aria-describedby="h-viewerPassword e-viewerPassword" type="password" name="viewerPassword" maxlength="32" autocomplete="new-password"></span><p class="ferr" id="e-viewerPassword" hidden></p></div>
@@ -1014,7 +1014,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       (i.step?' '+t('during step {0} of 4, {1}',i.step,t(STEP_NAMES[i.step+1])):'');
   }
   function renderInterrupted(s){
-    var i=s.interrupted||{},can=!!(i.active&&i.resume&&s.allowRemoteStart&&s.role!=='viewer');
+    var i=s.interrupted||{},can=!!(i.active&&i.resume&&s.allowRemoteStart);
     $('intrPanel').hidden=!i.active;
     $('btnIntrResume').hidden=!can;
     $('intrResume').hidden=!(i.active&&i.resume);
@@ -1067,8 +1067,9 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     d.showModal();$('pwWeb').focus();
   }
 
-  // View-only user (3.5): the controller refuses its changes; the page hides
-  // the buttons and the Service and Settings tabs.
+  // Viewer user (3.5): the page hides the Service and Settings tabs and the
+  // history restore; the controller refuses those from it. From 3.15 it has
+  // every control of the Overview tab.
   var role='admin';
   function setRole(r){
     r=r==='viewer'?'viewer':'admin';if(r===role)return;
@@ -1310,8 +1311,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
             var c=h.settings,b=new URLSearchParams();
             ['washPeriodS','washOpenS','manualWashMaxMin','drain2Min','edgeS','flowOnLpm','minFillLitres','saveMinLpm','stepAlertMin','tankMaxAgeH','ntfyServer','ntfyTopic','timeZone','language']
               .forEach(function(k){if(c[k]!==undefined)b.append(k,c[k])});
-            // Files from before 3.6 number other screen fonts: keep the current one. (3.6-3.13 files have fonts 0-3, 3.14 adds 4 = Large.)
-            if(c.screenFont!==undefined&&(c.screenFontCount===4||c.screenFontCount===5))b.append('screenFont',c.screenFont);
+            // Files from before 3.6 number other screen fonts: keep the current one.
+            if(c.screenFont!==undefined&&c.screenFontCount===4)b.append('screenFont',c.screenFont);
             b.append('allowRemoteStart',c.allowRemoteStart?'1':'0');b.append('buzzerOn',c.buzzerOn?'1':'0');
             return api('/api/settings',{method:'POST',body:b}).then(function(nc){fill(nc);toast(t('Water history and settings restored'))});
           }).catch(function(e){toast(e.message,true)});
@@ -1355,7 +1356,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     form.allowRemoteStart.checked=!!c.allowRemoteStart;form.ntfyServer.value=c.ntfyServer;
     form.ntfyTopic.value=c.ntfyTopic;form.timeZone.value=c.timeZone;form.buzzerOn.checked=!!c.buzzerOn;
     form.language.value=c.language==='en'?'en':'es';setLang(form.language.value);
-    form.screenFont.value=String(c.screenFont>=0&&c.screenFont<=4?c.screenFont:4);
+    form.screenFont.value=String(c.screenFont>=0&&c.screenFont<=3?c.screenFont:0);
     var sel=$('f-tzSel'),found=false;
     for(var i=0;i<sel.options.length;i++)if(sel.options[i].value===c.timeZone){sel.selectedIndex=i;found=true;}
     if(!found)sel.value='custom';$('tzCustomRow').hidden=found;topicHelp();form.webPassword.value='';form.otaPassword.value='';

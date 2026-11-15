@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.14
+# Communication protocol – firmware 3.15
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -8,7 +8,7 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 |---|---|
 | Address | `http://reusewater.local` (mDNS) or the IP shown on the screen |
 | Sign-in (3.11) | `POST /api/login` sets the cookie `gwsid` (`HttpOnly; SameSite=Strict`, `Max-Age=34560000` = 400 days with `remember=1`, a browser-session cookie with `remember=0`). Its value is `<role a/v><remember 1/0><16 hex nonce>.<32 hex HMAC>`, signed with HMAC-SHA256 under the 32-byte key `authkey` in flash; the signature covers the role's password (`AuthToken.h`). A password change invalidates that role's cookies; `POST /api/logout` with `all=1` makes a new key. `GET /` renews a remembered cookie. Without a valid cookie or Basic header, `/api/*` answers `401` `Sign in to continue.` **without** `WWW-Authenticate`, so browsers do not show their own password box; `GET /` is public |
-| Authentication | HTTP Basic (still accepted, for tools). User `admin` with the dashboard password (8–32 characters): everything. User `viewer` with the viewer password (3.5; off while none is set): only `GET /`, `GET /api/status` and `GET /api/history` (without `settings`); every other request answers `403` *The viewer user can only look. Sign in as admin to make changes.* |
+| Authentication | HTTP Basic (still accepted, for tools). User `admin` with the dashboard password (8–32 characters): everything. User `viewer` with the viewer password (3.5; off while none is set): only `GET /`, `GET /api/status`, `GET /api/history` (without `settings`) and, from 3.15, the Overview actions `POST /api/start`, `/api/stop`, `/api/wash`, `/api/wash/stop`, `/api/interrupted/resume` and `/api/interrupted/dismiss`; every other request answers `403` *The viewer user cannot do this. Sign in as admin.* (until 3.14 every `POST` did) |
 | Wrong passwords | 5 within a minute from one IP address → that address gets `429` for 1 minute (per device from 3.0) |
 | Actions | Every `POST` also needs the header `X-GW: 1`, else `403`. Other websites cannot send it, so they cannot press buttons with a remembered password |
 | Caching | All API replies carry `Cache-Control: no-store` |
@@ -22,7 +22,7 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 | GET | `/` | — | page | 401, 429 |
 | GET | `/api/status` | — | status JSON (below) | 401, 429 |
 | GET | `/api/settings` | — | settings JSON (no passwords; `viewerOn` says whether the viewer user is on, 3.5) | 401, 403 (viewer), 429 |
-| POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–3: Hyperlegible, Plain sans, Terminal bold, Schoolbook bold, 3.6; 4: Large, the default, 3.14), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword`, `viewerOn` (0 turns the viewer off and forgets its password; 1 needs a password, 3.5), `viewerPassword` (8–32, not the dashboard password, 3.5) | the saved settings JSON | 400 (message says which field), 403 (viewer), 500 (flash write failed) |
+| POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–3: Hyperlegible, Plain sans, Terminal bold, Schoolbook bold; 3.6), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword`, `viewerOn` (0 turns the viewer off and forgets its password; 1 needs a password, 3.5), `viewerPassword` (8–32, not the dashboard password, 3.5) | the saved settings JSON | 400 (message says which field), 403 (viewer), 500 (flash write failed) |
 | POST | `/api/start` | optional `save`: `1` *Reuse and save* (the default), `0` *Reuse only*, step 4 sends the rinse water to the drain (3.7) | `{"ok":true}` = request accepted | 400 (`save` not 0 or 1), 403 (turned off in Settings, or viewer), 409 (not Ready) |
 | POST | `/api/stop` | — | `{"ok":true}` = request accepted | 409 `No cycle is running.` (3.0) |
 | POST | `/api/wash` | — | `{"ok":true}` = started | 409 (cycle running, or tank already full) |

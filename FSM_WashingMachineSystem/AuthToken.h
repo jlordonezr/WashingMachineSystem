@@ -152,6 +152,14 @@ inline char authCheckToken(const uint8_t key[AUTH_KEY_LEN], const char* token, c
 
 // Finds "gwsid=<value>" in a Cookie header ("a=1; gwsid=...; b=2"). out needs
 // AUTH_TOKEN_LEN + 1 bytes. False if missing or not token-sized.
+// What a signed-in role may do (3.15). 'a' (admin): everything. 'v' (viewer):
+// read the status and the water history, and use the Overview controls
+// (start, stop, tank wash, resume or dismiss an interrupted cycle); never the
+// settings, the event log, a history restore, a test alert or a restart.
+inline bool authRoleAllows(char role, bool overviewAction) {
+  return role == 'a' || (role == 'v' && overviewAction);
+}
+
 inline bool authCookieValue(const char* header, char* out) {
   if (!header) return false;
   const char* p = header;

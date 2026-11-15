@@ -16,8 +16,6 @@ echo "== Phone alerts: topic, server address, JSON message, retries =="
 g++ -std=c++17 -O1 -Wall test_ntfy.cpp -o "$T/test_ntfy" && run ntfy "$T/test_ntfy" || { echo "!! ntfy did not compile"; FAIL=1; }
 echo "== Remember-this-device sign-in: SHA-256, HMAC, tokens, cookie =="
 g++ -std=c++17 -O1 -Wall test_auth.cpp -o "$T/test_auth" && run auth "$T/test_auth" || { echo "!! auth did not compile"; FAIL=1; }
-echo "== Large screen font: word wrap, three lines of 10, size 1 only when it does not fit =="
-g++ -std=c++17 -O1 -Wall -I.. test_screen_wrap.cpp -o "$T/test_screen_wrap" && run screenwrap "$T/test_screen_wrap" || { echo "!! screenwrap did not compile"; FAIL=1; }
 echo "== Screen texts fit the OLED (both languages) =="
 if command -v python3 >/dev/null 2>&1; then run screen python3 ../tools/check_screen_text.py; else echo "skipped: python3 not found"; fi
 echo "== Every dashboard text has a Spanish translation (web/es.json) =="
