@@ -144,6 +144,7 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 | — | 3.15.0 | Hardware: screen back to two lines in Hyperlegible; test alert through `https://ntfy.hostux.net`; H16 with the viewer starting and stopping | Not done yet |
 | 2026-11-20 | 3.15.0 | Measured on the installed controller, from a Mac on the home Wi-Fi | Status answer median 24 ms, slowest 308 ms; with one silent connection open **4.1 s every time**; `reusewater.local` lookup **5.0 s every time** (no IPv6 answer). Cause of the app's timeouts during washes |
 | 2026-11-20 | 3.16.0 | PC tests, firmware build | All suites pass, `test_connpool` P1–P7 and browser tests A1–A20 with axe-core (112 checks, first run on this Mac; existing A13/A15 assumptions corrected, A12 and A14 found two page bugs) |
+| 2026-11-20 | 3.16.0 | Upload over Wi-Fi (espota.py), measured from a Mac | Back up in 3 s; `/api/ping` answers. `reusewater.local` now also has its IPv6 address: lookup 4–6 ms (5.0 s on 3.15). Status/ping answers: median 23 ms, slowest 44 ms; with 2 silent connections held open median 22 ms, slowest 70 ms (4.1 s every time on 3.15); 0 over 300 ms, 0 failed |
 | — | 3.16.0 | Hardware H23 (app during a wash, iPhone, lock and unlock) | Not done yet |
 | 2026-10-30 | 3.1.0 | PC tests | All suites pass (see `tests/test_results.txt`) |
 | — | 3.1.0 | Hardware H10 | Not done yet |
