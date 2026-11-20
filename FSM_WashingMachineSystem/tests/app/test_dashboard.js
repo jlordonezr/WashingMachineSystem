@@ -40,6 +40,9 @@ let settings = { language: 'en', buzzerOn: false, minFillLitres: 3, saveMinLpm: 
 let lastSettingsPost = null;
 let resumeCalls = 0, dismissCalls = 0;
 let signedIn = true, lastLoginBody = null, logoutBodies = [];   // sign-in (3.11)
+// Connection faults (3.16): 'ok', 'hang' (never answers) or 'drop' (closes the connection).
+let statusMode = 'ok', stopMode = 'ok', settingsPostMode = 'ok', statusCalls = 0, stopCalls = 0;
+function resetFaults() { statusMode = stopMode = settingsPostMode = 'ok'; statusCalls = stopCalls = 0; }
 const server = http.createServer((req, res) => {
   const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
   if (req.url === '/' ) { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(PAGE); }
@@ -54,8 +57,14 @@ const server = http.createServer((req, res) => {
     return req.on('end', () => { const b = new URLSearchParams(body); logoutBodies.push(b); if (b.get('all') !== '1') signedIn = false; json(200, { ok: true }); });
   }
   if (req.url.startsWith('/api/') && !signedIn) return json(401, { error: 'Sign in to continue.' });
-  if (req.url === '/api/status') return json(200, status);
+  if (req.url === '/api/status') {
+    statusCalls++;
+    if (statusMode === 'drop') return req.socket.destroy();
+    if (statusMode === 'hang') return;
+    return json(200, status);
+  }
   if (req.url === '/api/events') return json(200, []);
+  if (req.url === '/api/settings' && req.method === 'POST' && settingsPostMode === 'drop') return req.socket.destroy();
   if (req.url === '/api/settings' && req.method === 'POST') {
     let body = ''; req.on('data', c => body += c);
     return req.on('end', () => { lastSettingsPost = new URLSearchParams(body);
@@ -68,7 +77,7 @@ const server = http.createServer((req, res) => {
     return req.on('end', () => { lastStartBody = new URLSearchParams(body); onStart(); json(200, { ok: true }); });
   }
   if (req.url === '/api/test-alert') { onTestAlert(); return json(200, { ok: true }); }
-  if (req.url === '/api/stop') return json(200, { ok: true });
+  if (req.url === '/api/stop') { stopCalls++; if (stopMode === 'hang') return; return json(200, { ok: true }); }
   if (req.url === '/api/interrupted/resume') {
     resumeCalls++;
     if (!status.interrupted.resume) return json(409, { error: 'The cycle can no longer be resumed.' });
@@ -259,7 +268,8 @@ async function fresh(browser, base) {
     check((await page.innerText('#dlgBody')).includes('to the drain'), 'A13 Reuse only confirmation does not say the rinse water goes to the drain');
     await page.click('#dlgOk'); await tick(page, 500);
     check(lastStartBody && lastStartBody.get('save') === '0', 'A13 Reuse only did not send save=0');
-    await page.click('#btnStart'); await tick(page, 300);
+    // force: Playwright waits for an aria-disabled button to become enabled; a person can still tap it.
+    await page.click('#btnStart', { force: true }); await tick(page, 300);
     check((await page.getAttribute('#btnStart', 'aria-disabled')) === 'true', 'A13 Reuse and save not disabled while a start is pending');
     await page.click('#dlgCancel').catch(() => {});
     await tick(page, 11000);                            // the pending start times out
@@ -341,7 +351,8 @@ async function fresh(browser, base) {
       'A15 sign-in form not shown, or the app visible, while signed out');
     check(await page.isChecked('#lgRemember') && (await page.inputValue('#lgUser')) === 'admin', 'A15 Remember not on by default, or user not admin');
     await page.fill('#lgPass', 'wrong'); await page.click('#lgBtn'); await tick(page, 500);
-    check((await page.innerText('#lgErr')).includes('Wrong user name or password') && await page.isVisible('#loginView'), 'A15 wrong password not reported');
+    // Before signing in the page has no status yet, so it is in the factory language (Spanish).
+    check(/Wrong user name or password|Usuario o contraseña incorrectos/.test(await page.innerText('#lgErr')) && await page.isVisible('#loginView'), 'A15 wrong password not reported');
     await page.fill('#lgPass', 'right-pass'); await page.click('#lgBtn'); await tick(page, 2500);
     check(lastLoginBody && lastLoginBody.get('remember') === '1', 'A15 Remember this device not sent');
     check(!(await page.isVisible('#loginView')) && await page.isVisible('#view-overview'), 'A15 app not shown after signing in');
@@ -355,6 +366,110 @@ async function fresh(browser, base) {
     check((await page.innerText('#connText')).includes('Signed out'), 'A15 badge not Signed out (or polling marked it offline)');
     await ctx.close();
     signedIn = true; status = baseStatus();
+  }
+
+  // ── Connection (3.16) ──
+  const conn = (page) => page.innerText('#connText');
+  const running = () => { const s = baseStatus(); s.state = 2; s.stateName = 'Fill1'; s.title = 'WASH 1 OF 4'; s.message = 'Washing|Tank water'; s.stepElapsedS = 2258; return s; };
+  const setHidden = (page, hidden) => page.evaluate(h => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => h ? 'hidden' : 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+
+  // A16 Online -> Reconnecting -> Offline -> Online, with the last data kept, greyed out and dated,
+  // and no toast at any point (until 3.15: "Offline" after 2 failures, toasts that stayed).
+  {
+    resetFaults(); status = running();
+    const { ctx, page } = await fresh(browser, base);
+    check((await conn(page)).startsWith('Online'), 'A16 not online at the start');
+    statusMode = 'drop'; await tick(page, 2250);
+    check((await conn(page)) === 'Reconnecting…', 'A16 badge not Reconnecting after one failure: ' + await conn(page));
+    check(await page.isVisible('#connBanner') && (await page.innerText('#connBannerText')).includes('Showing data from'), 'A16 no reconnecting banner with the data age');
+    check(await page.evaluate(() => document.body.classList.contains('stale')), 'A16 old data not marked stale');
+    const note = await page.innerText('#staleNote');
+    check(note.includes('Not live: last updated') && note.includes('press STOP on the controller'), 'A16 stale note missing or no STOP advice: ' + note);
+    check((await page.innerText('#headline')) !== '' && (await page.innerText('#chip')) === 'Running', 'A16 last data removed instead of kept');
+    await tick(page, 4000);
+    check((await conn(page)) === 'Offline', 'A16 not Offline after three failures: ' + await conn(page));
+    check(await page.evaluate(() => document.getElementById('connBanner').classList.contains('off')), 'A16 banner not in the offline style');
+    check((await page.innerText('#toast')) === '', 'A16 a toast appeared for polling failures: ' + await page.innerText('#toast'));
+    const before = statusCalls; await tick(page, 7750);
+    check(statusCalls - before <= 2, 'A16 offline retries not backed off: ' + (statusCalls - before) + ' requests in 7.75 s');
+    statusMode = 'ok'; await tick(page, 8250);
+    check((await conn(page)).startsWith('Online'), 'A16 not Online after the controller answered again: ' + await conn(page));
+    check(!(await page.isVisible('#connBanner')) && !(await page.isVisible('#staleNote')) &&
+      !(await page.evaluate(() => document.body.classList.contains('stale'))), 'A16 stale marks left after reconnecting');
+    check((await page.innerText('#toast')) === '', 'A16 toast after reconnecting');
+    await ctx.close(); status = baseStatus(); resetFaults();
+  }
+  // A17 One status request at a time: Refresh while a request hangs starts no second one;
+  // it times out after 4 s and only then is the next one sent.
+  {
+    resetFaults(); status = baseStatus();
+    const { ctx, page } = await fresh(browser, base);
+    statusMode = 'hang'; await tick(page, 2250);        // the next poll is now hanging
+    const n = statusCalls;
+    for (let i = 0; i < 3; i++) { await page.click('#btnRefresh'); await tick(page, 250); }
+    check(statusCalls === n, 'A17 Refresh started extra requests while one was waiting: ' + (statusCalls - n));
+    check((await page.getAttribute('#btnRefresh', 'aria-busy')) === 'true' && (await page.innerText('#refreshText')) === 'Refreshing…', 'A17 Refresh shows no progress');
+    statusMode = 'ok'; await tick(page, 4500);         // times out, retried after 1 s
+    check(statusCalls === n + 1 && (await conn(page)).startsWith('Online'), 'A17 not back online with exactly one retry: ' + (statusCalls - n));
+    check((await page.getAttribute('#btnRefresh', 'aria-busy')) === 'false', 'A17 Refresh still busy');
+    await ctx.close(); resetFaults();
+  }
+  // A18 A hidden page (phone locked) asks nothing; shown again, it asks at once.
+  {
+    resetFaults(); status = baseStatus();
+    const { ctx, page } = await fresh(browser, base);
+    await setHidden(page, true); const n = statusCalls;
+    await tick(page, 20000);
+    check(statusCalls === n, 'A18 polled while hidden: ' + (statusCalls - n));
+    check((await page.innerText('#toast')) === '' && !(await conn(page)).includes('Offline'), 'A18 error or Offline while hidden');
+    await setHidden(page, false); await tick(page, 250);
+    check(statusCalls === n + 1 && (await conn(page)).startsWith('Online'), 'A18 no request at once when shown again');
+    await ctx.close();
+  }
+  // A19 Messages never cover the Stop button or its help text (until 3.15 the toast floated over them),
+  // and a "can't reach" error goes away by itself when the controller answers again.
+  {
+    resetFaults(); status = running();
+    const { ctx, page } = await fresh(browser, base);
+    await page.setViewportSize({ width: 390, height: 844 });   // iPhone
+    await page.click('#tab-settings'); await tick(page, 500);
+    settingsPostMode = 'drop'; await page.click('#btnSave'); await tick(page, 500);
+    check((await page.innerText('#toast')).includes('Can’t reach the controller'), 'A19 no error for an unanswered save');
+    await page.click('#tab-overview'); await tick(page, 250);
+    const overlap = await page.evaluate(() => {
+      const r = id => document.getElementById(id).getBoundingClientRect(), t = r('toast');
+      const hit = o => !(t.right <= o.left || t.left >= o.right || t.bottom <= o.top || t.top >= o.bottom);
+      return { fixed: getComputedStyle(document.getElementById('toast')).position === 'fixed', stop: hit(r('btnStop')), hint: hit(r('ctlHint')) };
+    });
+    check(!overlap.fixed && !overlap.stop && !overlap.hint, 'A19 message covers a control: ' + JSON.stringify(overlap));
+    await tick(page, 2250);
+    check((await page.innerText('#toast')) === '', 'A19 connection error not cleared after the controller answered');
+    await ctx.close(); resetFaults(); status = baseStatus();
+  }
+  // A20 A Stop that gets no answer is sent once, never again; the status decides, and an
+  // answer that times out after the status confirmed it shows no error.
+  {
+    resetFaults(); status = running();
+    const { ctx, page } = await fresh(browser, base);
+    stopMode = 'hang'; await page.click('#btnStop'); await tick(page, 8500);
+    check(stopCalls === 1, 'A20 Stop sent ' + stopCalls + ' times');
+    check((await page.innerText('#toast')).includes('Checking whether the cycle stopped'), 'A20 no "checking" message: ' + await page.innerText('#toast'));
+    check((await page.innerText('#btnStop')).includes('Stopping'), 'A20 Stop button not waiting for the controller');
+    status = baseStatus(); await tick(page, 2500);
+    check((await page.innerText('#toast')).includes('Cycle stopped') && stopCalls === 1, 'A20 stop not confirmed from the status');
+    // Second case: the status confirms first, the request times out afterwards.
+    status = running(); await tick(page, 2500);
+    await page.click('#btnStop'); await tick(page, 500);
+    status = baseStatus(); await tick(page, 2500);
+    check((await page.innerText('#toast')).includes('Cycle stopped'), 'A20 second stop not confirmed');
+    await tick(page, 6000);                              // the hanging request gives up now
+    check(!(await page.innerText('#toast')).includes('took too long'), 'A20 error shown after the stop was confirmed');
+    check(stopCalls === 2, 'A20 stop requests: ' + stopCalls);
+    await ctx.close(); resetFaults(); status = baseStatus();
   }
 
   // A7 Accessibility (axe-core, if installed): no violations on any tab, normal and fault states.

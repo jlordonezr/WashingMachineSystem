@@ -1,6 +1,6 @@
-# Communication protocol – firmware 3.15
+# Communication protocol – firmware 3.16
 
-The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
+The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s, one request at a time and only while the page is shown (3.16), and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
 ## Transport and access
 
@@ -21,6 +21,7 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 |---|---|---|---|---|
 | GET | `/` | — | page | 401, 429 |
 | GET | `/api/status` | — | status JSON (below) | 401, 429 |
+| GET | `/api/ping` | — | `{"ok":true,"uptimeS":n}`; **public**, no sign-in, reads nothing, for timing the controller (3.16, `tools/latency_probe.py`) | — |
 | GET | `/api/settings` | — | settings JSON (no passwords; `viewerOn` says whether the viewer user is on, 3.5) | 401, 403 (viewer), 429 |
 | POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–3: Hyperlegible, Plain sans, Terminal bold, Schoolbook bold; 3.6), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword`, `viewerOn` (0 turns the viewer off and forgets its password; 1 needs a password, 3.5), `viewerPassword` (8–32, not the dashboard password, 3.5) | the saved settings JSON | 400 (message says which field), 403 (viewer), 500 (flash write failed) |
 | POST | `/api/start` | optional `save`: `1` *Reuse and save* (the default), `0` *Reuse only*, step 4 sends the rinse water to the drain (3.7) | `{"ok":true}` = request accepted | 400 (`save` not 0 or 1), 403 (turned off in Settings, or viewer), 409 (not Ready) |
@@ -46,6 +47,8 @@ Errors are JSON: `{"error":"<sentence for the user>"}`, always in English; the a
 1. keeps the button in *Starting…* / *Stopping…* after `200`,
 2. shows *Cycle started* / *Cycle stopped* only when a later status shows `state` ≠ 0 / `state` = 0,
 3. after 10 s without that, shows an error and re-enables the buttons.
+
+If the request itself gets no answer (timeout or no connection, 3.16), it may still have reached the controller. The app **never sends it again**: the button keeps waiting (*No answer yet. Checking…*), the 10 s start again, and the status decides as above. An answer that arrives after the status confirmed the command is ignored.
 
 The tank wash and the test alert follow the same rule (`manualWash` in the status; `alert.seq` / `alert.ok`).
 
@@ -89,6 +92,7 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `heap` | object | `free`, `min` bytes (3.0) |
 | `alert` | object | `seq` (results received), `ok`, `code`: HTTP status; −100 no Wi-Fi for 5 min; −101 bad server address; other negative values (HTTPClient −1 … −11): could not connect (3.0; −2 / −3 until 3.2.0) |
 | `wifi`, `time`, `uptimeS` | | Signal (dBm), IP, local time `YYYY-MM-DD HH:MM`, seconds since start-up |
+| `web` | object | `idleDropped`: connections closed because they stayed silent for 5 s, were closed by the phone or were pushed out of the full waiting room since start-up; `waiting`: connections waiting now, 0–4 (3.16, `HttpConnPool.h`) |
 
 Fields are only added between versions, never renamed, so an older page keeps working with newer firmware.
 
@@ -96,11 +100,12 @@ Fields are only added between versions, never renamed, so an older page keeps wo
 
 | Where | Value |
 |---|---|
-| App, status request | 5 s, then counted as a failure; 2 failures → *Offline* badge; no update for 6 s → *Updating slowly* |
+| App, status request | 4 s (5 s until 3.15), then counted as a failure. One request at a time; the next one 2 s after an answer, or 1 s, 2 s, 4 s, then every 8 s after failures. 1 failure → *Reconnecting…*, 3 in a row → *Offline* (2 until 3.15); a request open for over 6 s → *Updating slowly*. Paused while the page is hidden; sent at once when it is shown again (3.16) |
 | App, action request | 8 s |
 | App, confirmation of an action | 10 s |
 | App, test-alert result | 120 s (75 s until 3.2.0) |
-| Controller, Wi-Fi reconnect | every 60 s while disconnected (saved network) |
+| Controller, Wi-Fi reconnect | automatic (ESP-IDF), plus a new attempt every 60 s while disconnected (saved network). Power saving off (3.16) |
+| Controller, silent connection | closed after 5 s; up to 4 wait at once without holding up the others (3.16; until 3.15 one such connection held every request for up to 5 s) |
 | Controller, alert sending | 10 s each for connect, TLS handshake and answer. No Wi-Fi, no answer, a timeout, 408, 429 or 5xx: tried again after 5 s, 10 s, 20 s … at most every 5 min, for up to 30 min (test alert: 30 s); up to 6 alerts wait at once, each on its own schedule, the oldest is given up when a 7th arrives; queue of 6, extra alerts are dropped and logged (3.3.1) |
 | Controller, Wi-Fi setup page | closes after 3 min |
 

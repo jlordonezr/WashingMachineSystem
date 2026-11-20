@@ -1,4 +1,4 @@
-# Architecture – firmware 3.15
+# Architecture – firmware 3.16
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -47,10 +47,11 @@ FSM_WashingMachineSystem.ino   setup(), loop(), state machine wiring (AgileState
 ├─ GreyWaterDisplay     OLED 128x64: header in the yellow rows (title, tank litres, arrow, gauge; 3.13), message on one or two blue lines ("top|bottom"); start-up animation: Border Collie chasing a butterfly (BootAnimation.h), frame-timed, only redraws on change
 ├─ GreyWaterDiagnostics event log (50, RAM), loop timing, buzzer, restart reason
 ├─ GreyWaterSettings    settings + history in NVS (versioned structs, history twice + kept-aside copy)
-└─ GreyWaterNet         Wi-Fi (WiFiManager), web server + API, OTA, mDNS, NTP, alert task
+└─ GreyWaterNet         Wi-Fi (WiFiManager; power saving off, IPv6 on, 3.16), web server + API, OTA, mDNS, NTP, alert task
+     ├─ HttpConnPool.h   waiting room for connections that have not sent a request yet (3.16)
      └─ DashboardPage.h  gzip of web/dashboard.html (tools/build_dashboard.py)
 
-Hardware-free, unit tested: FlowMeter.h (FlowMeter, CycleGates, PumpGuard), TankLevel.h
+Hardware-free, unit tested: FlowMeter.h (FlowMeter, CycleGates, PumpGuard), TankLevel.h, HttpConnPool.h
 ```
 
 ## Output modes and interlocks
@@ -89,9 +90,13 @@ buttons ─► updateInputs (loop) ─► inStart / inStop ─► state machine
 app ─HTTP─► web server (loop) ─► requestRemoteStart/Stop flags ─► applied at the start of the next loop pass
 app ─HTTP─► /api/interrupted/resume ─► requestResume flag ─► takeResumeRequest (loop) ─► the sketch enters the saved step (3.10)
 cycle (loop) ─► outputsRequest(mode) ─► GreyWaterOutputs (lock) ─► SSR pins
-status snapshot (loop) ─► /api/status JSON ─► app (polls every 2 s)
+status snapshot (loop) ─► /api/status JSON ─► app (polls every 2 s, one request at a time, paused while hidden)
 events ─► notify() ─► queue ─► alert task ─► ntfy ─► result queue ─► event log + /api/status.alert
 ```
+
+## Web server (3.16)
+
+The stock ESP32 `WebServer` runs in `loop()` and serves one connection at a time. It used to wait up to 5 s for a connection that was open but silent, with every other request queued behind it; phones leave such connections open often, which made the app time out during washes. `GwWebServer` (in `GreyWaterNet.cpp`) accepts every waiting connection into `HttpConnPool` (4 places) and hands the stock code only a connection whose request has arrived, so one call answers one request and returns. Handlers only read values the cycle already keeps (no sensor or I2C reads) and send from stack buffers. The cycle, the safety task and the STOP button do not depend on the network at all.
 
 ## Why the app reflects the real hardware
 

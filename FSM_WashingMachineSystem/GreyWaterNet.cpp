@@ -14,9 +14,43 @@
 #include <WiFiClientSecure.h>
 #include <time.h>
 #include <esp_random.h>
+#include "HttpConnPool.h"
+
+// The web server, with a waiting room for connections that have not sent their
+// request yet (3.16, see HttpConnPool.h). The stock WebServer waited up to 5 s
+// on such a connection with every other request queued behind it, which made
+// the app time out during a wash. Here a connection is handed to the stock
+// code only once its request has arrived, so it never waits on a silent one.
+#define WEB_PARK_SLOTS 4      // = the listen backlog of the server socket
+class GwWebServer : public WebServer {
+public:
+  explicit GwWebServer(int port) : WebServer(port) {}
+  void handleClient() override {
+    if (_currentStatus != HC_NONE) { WebServer::handleClient(); return; }   // never the case: requests are answered in one call
+    uint32_t now = millis();
+    for (uint8_t i = 0; i < WEB_PARK_SLOTS; ++i) {   // take every connection the network stack has waiting
+      NetworkClient c = _server.accept();          // non-blocking
+      if (!c) break;
+      parked.add(c, now);
+    }
+    NetworkClient c;
+    if (!parked.takeReady(c, now, HTTP_MAX_DATA_WAIT)) {
+      if (_nullDelay) delay(1);                    // as the stock handleClient() does when idle
+      return;
+    }
+    _currentClient = c;
+    _currentStatus = HC_WAIT_READ;
+    _statusChange  = now;
+    WebServer::handleClient();                     // reads the request, answers, closes the connection
+  }
+  uint8_t  parkedCount() const { return parked.count(); }
+  uint32_t idleDropped() const { return parked.dropped(); }
+private:
+  HttpConnPool<NetworkClient, WEB_PARK_SLOTS> parked;
+};
 
 static WiFiManager wm;
-static WebServer   server(80);
+static GwWebServer server(80);
 static void blockSetupPages();        // see netStartConfigPortal()
 
 static bool servicesStarted = false;   // mDNS, OTA, NTP and web server are running
@@ -220,7 +254,9 @@ static const char* levelName(WaterLevel l) {
 
 static void sendJson(int code, const char* json) {
   server.sendHeader("Cache-Control", "no-store");
-  server.send(code, "application/json", json);
+  // send_P with a length writes straight from the buffer; send(const char*)
+  // copied the 2.4 KB status into a new String on every poll (3.16).
+  server.send_P(code, "application/json", json, strlen(json));
 }
 
 static void sendError(int code, const char* message) {
@@ -295,6 +331,18 @@ static char cookieRole(char* token, bool* remember) {
   return authCheckToken(authKey, token, cfg.webPassword, cfg.viewerPassword, remember);
 }
 
+// The device sending this request, as a number. IPv4 as is; an IPv6 address
+// (phones may connect over IPv6 from 3.16) is folded into 32 bits, because
+// IPAddress turns every IPv6 address into 0, which would make all those
+// devices share one wrong-password count.
+static uint32_t clientKey() {
+  IPAddress ip = server.client().remoteIP();
+  if (ip.type() == IPv4) return (uint32_t)ip;
+  uint32_t h = 2166136261u;                       // FNV-1a
+  for (int i = 0; i < 16; ++i) h = (h ^ ip[i]) * 16777619u;
+  return h | 1u;                                  // never 0 (an empty slot)
+}
+
 struct AuthSlot { uint32_t ip; uint8_t fails; bool locked; unsigned long windowStart, lockStart, lastSeen; };
 static AuthSlot authSlots[AUTH_SLOTS];
 
@@ -326,7 +374,7 @@ static bool authorized() {
   char r = cookieRole(tok, &currentRemember);
   if (r) { currentRole = r == 'a' ? roleAdmin : roleViewer; return true; }
   currentRemember = true;
-  uint32_t ip = (uint32_t)server.client().remoteIP();
+  uint32_t ip = clientKey();
   AuthSlot& a = authSlotFor(ip);
   a.lastSeen = millis();
   if (a.locked && millis() - a.lockStart < 60000UL) {
@@ -420,7 +468,8 @@ static void handleStatus() {
     "\"outputs\":%u,\"typicalS\":[%lu,%lu,%lu],\"interrupted\":{\"active\":%s,\"step\":%d,\"epoch\":%lu,\"noSave\":%s,\"resume\":%s,\"resumeLeftS\":%lu},"
     "\"boot\":\"%s\",\"updatesAllowed\":%s,\"defaultPasswords\":%s,"
     "\"lang\":\"%s\",\"tankFault\":%s,\"screen\":%s,\"loop\":{\"maxMs\":%lu,\"lastMinMaxMs\":%lu},"
-    "\"heap\":{\"free\":%lu,\"min\":%lu},\"alert\":{\"seq\":%lu,\"ok\":%s,\"code\":%d},\"role\":\"%s\"}",
+    "\"heap\":{\"free\":%lu,\"min\":%lu},\"alert\":{\"seq\":%lu,\"ok\":%s,\"code\":%d},\"role\":\"%s\","
+    "\"web\":{\"idleDropped\":%lu,\"waiting\":%u}}",
     FIRMWARE_VERSION, s.state, s.stateName, title, message,
     levelName(s.tankLevel), s.tankL, (int)s.tankTrend, s.washValveOpen ? "true" : "false", s.tapLpm, s.drainLpm,
     (unsigned long)s.stepElapsedS, (unsigned long)s.drain2LeftS, s.stuck ? "true" : "false",
@@ -453,7 +502,8 @@ static void handleStatus() {
     (unsigned long)loopMaxMs(), (unsigned long)loopMaxLastMinuteMs(),
     (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getMinFreeHeap(),
     (unsigned long)alertSeq, alertLastOk ? "true" : "false", alertLastCode,
-    currentRole == roleAdmin ? "admin" : "viewer");
+    currentRole == roleAdmin ? "admin" : "viewer",
+    (unsigned long)server.idleDropped(), (unsigned)server.parkedCount());
   sendJson(200, buf);
 }
 
@@ -691,7 +741,7 @@ static void handleResume() {
 // The X-GW header stops other websites from signing a browser in.
 static void handleLogin() {
   if (server.header("X-GW") != "1") { sendError(403, "Request blocked: use the dashboard page."); return; }
-  AuthSlot& a = authSlotFor((uint32_t)server.client().remoteIP());
+  AuthSlot& a = authSlotFor(clientKey());
   a.lastSeen = millis();
   if (a.locked && millis() - a.lockStart < 60000UL) {
     sendError(429, "Too many wrong passwords from this device. Wait one minute and try again.");
@@ -790,6 +840,14 @@ static void handleRestart() {
   ESP.restart();
 }
 
+// Health check (3.16): public and tiny, answered without reading anything, so
+// a phone or a script can time the controller without signing in.
+static void handlePing() {
+  char buf[48];
+  snprintf(buf, sizeof(buf), "{\"ok\":true,\"uptimeS\":%lu}", (unsigned long)(millis() / 1000UL));
+  sendJson(200, buf);
+}
+
 static void handleNotFound() {
   if (!authorized()) return;   // any user: a wrong address says "Not found."
   sendError(404, "Not found.");
@@ -845,6 +903,7 @@ void netBegin() {
   authKeyReady = authKeyLoad(authKey);   // none yet: made at the first sign-in
   server.on("/",                HTTP_GET,  handleRoot);
   server.on("/api/status",      HTTP_GET,  handleStatus);
+  server.on("/api/ping",        HTTP_GET,  handlePing);
   server.on("/api/settings",    HTTP_GET,  handleSettingsGet);
   server.on("/api/settings",    HTTP_POST, handleSettingsPost);
   server.on("/api/stop",        HTTP_POST, handleStop);
@@ -865,6 +924,15 @@ void netBegin() {
   WiFi.setHostname(NET_HOSTNAME);   // must come before WiFi.mode() on the ESP32 core
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
+  // Radio always on (3.16). The ESP32-S3 default is modem power-save: the radio
+  // sleeps between router beacons, which delayed replies by up to a few hundred
+  // ms and lost mDNS questions ("Can't reach the controller" on a phone with
+  // full signal). The board is mains powered, so the extra fraction of a watt does not matter.
+  WiFi.setSleep(false);
+  // IPv6 link-local address (3.16), so the mDNS responder answers the IPv6
+  // question for reusewater.local too. Without it Apple devices waited 5 s for
+  // that answer on every lookup (measured). The web server listens on both.
+  WiFi.enableIPv6();
 
   wm.setDebugOutput(DEBUG_MODE);
   wm.setConfigPortalBlocking(false);

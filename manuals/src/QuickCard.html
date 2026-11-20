@@ -64,7 +64,7 @@
 <li><b>Sign in once:</b> the first time, enter the password and leave <b>Recordar este dispositivo</b> on. The phone is not asked again. The door icon at the top signs out.</li>
 <li><b>Overview:</b> what is happening now, Start and Stop, the tank, and Wash tank.</li>
 <li><b>Water use:</b> how much water you have reused this month.</li>
-<li><b>Refresh:</b> use it if the page looks stuck.</li>
+<li><b>Refresh:</b> use it if the page looks stuck. If the top shows <i>Reconectando…</i> or <i>Sin conexión</i>, the data is old (greyed out, with its age): to stop a wash right away, press STOP on the controller.</li>
 <li><b>Settings → Language:</b> Español or English, for the app, the screen and the alerts.</li>
 <li><b>Viewer:</b> if you signed in as <b>viewer</b>, you see only Overview and Water use. You can start and stop a wash and wash the tank; the settings need the person with the admin sign-in.</li>
 <li><b>Settings → Screen font:</b> four letter styles for the controller screen: Hyperlegible (default), Plain sans, Terminal bold, Schoolbook bold. Save, look at the screen, and keep the one you read best.</li>
@@ -72,7 +72,7 @@
 <p>Phone alerts start with <i>Reuse Water:</i> (Spanish: <i>Reúso de Agua:</i>).</p>
 <p>Technician: <span class="blank"></span> Phone: <span class="blank"></span></p>
 
-<h2 class="page-break">Installer commissioning checklist (firmware 3.15)</h2>
+<h2 class="page-break">Installer commissioning checklist (firmware 3.16)</h2>
 <p>Firmware 3.0 has run correctly on the installed system. Firmware 3.1 adds the Spanish texts and the language setting. Firmware 3.2 renames the app to Reuse Water System, adds the start-up animation and a clearer screen font, and moves the optional buzzer from D12 to D1, on the same control logic. Firmware 3.3 makes the screen messages explain themselves in short pages and makes phone alerts more reliable. Complete these checks when installing or replacing a controller.</p>
 <h3>Hardware</h3>
 <ul class="check">
@@ -86,9 +86,10 @@
 </ul>
 <h3>First start</h3>
 <ul class="check">
-<li><b>Start-up screen:</b> the dog chases the butterfly (about 4 s), then <code>REUSO AGUA</code> / Sistema listo › Version 3.15.0 for 2 s, then <code>LISTO</code>. START during the dog skips it.</li>
+<li><b>Start-up screen:</b> the dog chases the butterfly (about 4 s), then <code>REUSO AGUA</code> / Sistema listo › Version 3.16.0 for 2 s, then <code>LISTO</code>. START during the dog skips it.</li>
 <li><b>Readability:</b> the bold messages can be read from where the household stands.</li>
-<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.15.0.</li>
+<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.16.0.</li>
+<li><b>App during a wash (3.16):</b> keep the app open on Overview through a whole wash and lock the phone for a couple of minutes once; it stays <i>En línea</i> with no error message, and Service → <i>Tiempo de respuesta de la app</i> stays under 300 ms.</li>
 </ul>
 <h3>First cycle (watch the Service tab)</h3>
 <ul class="check">
@@ -98,7 +99,7 @@
 <li>Step 4 saves water (<i>Saving water › Ends in …</i>); the fill valve is on and the drain valve off in <i>Valves and pump</i>. When the pump-out ends, the screen shows <i>Low flow › Ends in …</i> and the fill valve turns off within about 3 s.</li>
 <li><code>DONE</code> shows the litres reused and saved; <i>Water use</i> shows the wash. With the buzzer on: two short beeps.</li>
 </ul>
-<h3>Firmware features (3.0 to 3.15)</h3>
+<h3>Firmware features (3.0 to 3.16)</h3>
 <ul class="check">
 <li><b>Passwords:</b> the app asked for new passwords on first use, and both were changed.</li>
 <li><b>Sign in once:</b> on the household's phones, sign in with <i>Recordar este dispositivo</i> on; close the browser and open the app again: it opens straight to Overview, with no password.</li>

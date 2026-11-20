@@ -3,7 +3,7 @@
 
 Sources: static page text and aria-label/title/placeholder attributes,
 t('...') calls in the script, the lists the script passes through t()
-(STEP_NAMES, LEVEL, WASH_END, PLAIN, hints), and messages the firmware sends
+(STEP_NAMES, LEVEL, CONN, WASH_END, PLAIN, hints), and messages the firmware sends
 that the page translates (errors and history sources in GreyWaterNet.cpp /
 GreyWaterSettings.cpp).
 
@@ -36,6 +36,8 @@ def lit(name):
     return re.findall(r"'((?:[^'\\]|\\.)*)'", m.group(1)) if m else []
 for k in lit('STEP_NAMES'): add(k)
 for k in re.findall(r"t:'([^']+)'", js): add(k)
+for k in lit('CONN'):                       # connection badge labels (3.16); 'badge ...' are CSS classes
+    if not k.startswith('badge'): add(k)
 for k in lit('WASH_END'):
     if ' ' in k: add(k)
 plain = re.search(r"var PLAIN=\{(.*?)\};", js, re.S).group(1)

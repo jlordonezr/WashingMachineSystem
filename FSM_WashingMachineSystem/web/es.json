@@ -435,5 +435,21 @@
  "Other devices signed out": "Sesión cerrada en los otros dispositivos",
  "Enter the user name and the password.": "Escriba el usuario y la contraseña.",
  "Sign in to continue.": "Inicie sesión para continuar.",
- "Wrong user name or password.": "Usuario o contraseña incorrectos."
+ "Wrong user name or password.": "Usuario o contraseña incorrectos.",
+ "Try again": "Reintentar",
+ "Updating…": "Actualizando…",
+ "Reconnecting…": "Reconectando…",
+ "Reconnecting to the controller…": "Reconectando con el controlador…",
+ "Offline: can’t reach the controller. Check that this device is on the home Wi-Fi.": "Sin conexión: no se puede llegar al controlador. Revise que este dispositivo esté en el Wi-Fi de la casa.",
+ "Showing data from {0}.": "Se muestran los datos de {0}.",
+ "{0} s ago": "hace {0} s",
+ "Not live: last updated {0}.": "No es en vivo: última actualización {0}.",
+ "If you need to stop the cycle now, press STOP on the controller.": "Si necesita detener el ciclo ahora, pulse STOP en el controlador.",
+ "Still no answer from the controller. Trying again.": "El controlador aún no responde. Se intenta de nuevo.",
+ "No answer yet. Checking whether the cycle started…": "Aún no hay respuesta. Se comprueba si el ciclo inició…",
+ "No answer yet. Checking whether the cycle stopped…": "Aún no hay respuesta. Se comprueba si el ciclo se detuvo…",
+ "No answer yet. Checking with the controller…": "Aún no hay respuesta. Se comprueba con el controlador…",
+ "App response time": "Tiempo de respuesta de la app",
+ "{0} ms (slowest of the last {1}: {2} ms)": "{0} ms (la más lenta de las últimas {1}: {2} ms)",
+ "Silent connections closed": "Conexiones inactivas cerradas"
 }

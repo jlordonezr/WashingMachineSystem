@@ -17,8 +17,8 @@
 <table>
 <thead><tr><th>Item</th><th>Detail</th></tr></thead>
 <tr><td>Document</td><td>Reuse Water System – Runbook</td></tr>
-<tr><td>Version</td><td>3.15</td></tr>
-<tr><td>Applies to firmware</td><td><code>FSM_WashingMachineSystem.ino</code> and the <code>GreyWater*</code> files, firmware 3.15 (3.15: the Large screen font of 3.14 is removed, the screen is as in 3.13 with Hyperlegible as the default font; default alert server <code>https://ntfy.hostux.net</code>; the viewer user can start, stop and wash the tank; 3.13: the screen shows the estimated litres in the tank, with a fill/drain arrow; 3.12: a larger 128x64 yellow and blue screen, every message rewritten for two lines, with the start-up animation laid out for the taller screen; 3.11: the app asks for the password once per device, with Remember this device; 3.10: a cycle cut short by a power cut can be resumed from the app; 3.9: one fixed letter size per screen font for every message; 3.8: hold START 2 s on the panel for Reuse only, the cycle starts on release; 3.7: app buttons Reuse and save, Reuse only (rinse water to the drain) and Stop cycle; 3.6: four new screen fonts chosen by the household, the earlier ones removed; 3.5: view-only user <code>viewer</code> that sees only Overview and Water use; 3.4.1: shorter screen messages, full screen brightness; 3.4: minimum flow to save, screen font chosen in Settings; 3.3.1: alerts tried again for 30 min during an outage; 3.3: screen messages in short pages that explain what is happening and what to do, minutes left, more reliable phone alerts; 3.2: new name Reuse Water System, start-up animation, Helvetica Bold screen font, larger tank icon, buzzer on D1; 3.1: Spanish and English, chosen in Settings; 3.0: safety task, float-switch rules, code split into modules)</td></tr>
+<tr><td>Version</td><td>3.16</td></tr>
+<tr><td>Applies to firmware</td><td><code>FSM_WashingMachineSystem.ino</code> and the <code>GreyWater*</code> files, firmware 3.16 (3.16: the app stays connected during a wash, see section 11; 3.15: the Large screen font of 3.14 is removed, the screen is as in 3.13 with Hyperlegible as the default font; default alert server <code>https://ntfy.hostux.net</code>; the viewer user can start, stop and wash the tank; 3.13: the screen shows the estimated litres in the tank, with a fill/drain arrow; 3.12: a larger 128x64 yellow and blue screen, every message rewritten for two lines, with the start-up animation laid out for the taller screen; 3.11: the app asks for the password once per device, with Remember this device; 3.10: a cycle cut short by a power cut can be resumed from the app; 3.9: one fixed letter size per screen font for every message; 3.8: hold START 2 s on the panel for Reuse only, the cycle starts on release; 3.7: app buttons Reuse and save, Reuse only (rinse water to the drain) and Stop cycle; 3.6: four new screen fonts chosen by the household, the earlier ones removed; 3.5: view-only user <code>viewer</code> that sees only Overview and Water use; 3.4.1: shorter screen messages, full screen brightness; 3.4: minimum flow to save, screen font chosen in Settings; 3.3.1: alerts tried again for 30 min during an outage; 3.3: screen messages in short pages that explain what is happening and what to do, minutes left, more reliable phone alerts; 3.2: new name Reuse Water System, start-up animation, Helvetica Bold screen font, larger tank icon, buzzer on D1; 3.1: Spanish and English, chosen in Settings; 3.0: safety task, float-switch rules, code split into modules)</td></tr>
 <tr><td>Intended audience</td><td>Installers, operators and maintenance personnel</td></tr>
 <tr><td>Related documents</td><td><code>README.md</code> (firmware change summary); Reuse Water System – Quick Card</td></tr>
 </table>
@@ -372,7 +372,7 @@
 <table>
 <thead><tr><th>Top line</th><th>Message pages</th><th>What it means</th><th>Action needed</th></tr></thead>
 <tr><td colspan="2">Full screen: a dog chasing a butterfly</td><td>The controller has just switched on (about 4 s)</td><td>None; START skips it</td></tr>
-<tr><td><code>REUSE WATER</code><br><code>REUSO AGUA</code></td><td>System ready › Version 3.15.0<br>Sistema listo › Version 3.15.0</td><td>Start-up finished (2 s)</td><td>None</td></tr>
+<tr><td><code>REUSE WATER</code><br><code>REUSO AGUA</code></td><td>System ready › Version 3.16.0<br>Sistema listo › Version 3.16.0</td><td>Start-up finished (2 s)</td><td>None</td></tr>
 <tr><td><code>READY</code><br><code>LISTO</code></td><td>Start washer › Press START<br>Inicie lavadora › y pulse START</td><td>Waiting for a new cycle; the tank icon shows the tank level</td><td>Start the machine’s program, then press START</td></tr>
 <tr><td><code>REUSE &amp; SAVE</code><br><code>REUSO+AHORRO</code></td><td>Release to start › Hold: reuse only<br>Suelte e inicia › 2 s: solo reusar</td><td>START is held (under 2 s); a release starts the normal cycle (3.8)</td><td>Let go, or hold to 2 s for Reuse only</td></tr>
 <tr><td><code>REUSE ONLY</code><br><code>SOLO REUSAR</code></td><td>Release to start › Rinse not saved<br>Suelte e inicia › No se guarda</td><td>START held 2 s; a release starts Reuse only (3.8)</td><td>Let go</td></tr>
@@ -490,7 +490,7 @@
 </ul>
 <h3>Power-up and idle</h3>
 <ul class="check">
-<li>OLED shows the Border Collie chasing the butterfly (about 4 s), then <code>REUSE WATER</code> / System ready › Version 3.15.0 for 2 s, then <code>READY</code> / <i>Start washer › Press START</i>, with no <code>DONE</code></li>
+<li>OLED shows the Border Collie chasing the butterfly (about 4 s), then <code>REUSE WATER</code> / System ready › Version 3.16.0 for 2 s, then <code>READY</code> / <i>Start washer › Press START</i>, with no <code>DONE</code></li>
 <li>Pressing START during the animation ends it at once</li>
 <li>The header and both icons are in the yellow rows and the message is on two lines in the blue rows; nothing is cut off at the gap between the colours</li>
 <li>Messages read clearly in the bold font at the normal viewing distance; when the bottom line changes, each page stays about 3 s, long enough to read</li>
@@ -579,13 +579,17 @@
 <li>The STOP button on the controller always works, whoever is signed in to the app.</li>
 </ul>
 <p>On the Service tab, the tank-wash valve state is reported by the controller. The other valve and pump states are the expected states for the current step and fill source.</p>
-<p><b>Refresh (from firmware 2.8.1):</b> the app updates itself every 2 seconds. The badge in the top bar shows the connection:</p>
+<p><b>Refresh and the connection badge (from firmware 2.8.1; changed in 3.16):</b> the app updates itself every 2 seconds while it is on screen. The badge in the top bar shows the connection:</p>
 <ul>
 <li><i>Online</i> with the controller’s time: updates are arriving.</li>
-<li><i>Updating slowly</i>: no update for 6 seconds, usually weak Wi-Fi.</li>
-<li><i>Offline</i>: the controller cannot be reached.</li>
+<li><i>Updating…</i>: the phone was locked or the app was in the background; it asks at once and is normally <i>Online</i> again within a second.</li>
+<li><i>Updating slowly</i>: an update is taking more than 6 seconds, usually weak Wi-Fi.</li>
+<li><i>Reconnecting…</i>: one update got no answer; the app tries again after 1, 2 and 4 seconds.</li>
+<li><i>Offline</i>: three updates in a row got no answer; the app keeps trying every 8 seconds.</li>
 </ul>
-<p>Press <b>Refresh</b> next to the badge to fetch fresh data at once. It cancels any update that is still waiting.</p>
+<p>When the data is not live, a banner under the top bar says how old it is, with <b>Try again</b>. The readings are greyed out, and the status card says <i>Not live: last updated … If you need to stop the cycle now, press STOP on the controller.</i> The STOP button on the controller always works, with or without Wi-Fi.</p>
+<p>Press <b>Refresh</b> next to the badge to fetch fresh data at once (it waits for an update already on its way). Messages appear under the top bar, never over the buttons, and connection errors go away by themselves when the controller answers again.</p>
+<p><b>Stop, Reuse and save, Reuse only and Wash tank are never sent twice.</b> If the controller does not answer, the button keeps waiting (<i>No answer yet. Checking whether the cycle stopped…</i>) and the next update decides: <i>Cycle stopped</i>, or <i>The controller has not confirmed the stop. Press STOP on the controller.</i></p>
 <h3>Keeping the water history</h3>
 <p>The Water use history survives firmware updates. From firmware 2.8 it is protected in three places:</p>
 <table>
@@ -699,7 +703,7 @@
 <table>
 <thead><tr><th>Problem</th><th>What to check</th><th>How to fix</th></tr></thead>
 <tr><td><code>reusewater.local</code> does not open</td><td>Phone on the same Wi-Fi; some Android phones do not support .local names; an old bookmark to <code>greywater.local</code></td><td>Use the IP address shown on the screen at start-up, or from the router's device list; update old bookmarks</td></tr>
-<tr><td>Dashboard says it can't reach the controller</td><td>Controller powered; Wi-Fi signal (shown in the page footer)</td><td>Press Refresh in the top bar. If it stays Offline or Updating slowly, move the router or add a repeater; below about −80 dBm the link drops</td></tr>
+<tr><td>Dashboard says it can't reach the controller</td><td>Controller powered; Wi-Fi signal (shown in the page footer)</td><td>Press Refresh in the top bar. If it stays Offline or Updating slowly, move the router or add a repeater; below about −80 dBm the link drops. With firmware older than 3.16 the app also timed out during washes on a good signal (see 3.16 in the version history): update the firmware. To measure the controller from a computer: <code>python3 tools/latency_probe.py</code> (answers should stay under 300 ms)</td></tr>
 <tr><td>Test alert: <i>could not connect</i></td><td>The controller reached the internet but not the alert server; a public ntfy server is sometimes down for hours</td><td>Open the address in <i>Alert server</i> (default <code>https://ntfy.hostux.net</code>) on a phone on the same Wi-Fi. If it does not load either, wait and try later: real alerts are tried again for 30 minutes; or set another ntfy server in Settings and subscribe the phone on it. If it loads, restart the controller</td></tr>
 <tr><td>No alerts arrive</td><td>Topic in Settings matches the app exactly; footer says alerts are on; Service → Last alert and Recent events give the reason</td><td>Press Send a test alert. <i>The server refused the topic</i>: use only letters, numbers, - and _. <i>Too many alerts</i>: wait a few minutes. <i>No Wi-Fi</i> / <i>could not connect</i>: check the router's internet. Also check the phone's notification permission and battery saver for the ntfy app</td></tr>
 <tr><td>Cycle complete or Cycle stopped alerts arrive without sound</td><td>They are sent at low and minimum priority on purpose</td><td>In the ntfy app, open the topic's notification settings to change how low-priority alerts are shown</td></tr>
@@ -732,6 +736,7 @@
 <h2>Appendix B. Revision history</h2>
 <table>
 <thead><tr><th>Version</th><th>Date</th><th>Description</th></tr></thead>
+<tr><td>3.16</td><td>2026-11-20</td><td>The app stays connected during a wash. The web server no longer waits on silent connections that phones leave open (they held every update for 5 s, so the app said <i>took too long</i> or <i>Offline</i>). Wi-Fi power saving is off and IPv6 is on (<code>reusewater.local</code> is found at once on Apple devices). The app: <i>Reconnecting…</i> before <i>Offline</i>, a banner with the age of the data, stale readings greyed out, no updates while the phone is locked, messages never over the buttons, commands never sent twice. New <code>/api/ping</code>. Settings switches react to a tap on the switch itself; <i>Resume cycle</i> is hidden when resuming is not possible. Nothing in the cycle, valves or pump changed</td></tr>
 <tr><td>3.15</td><td>2026-11-15</td><td>The Large screen font of 3.14 is removed: the screen, the message wording and the four fonts are as in 3.13, with Hyperlegible as the default. Default alert server <code>https://ntfy.hostux.net</code>; a controller that still had the old default <code>https://ntfy.sh</code> saved moves to it (subscribe the phone again on the new server), any other server is kept. Settings version 12, every setting kept. The <code>viewer</code> user can use every control of the Overview tab (start, stop, tank wash, resume); settings and Service stay with <code>admin</code></td></tr>
 <tr><td>3.14</td><td>2026-11-15</td><td>Large screen font (the built-in font at twice its size, three lines of 10 characters) as the default, with the messages reworded to fit; default alert server <code>https://ntfy.hostux.net</code>. The font was withdrawn in 3.15</td></tr>
 <tr><td>3.13</td><td>2026-11-13</td><td>Tank litres: the controller estimates the water in the 100 L tank from the litres it moves (pump out, rinse water in, tank-wash water at an assumed 6 L/min), corrected by the floats (15 L and 90 L marks), and keeps it through a power cut. The header shows a gauge, the litres and a fill/drain arrow, FULL and EMPTY; the W icon is removed and titles are at most 12 characters (shorter Spanish step titles: LAVADO 1/4 ...). Status API: tankL, tankTrend. Unit test test_tank_volume; simulation F21; hardware test H22.</td></tr>

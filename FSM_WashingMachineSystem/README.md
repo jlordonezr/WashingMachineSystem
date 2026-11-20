@@ -1,4 +1,36 @@
-# Reuse Water System – Firmware 3.15 (Wi-Fi)
+# Reuse Water System – Firmware 3.16 (Wi-Fi)
+
+## What's new in 3.16: the app stays connected during a wash
+
+During a wash the app kept saying *The controller took too long to answer* or *Can't reach the controller* and showed *Offline*, although the phone had full signal and the controller was running normally. Measured on the installed controller (3.15):
+
+| | Answer time |
+|---|---|
+| Status request, normal | median 24 ms, slowest 308 ms |
+| Status request while one connection is open and silent (as Safari leaves them) | **4.1 s, every time** |
+| Looking up `reusewater.local` on a Mac | **5.0 s, every time** |
+
+Causes and fixes:
+
+- **The web server waited on silent connections (main cause).** The ESP32 web server serves one connection at a time and waited up to 5 s for a connection that was open but had not sent its request yet. Phones open such connections all the time, so the app's status request (5 s limit) queued behind it. From 3.16 those connections wait in a small waiting room (`HttpConnPool.h`, 4 places) and the server only takes a connection once its request has arrived. A silent one is closed after 5 s without holding anything up. Service shows how many were closed (*Silent connections closed*).
+- **Wi-Fi power saving is off.** The radio no longer sleeps between router beacons (the ESP32-S3 default), which delayed answers and lost mDNS questions. The board is mains powered.
+- **IPv6 is on**, so the controller also answers the IPv6 question for `reusewater.local`. Apple devices waited 5 s for that answer on every lookup. The wrong-password lockout tells IPv6 devices apart (IPAddress turns every IPv6 address into 0).
+- **The status reply is sent straight from its buffer**, without a 2.4 KB copy on the heap for every poll.
+- **New `GET /api/ping`**: `{"ok":true,"uptimeS":…}`, no sign-in needed, to time the controller (`tools/latency_probe.py`).
+- **The app:**
+  - It sends one status request at a time and Refresh no longer cancels it (the extra connections queued on the controller).
+  - A request gives up after 4 s. A failure is retried after 1 s, 2 s, 4 s, then every 8 s.
+  - The badge shows *Reconnecting…* after one failure and *Offline* only after three in a row.
+  - A banner under the app bar says how old the data is, with a *Try again* button.
+  - While the data is not live the readings are greyed out, and the status card says *Not live: last updated … If you need to stop the cycle now, press STOP on the controller.*
+- **Phone locked or app in the background:** the app stops asking and asks at once when shown again, so unlocking the phone no longer gives an error.
+- **Messages appear under the app bar, in the page**, never over the Stop button or its help text (until 3.15 they floated at the bottom). Connection errors go away by themselves when the controller answers again. Polling never shows a message of its own: the banner covers it.
+- **Stop, Reuse and save, Reuse only and Wash tank are never sent twice.** If a command gets no answer, the button keeps waiting (*No answer yet. Checking whether the cycle stopped…*) and the next status readings decide. The app then says *Cycle stopped*, or that the controller has not confirmed it (press STOP on the controller). An answer that times out after the status already confirmed the command no longer shows an error.
+- **Service tab:** *App response time* (last and slowest of the last 30) and *Silent connections closed*.
+- **Two older page bugs found by the browser tests:**
+  - The settings switches (*Viewer user*, *Buzzer*, …) did not change when tapped on the switch itself, only on their label.
+  - *Resume cycle* stayed visible when resuming was not possible (it had expired, or *Start from the dashboard* was off). The controller still refused it.
+- Tests: `tests/test_connpool.cpp` (P1–P7, new) and browser tests **A16–A20** (Reconnecting → Offline → Online, one request at a time, hidden page, message position, Stop with no answer). The browser tests ran on this computer for the first time (112 checks); A13 and A15 were corrected (Playwright waits on a disabled button; the sign-in form is in Spanish until the first status). Nothing in the cycle, valves, pump or interlocks changed.
 
 ## What's new in 3.15: the Large screen font is removed, new default alert server, the viewer can run a wash
 
@@ -35,7 +67,7 @@ The controller's screen is now a **0.96" 128x64 OLED** (SSD1306, I2C) instead of
 - **Two message lines in blue, every message rewritten for them:** each screen says everything at once and nothing changes while you read it (until 3.11 a message came in parts that took turns every 3 s). The second line adds what used to need a page or was missing, for example *Release to start / Hold: reuse only*, *Release to start / Rinse not saved*, *Cycle cancelled / Everything off*, *Tank full / Valve closed*, *System ready / Version 3.13.0*. During steps 1-3 the bottom line is *25 min left* once the times are known. A message with nothing more to say sits alone in the middle (*Cycle resumed*, *Try again*).
 - **Shorter where three parts did not fit:** *No water flow / Check washer* (the phone alert still says to call the installer); *Using tap water / Tank is low* (no minutes in this case; the empty tank icon shows it too); *Low flow / Ends in 9:05* and *Not saving / Ends in 18:42* (the drain is implied).
 - **Same letters:** the four screen fonts and their sizes are as in 3.9; every text still fits the 128 px line in both languages.
-- **Start-up animation:** the same Border Collie chasing a butterfly as before (`BootAnimation.h` and the drawing logic unchanged). On the taller screen the collie runs along the bottom of the blue rows and the butterfly flutters from its head height up into the yellow band, so it turns yellow as it rises. Then *System ready / Version 3.15.0*. START skips it.
+- **Start-up animation:** the same Border Collie chasing a butterfly as before (`BootAnimation.h` and the drawing logic unchanged). On the taller screen the collie runs along the bottom of the blue rows and the butterfly flutters from its head height up into the yellow band, so it turns yellow as it rises. Then *System ready / Version 3.16.0*. START skips it.
 - **Either I2C address:** the screen is found at `0x3C` or `0x3D` (modules with the address jumper moved). The controller now asks the I2C bus whether a screen answers, so a missing screen is reported reliably (the library alone does not notice).
 - **Wiring is the same four wires** (3V3, GND, A4 = SDA, A5 = SCL), but **read the labels on the new module**: the pin order differs between makers. A full frame is 1,024 bytes, about 25 ms at 400 kHz, and is still sent only when something on the screen changes.
 - `tools/check_screen_text.py` fails a message with more than two parts, and checks the two baselines of every font: all glyphs on rows 17-63, and the two lines at least 2 rows apart.
@@ -367,7 +399,7 @@ Only the app page changed (`DashboardPage.h`).
 
 - **Refresh button** in the top bar, next to the connection badge. It cancels any update still waiting and asks the controller again at once. It shows *Refreshing…* while working, and screen readers hear "Screen updated" when it finishes.
 - **No more frozen screen:** every request to the controller now gives up after 5 s (status) or 8 s (actions). Before, one stalled request on weak Wi-Fi could stop all updates until it finished.
-- **Slow updates are visible:** if no update arrives for 6 s, the badge changes to *Updating slowly* (amber), so people know when to press Refresh. After two failed updates it shows *Offline*, as before.
+- **Slow updates are visible:** if no update arrives for 6 s, the badge changes to *Updating slowly* (amber), so people know when to press Refresh. After two failed updates it shows *Offline*, as before. (From 3.16: *Reconnecting…* after one failure, *Offline* after three.)
 - **Fix:** the connection badge and Refresh sit at the right of the top bar again; an earlier change had moved them next to the title.
 
 ## What's new in 2.8: the water history is never lost
@@ -822,7 +854,7 @@ Until 3.11 the screen was 128x32, with the header above a separator line and one
 | State | Header | Message (top / bottom line) |
 |---|---|---|
 | Boot (about 4 s) | — | Start-up animation, full screen: a Border Collie chases a butterfly (`BootAnimation.h`); the collie along the bottom, the butterfly up into the yellow band. START or a tank wash ends it; notices that arrive meanwhile are shown after "System ready" |
-| Boot (2 s) | `REUSE WATER` (`REUSO AGUA`) | System ready / Version 3.15.0 |
+| Boot (2 s) | `REUSE WATER` (`REUSO AGUA`) | System ready / Version 3.16.0 |
 | Idle | `READY` | Start washer / Press START |
 | START pressed / held 2 s | `REUSE & SAVE` / `REUSE ONLY` | Release to start / Hold: reuse only — Release to start / Rinse not saved |
 | START held 15 s | `START BUTTON` | Button stuck / Release START |
@@ -887,7 +919,7 @@ For faster scrolling, raise `SCROLL_SPEED_PX` to 3. Lowering `DISPLAY_FRAME_MS` 
 4. Fill1 switching from tank water to tap water: the wash valve closes within 250 ms.
 5. Fill2 (rinse) and Drain2: the wash valve must stay closed.
 6. Press Stop during any state: the system returns to Idle and the wash valve closes within 250 ms.
-7. Power on: the screen shows the Border Collie chasing a butterfly (about 4 s), then `REUSE WATER / System ready / Version 3.15.0` for 2 s, then `READY / Start washer / Press START`, with no "Cycle complete" message.
+7. Power on: the screen shows the Border Collie chasing a butterfly (about 4 s), then `REUSE WATER / System ready / Version 3.16.0` for 2 s, then `READY / Start washer / Press START`, with no "Cycle complete" message.
 8. During each step, the header shows the right step (`1/4` to `4/4`) and long messages scroll smoothly without jumping.
 9. During the tank-water fill, the tank litres fall and the arrow points down; in step 4, while saving, they rise and the arrow points up.
 10. In Drain2, the countdown decreases every second.

@@ -1,4 +1,4 @@
-# Testing – firmware 3.15
+# Testing – firmware 3.16
 
 **Status on 30 Oct 2026:** every automated suite passes and the firmware builds for the Arduino Nano ESP32 with cores 3.0.7 and 2.0.17. 3.0 has run correctly on the installed system. 3.1 adds languages only; 3.2 renames the app, adds the start-up animation and the Helvetica Bold screen font, and moves the buzzer to D1. 3.3 pages the screen messages and makes phone alerts more reliable. Check H10–H13 on the real board.
 
@@ -14,10 +14,11 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | Phone alerts | `tests/test_ntfy.cpp` | 31 | Topic rules, server address clean-up, JSON body (accents, quotes, `click`), UTF-8-safe cuts, which failures are retried (3.3), retry intervals and the 30 min window (3.3.1) |
 | Estimated tank litres (3.13) | `tests/test_tank_volume.cpp` | 21 | Litres in and out, the wash valve at 6 L/min, 0-100 L limits, the four float corrections (and the exact value when a float changes), the start-up guess from the floats, the fill/drain trend |
 | Screen texts | `tools/check_screen_text.py` | 173 texts and pages | Every screen text, and each page of a paged message, is plain ASCII and fits the 128 px line in both languages in all four screen fonts (3.1; pages from 3.3; one size per font from 3.9). From 3.12 (128x64 screen): at most two parts per message; headers at most 12 characters (3.13); at both baselines every glyph stays on the blue rows 17-63 and the two lines are at least 2 rows apart |
-| Translations | `tools/i18n_keys.py` | 436 texts | Every app text has a Spanish translation (3.1); notes in `web/es.json` (keys starting with `_`, e.g. `_comment`) are not built into the page |
+| Translations | `tools/i18n_keys.py` | 452 texts | Every app text has a Spanish translation (3.1); notes in `web/es.json` (keys starting with `_`, e.g. `_comment`) are not built into the page |
 | Water history and settings storage | `tests/test_history.cpp` | 57 | Backup copy, unreadable records, migration, restore validation (since 2.8); settings version 7 → 8, the screen font and the minimum save flow (3.4); settings versions 10 and 11 → 12: the Large font of 3.14 becomes Hyperlegible, a chosen font is kept, the old default alert server moves to the new one and any other server is kept (3.15); cycle snapshot and the 3.9 marker (3.10); the sign-in key in flash (3.11) |
 | Full-cycle simulation | `tests/sim/` | 18 scenarios | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |
-| Dashboard | `tests/app/test_dashboard.js` | 38 | The real page in headless Chromium against a mock controller; axe-core accessibility on all tabs (3.0) |
+| Dashboard | `tests/app/test_dashboard.js` | 112 | The real page in headless Chromium against a mock controller; axe-core accessibility on all tabs (3.0); connection faults: a mock that hangs or drops the connection (3.16). Needs Node.js and Playwright; on this Mac a portable copy was used (`NODE_PATH` to its `node_modules`) |
+| Web connections (3.16) | `tests/test_connpool.cpp` | 15 | `HttpConnPool.h`: a silent connection never holds up a request behind it (P1), silent ones closed after 5 s (P2), closed ones removed (P3), oldest request first (P4), full pool closes the oldest (P5), no copy kept after serving (P6), `millis()` wrap (P7) |
 | Build | `arduino-cli compile --fqbn esp32:esp32:nano_nora` | — | 3.2.0: 1,368,305 bytes flash, 95,156 bytes RAM with core 3.3.12 (3.0.0: 1,301,277 / 72,624 with core 3.0.7) |
 
 ### Simulation scenarios
@@ -61,6 +62,11 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | A13 | Two start buttons: *Reuse and save* sends `save=1`, *Reuse only* `save=0`; the Reuse only note and *Final drain* (3.7) |
 | A14 | Resume popup (3.10): shown once after a cut, names the step, *Reuse only* and the minutes left; *Not now* keeps a Resume button on the notice; Resume (popup or notice) calls `/api/interrupted/resume`; *Don't resume* dismisses; closes when the offer expires; offered to the viewer too (3.15); not shown with *Start from the dashboard* off; Spanish |
 | A15 | Sign-in form (3.11): only the form while the controller answers 401; *Remember this device* on and user `admin` by default; a wrong password is reported; the right one sends `remember=1` and shows the app; *Sign out other devices* sends `all=1` and keeps this device signed in; *Sign out* returns to the form and the badge reads *Signed out* (no Offline) |
+| A16 | Online → *Reconnecting…* after one failure → *Offline* after three → Online again; the last data stays, greyed out, with its age and the STOP advice; no toast at any time; retries back off (3.16) |
+| A17 | One status request at a time: Refresh while one hangs starts no second one and shows *Refreshing…*; after the 4 s limit exactly one retry (3.16) |
+| A18 | Hidden page (phone locked): no requests and no error for 20 s; shown again: one request at once (3.16) |
+| A19 | On a phone-sized screen an error message is in the page (not floating) and covers neither Stop nor its help; a "can't reach" error clears when the controller answers again (3.16) |
+| A20 | A Stop with no answer is sent once, the app says it is checking, and confirms it from the status; a request that times out after the status confirmed it shows no error (3.16) |
 
 ## What the PC tests cannot show
 
@@ -86,6 +92,7 @@ Do these with the washing machine empty and someone at the controller. Note each
 | H20 | Sign in once (3.11) | On a phone: open the app, sign in with *Recordar este dispositivo* on. Close the browser completely (and restart the phone), open the app again. Then, on a second phone, sign in; on the first, Settings → *Cerrar sesión en otros dispositivos* | Asked once only; after the restart the app opens straight to Overview. The second phone shows the sign-in form at its next refresh; the first stays signed in. The browser's own password box never appears |
 | H21 | New 128x64 screen and messages (3.12) | Fit the yellow/blue screen (labels on the module: VCC → 3V3, GND → GND, SDA → A4, SCL → A5), flash 3.12, power on. Run one wash. Open Service → Loop time | Animation: the collie gallops along the bottom of the blue rows and the butterfly flutters up into the yellow band, turning yellow; nothing looks broken where it crosses the gap between yellow and blue. `LISTO` and the two icons in yellow; *Inicie lavadora* and *y pulse START* on two blue lines, nothing cut off at the yellow/blue gap. Every message is on two lines (or one, centred) and stays still; nothing is cut off. Service shows the screen as working; the longest loop pass stays under 100 ms |
 | H22 | Tank litres (3.13) | Note the litres in the header. Run a wash with tank water; watch the header in step 1 and in step 4. Then check the tank with a ruler or by eye | Step 1: the litres fall and the arrow points down while the pump runs; step 4: they rise and the arrow points up; `FULL` when the high float is wet. The estimate is close to the real tank (within about 10 L); if not, measure where the floats sit and set `TANK_LOW_MARK_L` / `TANK_HIGH_MARK_L` |
+| H23 | App during a wash (3.16) | On the iPhone, at `http://reusewater.local`: start a wash and keep the app open on Overview through all four steps. Lock the phone for 2 min in step 1 and in step 3, unlock and return to Safari. Meanwhile on a computer: `python3 tools/latency_probe.py --minutes 70 --idle 2` | Badge stays *Online* (at most a brief *Updating…* after unlocking, no error message); probe: name lookup under 1 s, no answer over 300 ms, 0 failed; Service → *App response time* under 300 ms |
 | H8 | Manual tank wash | Ready with the low float wet, **Wash tank**, then lift the high float | Wash valve (D0) closes at once; screen `TANK CLEANED`; event *Manual tank wash ended: full* |
 | H10 | Spanish screen (3.1) | Run one wash in Spanish; read every screen | Every text readable, nothing scrolls or is cut off; alerts arrive with accents |
 | H9 | Setup page | Hold STOP 5 s at `READY`; join with the key shown; browse to `/update` | Key works; `/update` is not offered (setup page only) |
@@ -135,6 +142,9 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 | 2026-11-15 | 3.14.0 | PC tests, firmware build, upload | All suites passed; uploaded to the installed controller over Wi-Fi. Large screen font; withdrawn in 3.15 |
 | 2026-11-15 | 3.15.0 | PC tests, firmware build | All suites pass, `test_history` S10 and S11 and `test_auth` R1 included (177 screen texts and pages; browser tests skipped: no Node.js on this Mac, so the changed A10 and A14 have not run) |
 | — | 3.15.0 | Hardware: screen back to two lines in Hyperlegible; test alert through `https://ntfy.hostux.net`; H16 with the viewer starting and stopping | Not done yet |
+| 2026-11-20 | 3.15.0 | Measured on the installed controller, from a Mac on the home Wi-Fi | Status answer median 24 ms, slowest 308 ms; with one silent connection open **4.1 s every time**; `reusewater.local` lookup **5.0 s every time** (no IPv6 answer). Cause of the app's timeouts during washes |
+| 2026-11-20 | 3.16.0 | PC tests, firmware build | All suites pass, `test_connpool` P1–P7 and browser tests A1–A20 with axe-core (112 checks, first run on this Mac; existing A13/A15 assumptions corrected, A12 and A14 found two page bugs) |
+| — | 3.16.0 | Hardware H23 (app during a wash, iPhone, lock and unlock) | Not done yet |
 | 2026-10-30 | 3.1.0 | PC tests | All suites pass (see `tests/test_results.txt`) |
 | — | 3.1.0 | Hardware H10 | Not done yet |
 | 2026-10-30 | 3.0.0 | Jose, installed system | Working as expected |

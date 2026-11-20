@@ -38,8 +38,9 @@ h1.brand{margin:0 auto 0 0}
 #headline{color:var(--ink)}
 .ferr{grid-column:1/-1;margin:0;color:var(--danger);font-size:0.8125rem;font-weight:500}
 .ferr[hidden]{display:none}
+.btn[hidden]{display:none}   /* .btn sets display, which would show a hidden button (Resume, 3.16) */
 .inp:has(input[aria-invalid=true]){border-color:var(--danger);border-width:2px}
-#toast .dismiss{margin-left:12px;background:none;border:1px solid currentColor;color:inherit;border-radius:6px;padding:4px 10px;font:inherit;cursor:pointer;pointer-events:auto}
+.msgs .dismiss{margin-left:auto;background:none;border:1px solid currentColor;color:inherit;border-radius:6px;padding:4px 10px;font:inherit;cursor:pointer;pointer-events:auto}
 
 /* App bar */
 .bar{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);
@@ -244,7 +245,7 @@ legend+*{clear:both}
 .inp em{font-style:normal;color:var(--muted);font-size:0.8125rem;padding:0 12px;border-left:1px solid var(--line);align-self:stretch;display:flex;align-items:center;background:var(--sunken)}
 .switch{justify-self:end;position:relative;width:46px;height:28px}
 .switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
-.switch i{position:absolute;inset:0;border-radius:999px;background:var(--line-strong);transition:background .15s}
+.switch i{position:absolute;inset:0;border-radius:999px;background:var(--line-strong);transition:background .15s;pointer-events:none}   /* taps reach the checkbox under it */
 .switch i::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s}
 .switch input:checked+i{background:var(--primary)}
 .switch input:checked+i::after{transform:translateX(18px)}
@@ -260,12 +261,23 @@ dialog::backdrop{background:rgba(8,20,19,.45)}
 dialog h3{margin:0 0 8px;font-size:1.125rem}
 dialog p{margin:0 0 18px;color:var(--muted)}
 dialog .actions{justify-content:flex-end}
-#toast{display:flex;align-items:center;position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0));transform:translateX(-50%);
-  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:var(--r-ctl);font-size:0.875rem;max-width:calc(100% - 32px);
-  opacity:0;pointer-events:none;transition:opacity .2s}
+/* Messages (3.16): one line under the app bar, in the page flow, so they never
+   cover a control (until 3.15 they floated over the Stop help text). */
+.msgs{max-width:1040px;margin:0 auto;padding:0 20px}
+.msgs:has(> :not([hidden]):not(:empty)){padding-bottom:8px}
+#toast,.conn-banner{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 14px;border-radius:var(--r-ctl);font-size:0.875rem}
+#toast{background:var(--ink);color:var(--bg)}
 #toast:empty{display:none}
-#toast.show{opacity:1}
 #toast.err{background:var(--danger);color:#fff}
+#toast+.conn-banner:not([hidden]),.conn-banner:not([hidden])+#toast:not(:empty){margin-top:6px}
+.conn-banner{background:var(--warn-soft);color:var(--warn-ink)}
+.conn-banner.off{background:var(--danger);color:#fff}
+.conn-banner[hidden]{display:none}
+/* Data that is not live (3.16): readings greyed out, controls unchanged. */
+.stale-note{margin:8px 0 0;font-size:0.875rem;font-weight:500;color:var(--warn-ink)}
+.stale-note[hidden]{display:none}
+body.stale #view-overview .status-top,body.stale #headline,body.stale #timing,body.stale #steps,body.stale #view-overview .tank,
+body.stale #view-water .panel,body.stale #view-service dl{opacity:.6}
 footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;color:var(--muted)}
 @media (forced-colors:active){
   nav.tabs button{border-bottom-style:none;padding-bottom:12px}
@@ -293,6 +305,10 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     <button type="button" class="refresh" id="btnSignOut" aria-label="Sign out" title="Sign out">
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11l3-3-3-3M13.5 8H6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
+  </div>
+  <div class="msgs">
+    <div id="toast"></div>
+    <div class="conn-banner" id="connBanner" hidden><span id="connBannerText"></span><button type="button" class="dismiss" id="connRetry">Try again</button></div>
   </div>
   <div id="announce" class="sr-only" aria-live="polite"></div>
   <div id="announceAlert" class="sr-only" role="alert"></div>
@@ -334,6 +350,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
         </div>
         <h2 id="headline">Ready for the next wash</h2>
         <p id="timing" class="num"></p>
+        <p class="stale-note" id="staleNote" hidden></p>
         <div id="ready" hidden>
           <p id="readyText"></p>
         </div>
@@ -533,6 +550,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
         <div><dt>Screen</dt><dd id="dScreen">—</dd></div>
         <div><dt>Slowest loop pass</dt><dd id="dLoop" class="num">—</dd></div>
         <div><dt>Memory</dt><dd id="dHeap" class="num">—</dd></div>
+        <div><dt>App response time</dt><dd id="dResp" class="num">—</dd></div>
+        <div><dt>Silent connections closed</dt><dd id="dIdle" class="num">—</dd></div>
       </dl>
     </section>
     <section class="panel wide" aria-labelledby="h-events">
@@ -621,7 +640,6 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       </div>
     </form>
   </div>
-  <div id="toast"></div>
 </main>
 <footer id="foot"></footer>
 
@@ -662,7 +680,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
 (function(){
   var $=function(id){return document.getElementById(id)};
   var TABS=['overview','water','service','settings'];
-  var last=null,failures=0,formLoaded=false,pending=null,pendingSave=true,pendingWash=false,toastTimer=null,offline=false,connShown='';
+  var last=null,failures=0,formLoaded=false,pending=null,pendingSave=true,pendingWash=false,toastTimer=null,connShown='';
   // Actions are reported as done only when the controller's status shows them (3.0).
   var pendingSince=0,washSince=0,alertWait=null,CONFIRM_MS=10000,ALERT_WAIT_MS=120000;
 
@@ -720,9 +738,13 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     var el=$(urgent?'announceAlert':'announce');el.textContent='';
     setTimeout(function(){el.textContent=text},50);
   }
-  // Visible message. Successes fade after 4 s; errors stay until dismissed.
-  function toast(msg,err){
-    var el=$('toast');clearTimeout(toastTimer);el.textContent='';
+  // Visible message under the app bar, one at a time (a new one replaces the
+  // last). Successes fade after 4 s; errors stay until dismissed, except
+  // "can't reach the controller" errors, which go away by themselves as soon as
+  // the controller answers again (3.16).
+  var toastNet=false;
+  function toast(msg,err,net){
+    var el=$('toast');clearTimeout(toastTimer);el.textContent='';toastNet=!!(err&&net);
     el.appendChild(document.createTextNode(msg));
     if(err){var b=document.createElement('button');b.type='button';b.className='dismiss';b.textContent=t('Dismiss');
       b.onclick=function(){el.className='';el.textContent=''};el.appendChild(b);}
@@ -730,6 +752,8 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     announce(msg,err);
     if(!err)toastTimer=setTimeout(function(){el.className='';el.textContent=''},4000);
   }
+  function toastErr(e){toast(e.message,true,e.net)}
+  function clearNetToast(){if(toastNet){toastNet=false;$('toast').className='';$('toast').textContent='';}}
   // aria-disabled keeps the button focusable and its reason readable (A8, A13).
   function setDis(el,on){el.setAttribute('aria-disabled',on?'true':'false')}
   function isDis(el){return el.getAttribute('aria-disabled')==='true'}
@@ -747,9 +771,12 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
         }
         return j;
       });
-    },function(e){
-      if(e&&e.name==='AbortError')throw new Error(t('The controller took too long to answer. Try Refresh.'));
-      throw new Error(t('Can\u2019t reach the controller. Check that this device is on the home Wi-Fi.'));
+    }).catch(function(e){
+      if(e&&e.status)throw e;                         // the controller answered with an error
+      // No answer (net): the request may or may not have reached the controller.
+      var err=new Error(e&&e.name==='AbortError'?t('The controller took too long to answer. Try Refresh.'):
+        t('Can\u2019t reach the controller. Check that this device is on the home Wi-Fi.'));
+      err.net=true;throw err;
     }).finally(function(){clearTimeout(timer)});
   }
   function ask(title,body,ok){
@@ -1037,7 +1064,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     var d=$('resumeDlg');if(d.open)d.close();
     api('/api/interrupted/resume',{method:'POST'}).then(function(){
       $('intrPanel').hidden=true;toast(t('Cycle resumed'));poll();
-    }).catch(function(e){toast(e.message,true)});
+    }).catch(function(e){toastErr(e)});
   }
 
   // Service tab: event log, fetched every 5 s while the tab is open.
@@ -1143,6 +1170,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     }
     $('dScreen').textContent=s.screen===false?t('Not found: check its wiring'):t('Working');
     if(s.loop)$('dLoop').textContent=t('{0} ms (last minute: {1} ms)',s.loop.maxMs,s.loop.lastMinMaxMs);
+    if(s.web)$('dIdle').textContent=s.web.idleDropped;   // 3.16
     if(s.heap)$('dHeap').textContent=t('{0} KB free (lowest {1} KB)',Math.round(s.heap.free/1024),Math.round(s.heap.min/1024));
     $('dLastAlert').textContent=!s.alert||!s.alert.seq?t('None since start-up'):(s.alert.ok?t('Delivered'):t('Failed: {0}',alertCodeText(s.alert.code)));
     syncBackup(s);
@@ -1153,43 +1181,95 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     $('dIp').textContent=s.wifi.ip;$('dUptime').textContent=uptime(s.uptimeS);
     $('dAlerts').textContent=s.alerts?t('On'):t('Off');$('dFw').textContent=s.fw;
 
-    if(offline){offline=false;announce(t('Connected to the controller again'));}
+    setConn('online');
     $('conn').className='badge on';
     var ct=t('Online')+(s.time?', '+s.time.slice(11):'');
     if(ct!==connShown){connShown=ct;$('connText').textContent=ct;}
     $('foot').textContent=t('Updated {0}',new Date().toLocaleTimeString(locale()));
   }
 
-  // Status updates every 2 s. Refresh cancels a request that is still waiting
-  // and asks again at once.
-  var pollTimer=null,pollCtrl=null,lastOk=0,manualRefresh=false;
+  // ── Connection (3.16) ──
+  // One status request at a time: the next one is scheduled only when the last
+  // one has answered or given up, and Refresh never cancels it (until 3.15 it
+  // did, and the extra connections queued up on the controller). A failed
+  // request is tried again sooner (1 s, 2 s, 4 s, then every 8 s); the badge
+  // says Reconnecting after the first failure and Offline after three in a row.
+  // The last good data stays on screen, greyed out and labelled with its age.
+  // Polling pauses while the page is hidden (phone locked, another app open)
+  // and asks at once when it is shown again.
+  var POLL_MS=2000,POLL_TIMEOUT_MS=4000,OFFLINE_AFTER=3,BACKOFF=[1000,2000,4000,8000];
+  var pollTimer=null,pollCtrl=null,lastOk=0,manualRefresh=false,connState='connecting',respMs=[];
+  var CONN={connecting:['badge','Connecting'],updating:['badge slow','Updating\u2026'],slow:['badge slow','Updating slowly'],
+    reconnecting:['badge slow','Reconnecting\u2026'],offline:['badge off','Offline']};
   function setRefreshing(on){
     var b=$('btnRefresh');b.setAttribute('aria-busy',on?'true':'false');$('refreshText').textContent=on?t('Refreshing\u2026'):t('Refresh');
   }
+  function ago(ms){var s=Math.max(0,Math.round(ms/1000));return s<60?t('{0} s ago',s):t('{0} min ago',Math.floor(s/60))}
+  // online is drawn by render(), with the controller's time.
+  function setConn(st){
+    if(signedOut)return;
+    var was=connState;connState=st;
+    if(st!=='online'){var c=CONN[st];$('conn').className=c[0];connShown=c[1];$('connText').textContent=t(c[1]);}
+    if(st==='offline'&&was!=='offline')announce(t('Connection to the controller lost'),true);
+    if(st==='online'&&(was==='offline'||was==='reconnecting'))announce(t('Connected to the controller again'));
+    showStale();
+  }
+  // Says how old the data on screen is whenever it is not live.
+  function showStale(){
+    var st=connState,stale=!!last&&(st==='reconnecting'||st==='offline'||st==='updating'),lost=st==='reconnecting'||st==='offline';
+    document.body.classList.toggle('stale',stale);
+    var b=$('connBanner');b.hidden=!lost;b.className='conn-banner'+(st==='offline'?' off':'');
+    if(lost)$('connBannerText').textContent=(st==='offline'?t('Offline: can\u2019t reach the controller. Check that this device is on the home Wi-Fi.'):
+      t('Reconnecting to the controller\u2026'))+(lastOk?' '+t('Showing data from {0}.',ago(Date.now()-lastOk)):'');
+    var n=$('staleNote');n.hidden=!stale;
+    if(stale)n.textContent=t('Not live: last updated {0}.',ago(Date.now()-lastOk))+
+      (last.state!==0?' '+t('If you need to stop the cycle now, press STOP on the controller.'):'');
+  }
+  function noteResponse(ms){
+    respMs.push(ms);if(respMs.length>30)respMs.shift();
+    $('dResp').textContent=t('{0} ms (slowest of the last {1}: {2} ms)',ms,respMs.length,Math.max.apply(null,respMs));
+  }
+  function schedule(ms){
+    clearTimeout(pollTimer);pollTimer=null;
+    if(!signedOut&&!document.hidden)pollTimer=setTimeout(poll,ms);
+  }
   function poll(){
-    clearTimeout(pollTimer);
-    if(pollCtrl)pollCtrl.abort();
-    var ctrl=new AbortController(),manual=manualRefresh;pollCtrl=ctrl;manualRefresh=false;
-    api('/api/status',{controller:ctrl,timeoutMs:5000}).then(function(s){
+    clearTimeout(pollTimer);pollTimer=null;
+    if(pollCtrl||signedOut||document.hidden)return;   // one at a time; hidden: resumes on visibilitychange
+    var ctrl=new AbortController(),t0=Date.now();pollCtrl=ctrl;
+    api('/api/status',{controller:ctrl,timeoutMs:POLL_TIMEOUT_MS}).then(function(s){
       if(pollCtrl!==ctrl)return;
-      failures=0;lastOk=Date.now();render(s);
-      if(manual)announce(t('Screen updated'));
+      noteResponse(Date.now()-t0);
+      failures=0;lastOk=Date.now();
+      render(s);clearNetToast();
+      if(manualRefresh){if($('toast').textContent)announce(t('Screen updated'));else toast(t('Screen updated'));}   // never hides a message from render()
     }).catch(function(e){
-      if(pollCtrl!==ctrl)return;                      // replaced by a newer request
+      if(pollCtrl!==ctrl)return;                      // given up because the page was hidden
       if(e.status===401)return;                       // the sign-in form is shown
-      if(manual)toast(e.message,true);
-      if(++failures>=2&&!offline){offline=true;$('conn').className='badge off';connShown='Offline';$('connText').textContent=t('Offline');
-        announce(t('Connection to the controller lost'),true);
-        $('foot').textContent=t('Can\u2019t reach the controller. Check that this device is on the home Wi-Fi.');}
+      failures++;
+      setConn(failures>=OFFLINE_AFTER?'offline':'reconnecting');
+      if(manualRefresh)announce(t('Still no answer from the controller. Trying again.'),true);
     }).finally(function(){
       if(pollCtrl!==ctrl)return;
-      pollCtrl=null;setRefreshing(false);if(!signedOut)pollTimer=setTimeout(poll,2000);
+      pollCtrl=null;manualRefresh=false;setRefreshing(false);
+      schedule(failures?BACKOFF[Math.min(failures,BACKOFF.length)-1]:POLL_MS);
     });
   }
-  $('btnRefresh').addEventListener('click',function(){
-    manualRefresh=true;setRefreshing(true);poll();
+  // Refresh: asks now, or waits for the request already on its way.
+  function refreshNow(){manualRefresh=true;setRefreshing(true);poll();}
+  $('btnRefresh').addEventListener('click',refreshNow);
+  $('connRetry').addEventListener('click',refreshNow);
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden){                              // phone locked or another app: stop asking
+      clearTimeout(pollTimer);pollTimer=null;
+      if(pollCtrl){var c=pollCtrl;pollCtrl=null;c.abort();}
+      manualRefresh=false;setRefreshing(false);return;
+    }
+    if(lastOk&&Date.now()-lastOk>POLL_MS*3&&(connState==='online'||connState==='slow'))setConn('updating');
+    poll();
   });
-  // Show when updates are late, so people know when Refresh helps.
+  window.addEventListener('pageshow',function(e){if(e.persisted)poll()});   // back from the browser's page cache
+  window.addEventListener('online',function(){poll()});                      // the phone's network came back
   function alertCodeText(c){return c===-100?t('no Wi-Fi'):c===-101?t('bad server address'):c<0?t('could not connect'):c===429?t('too many alerts, try again later'):c===400||c===404?t('the server refused the topic'):c===401||c===403?t('the server needs a login'):t('server answered {0}',c)}
   setInterval(function(){
     var now=Date.now();
@@ -1204,11 +1284,20 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     if(alertWait&&now-alertWait.since>ALERT_WAIT_MS){
       toast(t('No answer from the alert server yet. Recent events on the Service tab will show the result.'),true);alertWait=null;
     }
-    if(offline||!lastOk||signedOut)return;
-    if(Date.now()-lastOk>6000&&connShown!=='Updating slowly'){
-      $('conn').className='badge slow';connShown='Updating slowly';$('connText').textContent=t('Updating slowly');
-    }
+    if(signedOut||!lastOk)return;
+    if(connState==='online'&&pollCtrl&&now-lastOk>6000)setConn('slow');   // a request is taking long
+    showStale();                                                         // keeps "x s ago" current
   },1000);
+
+  // A command that got no answer may still have reached the controller (3.16).
+  // It is never sent again: the button keeps waiting, and the next status
+  // readings decide within CONFIRM_MS, then say done or "not confirmed". An
+  // answer that arrives after the status already confirmed it is ignored.
+  function commandFailed(e,kind,unanswered){
+    if(pending!==kind)return;                          // already confirmed (or replaced)
+    if(e.net){pendingSince=Date.now();toast(unanswered);return;}
+    pending=null;if(last)setControls(last);toastErr(e);
+  }
 
   // Two ways to start (3.7): "Reuse and save" (normal cycle) and "Reuse only"
   // (step 4 sends the rinse water to the drain). Both reuse tank water in step 1.
@@ -1225,7 +1314,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
         pendingSince=Date.now();
         var body=new URLSearchParams();body.append('save',save?'1':'0');
         api('/api/start',{method:'POST',body:body}).then(function(){announce(t('Start sent, waiting for the controller'))})
-          .catch(function(e){pending=null;if(last)setControls(last);toast(e.message,true)});
+          .catch(function(e){commandFailed(e,'start',t('No answer yet. Checking whether the cycle started\u2026'))});
       });
   }
   $('btnStart').addEventListener('click',function(){startCycle(this,true)});
@@ -1234,12 +1323,12 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     if(isDis(this))return;
     pending='stop';pendingSince=Date.now();if(last)setControls(last);
     api('/api/stop',{method:'POST'}).then(function(){announce(t('Stop sent, waiting for the controller'))})
-      .catch(function(e){pending=null;if(last)setControls(last);toast(e.message,true)});
+      .catch(function(e){commandFailed(e,'stop',t('No answer yet. Checking whether the cycle stopped\u2026'))});
   });
 
   $('btnRestore').addEventListener('click',function(){
     var b=readBackup();if(!b)return;
-    restoreHistory(b,false).catch(function(e){toast(e.message,true)});
+    restoreHistory(b,false).catch(function(e){toastErr(e)});
   });
   $('btnDownload').addEventListener('click',function(){
     api('/api/history').catch(function(){return readBackup()}).then(function(h){
@@ -1253,7 +1342,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     });
   });
   function dismissIntr(){
-    api('/api/interrupted/dismiss',{method:'POST'}).then(function(){$('intrPanel').hidden=true}).catch(function(e){toast(e.message,true)});
+    api('/api/interrupted/dismiss',{method:'POST'}).then(function(){$('intrPanel').hidden=true}).catch(function(e){toastErr(e)});
   }
   $('btnIntrOk').addEventListener('click',dismissIntr);
   $('btnIntrResume').addEventListener('click',resumeCycle);
@@ -1281,7 +1370,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   });
   // Password prompt
   $('pwStop').addEventListener('click',function(){pending='stop';pendingSince=Date.now();
-    api('/api/stop',{method:'POST'}).catch(function(e){pending=null;toast(e.message,true)})});
+    api('/api/stop',{method:'POST'}).catch(function(e){commandFailed(e,'stop',t('No answer yet. Checking whether the cycle stopped\u2026'))})});
   $('pwForm').addEventListener('submit',function(e){
     e.preventDefault();
     var w=$('pwWeb').value,o=$('pwOta').value,err=$('pwErr'),bad='';
@@ -1315,7 +1404,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
             if(c.screenFont!==undefined&&c.screenFontCount===4)b.append('screenFont',c.screenFont);
             b.append('allowRemoteStart',c.allowRemoteStart?'1':'0');b.append('buzzerOn',c.buzzerOn?'1':'0');
             return api('/api/settings',{method:'POST',body:b}).then(function(nc){fill(nc);toast(t('Water history and settings restored'))});
-          }).catch(function(e){toast(e.message,true)});
+          }).catch(function(e){toastErr(e)});
         });
     });
   });
@@ -1325,7 +1414,10 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     var stopping=last.manualWash;
     pendingWash=true;washSince=Date.now();setWash(last);
     api(stopping?'/api/wash/stop':'/api/wash',{method:'POST'})
-      .catch(function(e){pendingWash=false;setWash(last);toast(e.message,true)});
+      .catch(function(e){
+        if(!pendingWash)return;                        // already confirmed by the status
+        if(e.net){washSince=Date.now();toast(t('No answer yet. Checking with the controller\u2026'));return;}
+        pendingWash=false;setWash(last);toastErr(e)});
   });
 
   function showTab(name,focus){
@@ -1335,7 +1427,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       tb.setAttribute('tabindex',n===name?'0':'-1');$('view-'+n).hidden=(n!==name);
     });
     if(focus)$('tab-'+name).focus();
-    if(name==='settings'&&!formLoaded){api('/api/settings').then(function(c){fill(c);formLoaded=true}).catch(function(e){toast(e.message,true)});}
+    if(name==='settings'&&!formLoaded){api('/api/settings').then(function(c){fill(c);formLoaded=true}).catch(function(e){toastErr(e)});}
   }
   $('tab-overview').addEventListener('click',function(){showTab('overview')});
   $('tab-water').addEventListener('click',function(){showTab('water')});
@@ -1397,19 +1489,19 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     body.append('buzzerOn',form.buzzerOn.checked?'1':'0');
     setDis($('btnSave'),true);
     api('/api/settings',{method:'POST',body:body}).then(function(c){fill(c);toast(t('Settings saved'))})
-      .catch(function(e){toast(e.message,true)}).finally(function(){setDis($('btnSave'),false)});
+      .catch(function(e){toastErr(e)}).finally(function(){setDis($('btnSave'),false)});
   });
   $('btnTest').addEventListener('click',function(){
     var seq=last&&last.alert?last.alert.seq:null;
     api('/api/test-alert',{method:'POST'}).then(function(){
       toast(t('Test alert handed to the controller. Waiting for the alert server\u2026'));
       if(seq!==null)alertWait={seq:seq,since:Date.now()};
-    }).catch(function(e){toast(e.message,true)});
+    }).catch(function(e){toastErr(e)});
   });
   $('btnRestart').addEventListener('click',function(){
     ask(t('Restart the controller?'),t('The dashboard reconnects in about 20 seconds. Restarting is only possible while no cycle is running.'),t('Restart')).then(function(ok){
       if(!ok)return;
-      api('/api/restart',{method:'POST'}).then(function(){toast(t('Restarting'))}).catch(function(e){toast(e.message,true)});
+      api('/api/restart',{method:'POST'}).then(function(){toast(t('Restarting'))}).catch(function(e){toastErr(e)});
     });
   });
 
@@ -1423,6 +1515,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     ['resumeDlg','pwDlg','dlg'].forEach(function(id){var d=$(id);if(d.open)d.close()});
     document.body.classList.add('signedout');$('loginView').hidden=false;
     $('conn').className='badge';connShown='Signed out';$('connText').textContent=t('Signed out');
+    $('connBanner').hidden=true;document.body.classList.remove('stale');
     $('foot').textContent='';
     var u=$('lgUser'),p=$('lgPass');p.value='';
     setTimeout(function(){(u.value?p:u).focus()},0);
@@ -1444,13 +1537,13 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       .finally(function(){setDis(btn,false)});
   });
   $('btnSignOut').addEventListener('click',function(){
-    api('/api/logout',{method:'POST'}).then(function(){showLogin();toast(t('Signed out'))}).catch(function(e){toast(e.message,true)});
+    api('/api/logout',{method:'POST'}).then(function(){showLogin();toast(t('Signed out'))}).catch(function(e){toastErr(e)});
   });
   $('btnSignOutAll').addEventListener('click',function(){
     ask(t('Sign out other devices?'),t('Every other phone and computer must sign in again with the password. This device stays signed in.'),t('Sign out other devices')).then(function(ok){
       if(!ok)return;
       var body=new URLSearchParams();body.append('all','1');
-      api('/api/logout',{method:'POST',body:body}).then(function(){toast(t('Other devices signed out'))}).catch(function(e){toast(e.message,true)});
+      api('/api/logout',{method:'POST',body:body}).then(function(){toast(t('Other devices signed out'))}).catch(function(e){toastErr(e)});
     });
   });
 

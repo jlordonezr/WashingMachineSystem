@@ -50,7 +50,8 @@ g++ -std=c++17 -O1 -Wall -Istubs test_history.cpp stubs/GreyWaterSettings.cpp -o
 | `test_history.cpp` | Water history storage in `GreyWaterSettings.cpp` against a simulated flash store: survives restarts, recovers from the backup copy, keeps unreadable records, upgrades old records, restores from the app, refuses invalid backups (20 checks, including the upgrade from the 2.3–2.8 format) |
 | `test_ntfy.cpp` | `Ntfy.h`: alert topic rules, server address clean-up, JSON body, UTF-8-safe cuts, retry rule (3.3) |
 | `test_level.cpp` | `TankLevel.h`: debouncing towards the safe reading, bobbing float, failed low float, fault timing, millis() wrap (3.0) |
-| `app/test_dashboard.js` | The real `web/dashboard.html` against a mock controller: confirm-before-success, timeouts, float fault, alert results, Service tab, accessibility (3.0) |
+| `app/test_dashboard.js` | The real `web/dashboard.html` against a mock controller: confirm-before-success, timeouts, float fault, alert results, Service tab, accessibility (3.0); connection faults: Reconnecting/Offline, one request at a time, hidden page, message position, unanswered Stop (A16–A20, 3.16) |
+| `test_connpool.cpp` | `HttpConnPool.h`: a silent web connection never holds up the requests behind it (3.16) |
 | `test_flow.cpp` | 12 unit tests (T01–T12), 9 cycle scenarios (S1–S8), 5 "machine is filled" guard tests (S9–S13) and 5 pump-protection tests (P1–P5), 52 checks in total |
 
 ## Test cases
