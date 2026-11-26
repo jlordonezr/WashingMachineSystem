@@ -8,7 +8,7 @@
 
 extern const uint16_t BEEP_DONE[];    // two short beeps: cycle finished
 extern const uint16_t BEEP_ALARM[];   // three long beeps: something needs attention
-extern const uint16_t BEEP_TICK[];    // one short beep: START held long enough for "Reuse only"
+extern const uint16_t BEEP_TICK[];    // one short beep: a START press counted (start, mode switch, 3.17)
 void beep(const uint16_t* pattern);   // non-blocking; silent unless the buzzer is on in Settings
 void buzzerUpdate();                  // call every loop() pass
 

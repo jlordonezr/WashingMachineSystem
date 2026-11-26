@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.16
+# Communication protocol – firmware 3.17
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s, one request at a time and only while the page is shown (3.16), and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -79,7 +79,7 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `typicalS` | [3] | Typical duration of steps 1–3 on this machine, s (0 = not learned) |
 | `manualWash`, `manualWashLeftS`, `manualWashMaxMin`, `manualWashResult` | | Manual wash state; result `full` / `timeout` / `stopped` / `cycle` |
 | `tankAgeH`, `tankMaxAgeH` | number | Age of the oldest tank water (−1 empty/unknown), limit |
-| `cycle`, `month`, `prevMonth`, `total`, `last` | objects | Water statistics, litres (`tap`, `reused`, `saved`, `cycles`); `cycle.noSave` is true while a *Reuse only* cycle runs (3.7) |
+| `cycle`, `month`, `prevMonth`, `total`, `last` | objects | Water statistics, litres (`tap`, `reused`, `saved`, `cycles`); `cycle.noSave` is true while a *Reuse only* cycle runs (3.7); from 3.17 START on the controller can switch it while starting and in steps 1-3, so it can change during a cycle (fixed from step 4) |
 | `history` | object | `source` (where the history was loaded from), `hasData` |
 | `interrupted` | object | `active`, `step` (0 = before step 1, else 1–4), `epoch` of the last cycle cut short (time of its last snapshot, 0 if the clock was not set); 3.10: `noSave` (it was *Reuse only*), `resume` (`/api/interrupted/resume` would be accepted now, ignoring the Settings switch), `resumeLeftS` (seconds left to resume, 0 when `resume` is false) |
 | `boot` | string | Last restart reason |

@@ -1,4 +1,31 @@
-# Reuse Water System – Firmware 3.16 (Wi-Fi)
+# Reuse Water System – Firmware 3.17 (Wi-Fi)
+
+## What's new in 3.17: one press of START starts the wash, more presses change the mode
+
+No holding and no waiting. This replaces the press-and-hold choice of 3.8.
+
+| START on the panel | What happens | Screen for about 3 s (ES) |
+|---|---|---|
+| At `READY`, one press | The cycle starts **at once** in **Reuse and save** | `REUSE & SAVE` › *Press START › to change* (`REUSO+AHORRO` › *Pulse START › para cambiar*) |
+| 2nd press, while starting or in steps 1-3 | Switches to **Reuse only**: step 4 sends the rinse water to the drain | `REUSE ONLY` › *Press START › to change* (`SOLO REUSAR`) |
+| 3rd press, and so on | Back to **Reuse and save**, and so on | as above |
+| A press in step 4 | Nothing changes: the rinse water is already going where the mode said | the current mode › *Mode fixed › Step 4 running* (*Modo fijo › Paso 4 en curso*) |
+| Held 15 s (`START_STUCK_MS`) | Reported, nothing more happens | `START BUTTON` › *Button stuck › Release START*; event log *START held 15 s: treated as stuck* |
+
+- Every counted press gives one short beep if the buzzer is on. After the notice the step screen comes back.
+- **A press counts when the button goes down.** A press less than 1 s after the last counted one (`START_MIN_GAP_MS`) is ignored, so contact bounce or a quick double tap never counts twice.
+- **A button already held at power-up never starts a cycle**: START must first be seen released. A button that sticks while `READY` starts one *Reuse and save* cycle on the press, then does nothing more until it is released.
+- The switch is saved in the cycle snapshot right away, so **a resume after a power cut keeps the chosen mode**. The app shows it with the next status (`cycle.noSave`): the *Reuse only* note, and step 4 named *Final drain* or *Save*.
+- **The app is unchanged.** *Reuse and save* and *Reuse only* start the cycle as before, and START on the panel can still switch the mode during steps 1-3 of a cycle started from the app.
+- Event log: *Cycle started* (panel), *Mode changed: reuse only (panel)*, *Mode changed: reuse and save (panel)*.
+- STOP is unchanged (hold 5 s at `READY` for Wi-Fi setup).
+- Suggested panel label: *START: pulse = inicia (reusar y guardar) · pulse otra vez = cambia a solo reusar*.
+- Tests:
+  - Simulation F15 (rewritten): one press starts during the press, step 4 saves.
+  - New simulation scenarios: F22 a switch in step 1, F23 a switch back in step 3, F24 a press in step 4, F25 bounce, F26 held at power-up or stuck, F27 a switch then a power cut and resume, F28 an app start then a panel switch, F29 STOP after a switch.
+  - Dashboard A21: the note and the step 4 name follow a mode switch without a reload.
+- Settings, history, status fields and API unchanged.
+- Build: 1.40 MB flash (44%), 98 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.16: the app stays connected during a wash
 
@@ -130,6 +157,8 @@ Until 3.8 a message part too wide for a font's main size was drawn in a smaller 
 - Build: 1.38 MB flash (43%), 97 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.8: "Reuse only" from the panel, by holding START
+
+*Replaced in 3.17: START now starts on the press, and further presses switch the mode.*
 
 The panel has only START and STOP, so START now has two uses at `READY`. The cycle starts when START is **released**, and while it is held the screen shows which cycle the release starts:
 

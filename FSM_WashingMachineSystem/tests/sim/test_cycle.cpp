@@ -31,7 +31,9 @@ void attachInterrupt(int p, void (*fn)(), int) { isr[p] = fn; }
 esp_reset_reason_t esp_reset_reason() { return simReset; }
 
 static double tankL = 30.0;                 // litres in the storage tank (low switch 10 L, high switch 40 L)
-static uint64_t startHeldUntil = 0, stopHeldUntil = 0;
+static std::vector<std::pair<uint64_t,uint64_t>> startPresses;   // START pressed in [from, to) µs (3.17: bounce can be simulated)
+static uint64_t stopHeldUntil = 0;
+static bool startIsDown() { for (auto& p : startPresses) if (simUs >= p.first && simUs < p.second) return true; return false; }
 static bool lowStuckDry = false;            // F7: the low float has failed and always reads dry
 static bool highBobs = false;               // F8: between 38 and 41 L the high float bobs every 300 ms
 int digitalRead(int p) {
@@ -40,7 +42,7 @@ int digitalRead(int p) {
     if (highBobs && tankL > 38.0 && tankL < 41.0) return ((simUs / 300000ULL) % 2) ? HIGH : LOW;
     return tankL > 40.0 ? HIGH : LOW;
   }
-  if (p == START_BUTTON) return simUs < startHeldUntil ? LOW : HIGH;
+  if (p == START_BUTTON) return startIsDown() ? LOW : HIGH;
   if (p == STOP_BUTTON)  return simUs < stopHeldUntil ? LOW : HIGH;
   return LOW;
 }
@@ -120,10 +122,14 @@ static void stepWorld(uint32_t dtMs) {
   if (rec.msgs.empty() || rec.msgs.back() != m) rec.msgs.push_back(m);
 }
 static void runFor(double seconds) { uint64_t end = simUs + (uint64_t)(seconds * 1e6); while (simUs < end) stepWorld(2); }
-static void pressStart() { startHeldUntil = simUs + 150000; startAt = now(); }
+static void holdStartFor(double s) { startPresses.push_back({simUs, simUs + (uint64_t)(s * 1e6)}); }
+// START at Ready (3.17: the cycle starts on the press); the washer program starts with it.
+static void pressStart() { holdStartFor(0.15); startAt = now(); }
 static void pressStop()  { stopHeldUntil  = simUs + 150000; }
-// Holds START for the given time; the washer program starts when it is released (3.8).
-static void holdStart(double s) { startHeldUntil = simUs + (uint64_t)(s * 1e6); startAt = now() + s; }
+// START during a cycle (3.17: switches the mode in steps 1-3); the washer program goes on.
+static void tapStart() { holdStartFor(0.15); }
+// Runs until the cycle is in this state (or the time limit passes).
+static void runUntilState(int st, double maxS = 2000) { double end = now() + maxS; while (activeState != st && now() < end) runFor(0.05); }
 static bool onScreen(const char* t) { for (auto& x : oled.shown) if (x == t) return true; return false; }
 // Row (cursor y) a text on the screen was printed at, -1 if it is not there.
 static int rowOf(const char* t) { for (size_t i = 0; i < oled.shown.size(); ++i) if (oled.shown[i] == t) return oled.shownY[i]; return -1; }
@@ -134,6 +140,8 @@ static bool sawMsg(const char* m) {
   return false;
 }
 static bool eventSeen(const char* needle) { for (int i = 0; i < eventCount(); ++i) { uint32_t e, u; const char* tx; eventAt(i, e, u, tx); if (strstr(tx, needle)) return true; } return false; }
+static int eventCountOf(const char* needle) { int n = 0; for (int i = 0; i < eventCount(); ++i) { uint32_t e, u; const char* tx; eventAt(i, e, u, tx); if (strstr(tx, needle)) ++n; } return n; }
+static bool noSaveNow() { SystemStatus s; getSystemStatus(s); return s.noSave; }
 static bool alertSeen(const char* t, int* prio = nullptr) { for (auto& a : alerts) if (a.title == t) { if (prio) *prio = a.prio; return true; } return false; }
 
 // Scenarios run in English (their checks use the English texts) unless they ask
@@ -365,41 +373,149 @@ int main(int argc, char** argv) {
     CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "START button after a Reuse only cycle did not save (saved %.1f L)", stats.totalSavedL);
   }
   else if (sc == "F15") {
-    printf("F15 START on the panel: a short press is Reuse and save, held 2 s Reuse only, held 15 s nothing (3.8)\n");
+    printf("F15 START on the panel: one press starts Reuse and save at once, then step 4 saves (3.17)\n");
     typicalProgram(); boot();                             // the start-up animation is still running
-    // During the start-up animation a press ends it and shows the choice; the release starts the cycle.
-    holdStart(0.5); runFor(0.2);
-    CHECK(onScreen("REUSE & SAVE"), "a press during the start-up animation does not show REUSE AND SAVE");
-    runFor(1);
-    CHECK(activeState != stIdle, "a short press during the start-up animation did not start the cycle");
+    pressStart(); runFor(0.1);                            // START is still held
+    CHECK(activeState != stIdle, "a press during the start-up animation did not start the cycle at once");
     pressStop(); runFor(6);
-    // Short press: the screen says what a release starts; the cycle starts on release and saves.
-    holdStart(1.0); runFor(0.3);
-    CHECK(onScreen("REUSE & SAVE") && onScreen("Release to start") && onScreen("Hold: reuse only"), "short press: screen does not show REUSE AND SAVE / Release to start / Hold: reuse only");
-    CHECK(activeState == stIdle, "the cycle started while START was still held");
-    runFor(1.0);
-    SystemStatus snap; getSystemStatus(snap);
-    CHECK(activeState != stIdle && !snap.noSave, "short press did not start Reuse and save (state %d, noSave %d)", activeState, snap.noSave);
-    pressStop(); runFor(1);
     CHECK(activeState == stIdle, "STOP did not end the cycle");
-    runFor(5);                                             // past the STOPPED notice
-    // Held 2 s: the screen switches to REUSE ONLY at 2 s; the release starts Reuse only.
-    holdStart(3.0); runFor(1.8);
-    CHECK(onScreen("REUSE & SAVE"), "at 1.8 s the screen should still show REUSE AND SAVE");
-    runFor(0.4);
-    CHECK(onScreen("REUSE ONLY") && onScreen("Release to start") && onScreen("Rinse not saved"), "at 2.2 s the screen does not show REUSE ONLY / Release to start / Rinse not saved");
-    CHECK(activeState == stIdle, "the cycle started before START was released");
-    runFor(1.5);
-    getSystemStatus(snap);
-    CHECK(activeState != stIdle && snap.noSave, "START held 3 s did not start Reuse only (state %d, noSave %d)", activeState, snap.noSave);
-    CHECK(eventSeen("Cycle started: reuse only"), "event log has no reuse-only start from the panel");
+    pressStart(); runFor(0.1);                            // START is still held
+    CHECK(activeState != stIdle && !noSaveNow(), "one press did not start Reuse and save while START was held (state %d, noSave %d)", activeState, noSaveNow());
+    CHECK(onScreen("REUSE & SAVE") && onScreen("Press START") && onScreen("to change"), "start notice is not REUSE & SAVE / Press START / to change");
+    CHECK(eventCountOf("Cycle started") == 2 && eventCountOf("Mode changed") == 0, "event log: %d starts, %d mode changes", eventCountOf("Cycle started"), eventCountOf("Mode changed"));
+    runFor(4);
+    CHECK(!onScreen("Press START") && onScreen("WASH 1 OF 4"), "the step screen did not come back after the notice");
+    runFor(1800);
+    CHECK(stateAt(stDrain2) > 0 && activeState == stIdle, "cycle did not run through step 4");
+    CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "step 4 did not save to the tank (saved %.1f L)", stats.totalSavedL);
+    CHECK(sawMsg("Saving water"), "step 4 screen never showed \"Saving water\"");
+  }
+  else if (sc == "F22") {
+    printf("F22 a 2nd press in step 1 switches to Reuse only; step 4 sends the rinse to the drain (3.17)\n");
+    typicalProgram(); boot(); runFor(11); pressStart(); runFor(60);
+    CHECK(activeState == stFill1, "expected step 1, state %d", activeState);
+    tapStart(); runFor(0.1);
+    CHECK(noSaveNow(), "the 2nd press did not switch to Reuse only");
+    CHECK(onScreen("REUSE ONLY") && onScreen("Press START") && onScreen("to change"), "notice is not REUSE ONLY / Press START / to change");
+    CHECK(eventSeen("Mode changed: reuse only (panel)"), "the switch is not in the event log");
+    { CycleSnapshot c; Preferences p; p.getBytes("cyc", &c, sizeof(c)); CHECK(c.noSave == 1, "snapshot in flash not updated with the new mode"); }
+    runFor(4);
+    CHECK(!onScreen("REUSE ONLY") && onScreen("WASH 1 OF 4"), "the step screen did not come back after the notice");
+    runFor(1800);
+    CHECK(stateAt(stDrain2) > 0 && activeState == stIdle, "cycle did not run through step 4");
+    CHECK(sawMsg("Not saving") && eventSeen("Step 4/4 final drain started (reuse only"), "step 4 did not run as Reuse only");
+    CHECK(!rec.savedWhileSaving && stats.totalSavedL == 0, "rinse water saved in a cycle switched to Reuse only (%.1f L)", stats.totalSavedL);
+    CHECK(!noSaveNow(), "Reuse only still reported after the cycle");
+  }
+  else if (sc == "F23") {
+    printf("F23 press in step 1, then a 3rd press in step 3: back to Reuse and save; step 4 saves (3.17)\n");
+    typicalProgram(); boot(); runFor(11); pressStart(); runFor(60);
+    tapStart(); runFor(1.5);
+    CHECK(noSaveNow(), "the 2nd press did not switch to Reuse only");
+    runUntilState(stFill2); runFor(30);
+    CHECK(activeState == stFill2, "expected step 3, state %d", activeState);
+    tapStart(); runFor(0.1);
+    CHECK(!noSaveNow(), "the 3rd press did not switch back to Reuse and save");
+    CHECK(onScreen("REUSE & SAVE") && onScreen("to change"), "notice is not REUSE & SAVE / to change");
+    CHECK(eventSeen("Mode changed: reuse and save (panel)") && eventCountOf("Mode changed") == 2, "event log: %d mode changes", eventCountOf("Mode changed"));
+    { CycleSnapshot c; Preferences p; p.getBytes("cyc", &c, sizeof(c)); CHECK(c.noSave == 0, "snapshot in flash still Reuse only"); }
+    runFor(1800);
+    CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "step 4 did not save after switching back (saved %.1f L)", stats.totalSavedL);
+  }
+  else if (sc == "F24") {
+    printf("F24 a press in step 4 does not change the mode; \"Mode fixed\" shown (3.17)\n");
+    typicalProgram(); boot(); runFor(11); pressStart(); runUntilState(stDrain2); runFor(10);
+    CHECK(activeState == stDrain2, "expected step 4, state %d", activeState);
+    tapStart(); runFor(0.1);
+    CHECK(activeState == stDrain2 && !noSaveNow(), "a press in step 4 changed the mode or the step");
+    CHECK(onScreen("REUSE & SAVE") && onScreen("Mode fixed") && onScreen("Step 4 running"), "notice is not REUSE & SAVE / Mode fixed / Step 4 running");
+    CHECK(eventCountOf("Mode changed") == 0, "a press in step 4 logged a mode change");
+    runFor(4);
+    CHECK(!onScreen("Mode fixed") && onScreen("SAVE 4 OF 4"), "the step 4 screen did not come back after the notice");
+    runFor(300);
+    CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "step 4 stopped saving after the press (saved %.1f L)", stats.totalSavedL);
+  }
+  else if (sc == "F25") {
+    printf("F25 bounce: two press edges 50 ms apart at Ready start the cycle once (3.17)\n");
+    typicalProgram(); boot(); runFor(11);
+    startPresses.push_back({simUs, simUs + 25000}); startPresses.push_back({simUs + 50000, simUs + 200000}); startAt = now();
+    runFor(2);
+    CHECK(activeState != stIdle && !noSaveNow(), "bounce: cycle not started in Reuse and save (state %d, noSave %d)", activeState, noSaveNow());
+    CHECK(eventCountOf("Cycle started") == 1 && eventCountOf("Mode changed") == 0, "bounce counted twice: %d starts, %d mode changes",
+          eventCountOf("Cycle started"), eventCountOf("Mode changed"));
+    // A real press 2 s later does count: it switches the mode.
+    tapStart(); runFor(0.1);
+    CHECK(noSaveNow(), "a real press 2 s after the start did not switch the mode");
+  }
+  else if (sc == "F26") {
+    printf("F26 START held at power-up, or stuck during a cycle: nothing starts or changes, \"Button stuck\" (3.17)\n");
+    startPresses.push_back({0, 25000000});                // held from before power-up until 25 s
+    typicalProgram(); boot(); runFor(16);
+    CHECK(activeState == stIdle, "START held at power-up started a cycle (state %d)", activeState);
+    CHECK(eventSeen("START held 15 s: treated as stuck"), "stuck START at power-up not in the event log");
+    CHECK(onScreen("START BUTTON") && onScreen("Button stuck"), "stuck START at power-up not shown on the screen");
+    runFor(10);                                           // released at 25 s
+    CHECK(activeState == stIdle && eventCountOf("Cycle started") == 0, "releasing a stuck START started a cycle");
+    pressStart(); runFor(0.5);
+    CHECK(activeState != stIdle, "after the stuck button was released a normal press did not start");
+    // A press that then sticks: the cycle started on the press; the stuck button changes nothing more.
     pressStop(); runFor(6);
-    // Held 20 s: stuck; nothing starts, before or after the release.
-    holdStart(20.0); runFor(16);
-    CHECK(onScreen("START BUTTON") && onScreen("Button stuck"), "a stuck START is not reported on the screen");
-    runFor(6);
-    CHECK(activeState == stIdle, "a 20 s hold started a cycle (state %d)", activeState);
-    CHECK(eventSeen("START held 15 s: treated as stuck"), "stuck START not in the event log");
+    holdStartFor(20.0); startAt = now(); runFor(17);
+    CHECK(activeState != stIdle && !noSaveNow() && eventCountOf("Mode changed") == 0, "a stuck START changed the cycle (state %d, noSave %d)", activeState, noSaveNow());
+    CHECK(eventCountOf("treated as stuck") == 2 && onScreen("Button stuck"), "a START stuck during a cycle is not reported");
+    runFor(5);
+    CHECK(!noSaveNow() && eventCountOf("Mode changed") == 0, "releasing a stuck START changed the mode");
+  }
+  else if (sc == "F27a") {
+    printf("F27 panel switch to Reuse only, then a power cut (part 1: run until 320 s, then cut power) (3.17)\n");
+    typicalProgram(); boot(); runFor(11); pressStart(); runFor(60);
+    tapStart(); runFor(260);
+    CHECK(activeState == stFill1 && noSaveNow(), "expected Reuse only in step 1 (state %d, noSave %d)", activeState, noSaveNow());
+    CycleSnapshot snap; Preferences p; p.getBytes("cyc", &snap, sizeof(snap));
+    CHECK(p.getBytesLength("cyc") == sizeof(snap) && snap.state == stFill1 && snap.filled == 1 && snap.noSave == 1,
+          "snapshot: state %d filled %d noSave %d", snap.state, snap.filled, snap.noSave);
+    Preferences::saveFile(flash);
+  }
+  else if (sc == "F27b") {
+    printf("F27 panel switch to Reuse only, then a power cut (part 2: power back, resume: still Reuse only)\n");
+    Preferences::loadFile(flash);
+    simUs += 400000000ULL;
+    typicalProgram(); simReset = ESP_RST_POWERON; boot();
+    startAt = now() - 320;
+    runFor(10);
+    CHECK(interruptedNoSave(), "the cut cycle is not reported as Reuse only");
+    CHECK(requestResume(), "Resume refused");
+    runFor(1);
+    CHECK(activeState == stFill1 && noSaveNow(), "resumed cycle is not Reuse only in step 1 (state %d)", activeState);
+    CHECK(eventSeen("Cycle resumed: step 1/4, reuse only"), "resume not in the event log as Reuse only");
+    runFor(1500);
+    CHECK(activeState == stIdle && stateAt(stDrain2) > 0, "resumed cycle did not run through step 4");
+    CHECK(!rec.savedWhileSaving && stats.totalSavedL == 0, "rinse water saved after resuming a Reuse only cycle (%.1f L)", stats.totalSavedL);
+  }
+  else if (sc == "F28") {
+    printf("F28 the app starts Reuse only, a panel press in step 2 switches to Reuse and save (3.17)\n");
+    typicalProgram(); boot(); runFor(11);
+    cfg.allowRemoteStart = true;
+    CHECK(requestRemoteStart(false), "Reuse only refused at Ready");
+    startAt = now(); runFor(1);
+    CHECK(noSaveNow() && eventSeen("Cycle started: reuse only"), "app start was not Reuse only");
+    runUntilState(stDrain1); runFor(20);
+    CHECK(activeState == stDrain1, "expected step 2, state %d", activeState);
+    tapStart(); runFor(0.1);
+    CHECK(!noSaveNow() && onScreen("REUSE & SAVE") && eventSeen("Mode changed: reuse and save (panel)"), "panel press in step 2 did not switch to Reuse and save");
+    runFor(1800);
+    CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "step 4 did not save (saved %.1f L)", stats.totalSavedL);
+  }
+  else if (sc == "F29") {
+    printf("F29 STOP after a panel switch stops the cycle, pump/fill/wash off (3.17)\n");
+    typicalProgram(); boot(); runFor(11); pressStart(); runFor(300);
+    tapStart(); runFor(1.5);
+    CHECK(noSaveNow(), "the press did not switch to Reuse only");
+    pressStop(); runFor(3);
+    CHECK(activeState == stIdle, "not back to Ready after STOP");
+    CHECK(pinOut[OUT_MOTOR] == LOW && pinOut[OUT_FILL_EV] == LOW && pinOut[OUT_WASH_EV] == LOW, "pump, fill or wash output still on");
+    CHECK(eventSeen("Cycle stopped") && !noSaveNow(), "stop not logged, or Reuse only still reported");
+    Preferences p; CHECK(p.getBytesLength("cyc") == 0, "cycle snapshot left behind after STOP");
   }
   else if (sc == "F16a") {
     printf("F16 Reuse only cycle cut after the machine filled in step 1 (part 1: run until 320 s, then cut power) (3.10)\n");

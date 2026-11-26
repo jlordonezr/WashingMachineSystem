@@ -1,4 +1,4 @@
-# Architecture – firmware 3.16
+# Architecture – firmware 3.17
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -87,12 +87,17 @@ flow sensors ─ISR─► pulse counters ─► FlowMeter (loop) ─► CycleGat
                          └──────────────► PumpGuard (safety task, 20 ms) ─► pump off
 float switches ─────────────────────────► TankLevel (safety task) ─► interlocks, cycle decisions, screen, app
 buttons ─► updateInputs (loop) ─► inStart / inStop ─► state machine
+START press edge (3.17) ─► Ready: inStart ("Reuse and save") · Starting and steps 1-3: cycleNoSave flipped ─► saveCycleSnapshot() ─► status / app
 app ─HTTP─► web server (loop) ─► requestRemoteStart/Stop flags ─► applied at the start of the next loop pass
 app ─HTTP─► /api/interrupted/resume ─► requestResume flag ─► takeResumeRequest (loop) ─► the sketch enters the saved step (3.10)
 cycle (loop) ─► outputsRequest(mode) ─► GreyWaterOutputs (lock) ─► SSR pins
 status snapshot (loop) ─► /api/status JSON ─► app (polls every 2 s, one request at a time, paused while hidden)
 events ─► notify() ─► queue ─► alert task ─► ntfy ─► result queue ─► event log + /api/status.alert
 ```
+
+## START button (3.17)
+
+`readStartButton()` in `GreyWaterSystem.cpp` counts a press on the debounced press edge, only when START has been seen released since power-up (`startArmed`, so a button held at power-up never counts) and at least `START_MIN_GAP_MS` (1 s) after the last counted press (bounce). At Ready a press starts *Reuse and save* at once. While starting and in steps 1-3 each press flips `cycleNoSave`, writes the cycle snapshot and logs *Mode changed: … (panel)*; in step 4 (`stDrain2`) it only shows *Mode fixed*. Each counted press beeps once and shows the mode for `START_NOTICE_MS` (3 s). Held `START_STUCK_MS` (15 s): logged and shown as stuck, in any state. Only `millis()` and statics, no heap.
 
 ## Web server (3.16)
 

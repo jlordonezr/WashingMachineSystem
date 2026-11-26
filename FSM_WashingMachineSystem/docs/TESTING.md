@@ -1,4 +1,4 @@
-# Testing – firmware 3.16
+# Testing – firmware 3.17
 
 **Status on 30 Oct 2026:** every automated suite passes and the firmware builds for the Arduino Nano ESP32 with cores 3.0.7 and 2.0.17. 3.0 has run correctly on the installed system. 3.1 adds languages only; 3.2 renames the app, adds the start-up animation and the Helvetica Bold screen font, and moves the buzzer to D1. 3.3 pages the screen messages and makes phone alerts more reliable. Check H10–H13 on the real board.
 
@@ -16,8 +16,8 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | Screen texts | `tools/check_screen_text.py` | 173 texts and pages | Every screen text, and each page of a paged message, is plain ASCII and fits the 128 px line in both languages in all four screen fonts (3.1; pages from 3.3; one size per font from 3.9). From 3.12 (128x64 screen): at most two parts per message; headers at most 12 characters (3.13); at both baselines every glyph stays on the blue rows 17-63 and the two lines are at least 2 rows apart |
 | Translations | `tools/i18n_keys.py` | 452 texts | Every app text has a Spanish translation (3.1); notes in `web/es.json` (keys starting with `_`, e.g. `_comment`) are not built into the page |
 | Water history and settings storage | `tests/test_history.cpp` | 57 | Backup copy, unreadable records, migration, restore validation (since 2.8); settings version 7 → 8, the screen font and the minimum save flow (3.4); settings versions 10 and 11 → 12: the Large font of 3.14 becomes Hyperlegible, a chosen font is kept, the old default alert server moves to the new one and any other server is kept (3.15); cycle snapshot and the 3.9 marker (3.10); the sign-in key in flash (3.11) |
-| Full-cycle simulation | `tests/sim/` | 18 scenarios | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |
-| Dashboard | `tests/app/test_dashboard.js` | 112 | The real page in headless Chromium against a mock controller; axe-core accessibility on all tabs (3.0); connection faults: a mock that hangs or drops the connection (3.16). Needs Node.js and Playwright; on this Mac a portable copy was used (`NODE_PATH` to its `node_modules`) |
+| Full-cycle simulation | `tests/sim/` | 33 runs (3.17) | The real firmware (all modules except Wi-Fi) against a simulated machine, tank, sensors, buttons and flash; the safety task is called every 20 ms of simulated time |
+| Dashboard | `tests/app/test_dashboard.js` | 115 | The real page in headless Chromium against a mock controller; axe-core accessibility on all tabs (3.0); connection faults: a mock that hangs or drops the connection (3.16). Needs Node.js and Playwright; on this Mac a portable copy was used (`NODE_PATH` to its `node_modules`) |
 | Web connections (3.16) | `tests/test_connpool.cpp` | 15 | `HttpConnPool.h`: a silent connection never holds up a request behind it (P1), silent ones closed after 5 s (P2), closed ones removed (P3), oldest request first (P4), full pool closes the oldest (P5), no copy kept after serving (P6), `millis()` wrap (P7) |
 | Build | `arduino-cli compile --fqbn esp32:esp32:nano_nora` | — | 3.2.0: 1,368,305 bytes flash, 95,156 bytes RAM with core 3.3.12 (3.0.0: 1,301,277 / 72,624 with core 3.0.7) |
 
@@ -35,6 +35,15 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | F19 | Screen at I2C address 0x3D (3.12) | Screen found and started at 0x3D, no missing-screen alert or event, `READY` drawn |
 | F20 | Start-up and two-line messages (3.12) | No text during the start-up animation (25 frames per second) for 3.5 s; then `REUSE WATER` / *System ready* / *Version 3.12.0*; in a full cycle no message has more than two lines |
 | F21 | Estimated tank litres (3.13) | From the floats at start (25 L between 10 and 40 L); during a whole cycle the estimate stays within 12 L of the simulated tank and ends within 3 L; the trend is draining while the pump draws and filling while step 4 saves; FULL and EMPTY in the header from the floats; the estimate survives a power cut (F21a, F21b) |
+| F15 | START on the panel (3.17, replaces the 3.8 hold test) | A press during the start-up animation starts the cycle at once; at `READY` one press starts *Reuse and save* while START is still held; `REUSE & SAVE` › *Press START › to change*, then the step screen; step 4 saves |
+| F22 | 2nd START press in step 1 (3.17) | *Reuse only* at once in the status, notice `REUSE ONLY`, event *Mode changed: reuse only (panel)*, snapshot in flash updated; step 4 *Not saving*, nothing saved |
+| F23 | Press in step 1, 3rd press in step 3 (3.17) | Back to *Reuse and save*, event *Mode changed: reuse and save (panel)*, snapshot updated; step 4 saves |
+| F24 | START press in step 4 (3.17) | Mode and step unchanged, *Mode fixed › Step 4 running*, no event; still saving |
+| F25 | Bounce at `READY` (3.17) | Two press edges 50 ms apart: one start, no mode change (fails with `START_MIN_GAP_MS` 0); a real press 2 s later switches |
+| F26 | START held at power-up, or stuck in a cycle (3.17) | Held from power-up for 25 s: no cycle, *Button stuck*, *START held 15 s: treated as stuck*; release starts nothing; a later press starts. A press that sticks for 20 s: one start, no mode change, reported stuck |
+| F27 | Switch to *Reuse only*, power cut, resume (3.17) | Snapshot `noSave` 1 (F27a); after power-up the cut cycle is *Reuse only*, the resumed cycle too, nothing saved (F27b) |
+| F28 | App starts *Reuse only*, START in step 2 (3.17) | Switched to *Reuse and save*, logged; step 4 saves |
+| F29 | STOP after a switch (3.17) | Ready; pump, fill and wash outputs off; *Cycle stopped*; snapshot removed |
 | F5, F6 | Normal power-up; watchdog restart while Ready | No false interruption |
 | F7 | Low float failed dry, tank full (3.0) | Fault alert; pump never runs; fill and wash valves never open into the full tank; cycle completes |
 | F8 | High float bobbing at the mark (3.0) | Fill valve switches at most twice; tank stops below 39 L |
@@ -66,6 +75,7 @@ Run everything: `sh tests/run_all.sh` (exit code 0 only if all pass).
 | A17 | One status request at a time: Refresh while one hangs starts no second one and shows *Refreshing…*; after the 4 s limit exactly one retry (3.16) |
 | A18 | Hidden page (phone locked): no requests and no error for 20 s; shown again: one request at once (3.16) |
 | A19 | On a phone-sized screen an error message is in the page (not floating) and covers neither Stop nor its help; a "can't reach" error clears when the controller answers again (3.16) |
+| A21 | A mode switch from START on the panel (3.17): the *Reuse only* note and the step 4 name (*Save* / *Final drain*) follow `cycle.noSave` in the next status, without a reload |
 | A20 | A Stop with no answer is sent once, the app says it is checking, and confirms it from the status; a request that times out after the status confirmed it shows no error (3.16) |
 
 ## What the PC tests cannot show
@@ -99,7 +109,7 @@ Do these with the washing machine empty and someone at the controller. Note each
 | H11 | Start-up screen (3.2) | Power on, watch the screen; then power on again and press START during the dog | Border Collie chases the butterfly (about 4 s), then `REUSO DE AGUA` / *Sistema listo* for 2 s, then `LISTO`; START ends the animation at once. Messages are in Helvetica Bold and readable | (3.12: the collie runs along the bottom, the butterfly flutters up into the yellow band)
 | H15 | Minimum flow to save (3.4) | In step 4, watch Service → Valves and pump as the rinse pump-out ends | Fill valve turns off and drain on within about 3 s of the flow dropping below the limit; screen *Flujo bajo › Al desague*; a spin pump-out turns the fill valve on again |
 | H16 | Viewer user (3.5, Overview controls from 3.15) | Settings → *Viewer user* on, set a password, Save. On another phone (or a private browser window) sign in as `viewer`; start a wash, stop it, start and stop a tank wash | Only Overview and Water use; Reuse and save, Reuse only, Stop cycle and Wash tank work; no Service, Settings or history restore. As admin again, turning it off makes the viewer password stop working |
-| H18 | START press and hold (3.8) | At `LISTO`: press START briefly; then, after Stop, hold START and watch the screen; then hold it for 20 s | Short press: `REUSAR Y GUARDAR` › *Suelte e inicia*, the cycle starts on release and saves. Hold: after 2 s the screen changes to `SOLO REUSAR` (short beep with the buzzer on); on release the cycle starts and step 4 shows `DESAGUE 4 DE 4`. 20 s: `BOTON START` › *Atascado*, nothing starts |
+| H18 | START press and mode switch (3.17) | At `LISTO` (buzzer on): press START once; in step 1 press it again; in step 3 press it again; in step 4 press it again. Then a new wash: press START twice quickly (under 1 s). Then switch off, hold START, switch on and keep holding 20 s | First press: the cycle starts at once, short beep, `REUSO+AHORRO` › *Pulse START › para cambiar* for about 3 s, then `LAVADO 1/4`. Step 1: `SOLO REUSAR`, the app shows the *Reuse only* note. Step 3: `REUSO+AHORRO`. Step 4: *Modo fijo › Paso 4 en curso*, still `AHORRO 4/4`, saving. Quick double press: starts *Reusar y guardar* only. Held at power-up: nothing starts, `BOTON START` › *Boton atascado*. Service → event log lists each *Mode changed* |
 | H17 | Reuse only (3.7) | With water in the tank, start the machine, then *Solo reusar* in the app; watch step 1 and step 4 | Step 1 *Reusando agua*; step 4 header `DESAGUE 4 DE 4`, *Sin guardar › Al desague*; Service → Valves: fill valve off, drain on all through step 4; *TERMINADO* shows only the litres reused. Then press START on the controller: a normal cycle that saves |
 | H14 | Screen font (3.9) | Settings → Screen font: choose each of the four styles (Hyperlegible, Plain sans, Terminal bold, Schoolbook bold), Save, look at the screen during a wash | The screen changes at once; in each style every message has the same letter size, nothing scrolls or is cut off, the letters sit centred under the line; the choice is kept after Restart controller |
 | H13 | Screen pages (3.3) | Run one wash in Spanish; watch each step for 15 s | Pages change every 3 s and each is readable; header `LAVADO 1 DE 4` … `AHORRO 4 DE 4`; *Faltan n min* from the second wash and roughly right; `TERMINADO` shows *Lavado listo › Reusados n L › Guardados n L* |
@@ -150,3 +160,5 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 | — | 3.1.0 | Hardware H10 | Not done yet |
 | 2026-10-30 | 3.0.0 | Jose, installed system | Working as expected |
 | 2026-10-30 | 3.0.0 | PC tests | All suites pass |
+| 2026-11-25 | 3.17.0 | PC tests, firmware build | All suites pass, simulation F15 (rewritten) and F22–F29, browser tests A1–A21 with axe-core (115 checks); 1,396,929 bytes flash, 100,276 bytes RAM with core 3.3.12 |
+| — | 3.17.0 | Hardware H18 (START press and mode switch) | Not done yet |

@@ -96,8 +96,9 @@ extern volatile uint32_t drainPulseCount;
 #define DEFAULT_WEB_PASSWORD "greywater"  // change on first use (dashboard user: admin)
 #define DEFAULT_OTA_PASSWORD "greywater"  // change on first use
 #define WIFI_SETUP_HOLD_MS 5000  // hold STOP this long while READY to open Wi-Fi setup
-#define START_HOLD_MS 2000       // hold START this long at READY for "Reuse only" (3.8); a shorter press: "Reuse and save"
-#define START_STUCK_MS 15000     // START held this long: treated as stuck, nothing starts
+#define START_MIN_GAP_MS 1000    // START presses closer than this to the last counted one are ignored (bounce, 3.17)
+#define START_NOTICE_MS 3000     // ms the mode notice stays on after a START press (3.17)
+#define START_STUCK_MS 15000     // START held this long: reported as stuck
 #define RESUME_OFFER_MS  1800000UL // the app offers to resume a cut cycle for 30 min after power-up (3.10)
 #define RESUME_MAX_AGE_S 14400UL   // ... not if the saved step was written over 4 h before (when the clock is set)
 #define TANK_CHECK_PERIOD 10000  // ms between tank level / water age checks

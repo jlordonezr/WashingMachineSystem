@@ -500,6 +500,24 @@ async function fresh(browser, base) {
     settings.language = 'en';
   }
 
+  // A21 START on the panel switches the mode during steps 1-3 (3.17): the Reuse only note and the
+  // name of step 4 follow cycle.noSave in the next status, without reloading the page.
+  {
+    const running = (noSave) => { const s = baseStatus(); s.state = 3; s.stateName = 'Drain1'; s.title = 'DRAIN 2 OF 4';
+      s.message = 'Soapy water|To the drain'; s.cycle = { tap: 30, reused: 20, saved: 0, noSave }; return s; };
+    status = running(false);
+    const { ctx, page } = await fresh(browser, base);
+    await tick(page, 500);
+    const step4 = () => page.evaluate(() => document.getElementById('steps').children[3].firstChild.textContent);
+    check(!(await page.isVisible('#noSaveNote')) && (await step4()) === 'Save', 'A21 Reuse and save cycle shows the Reuse only note or no Save step');
+    status = running(true); await tick(page, 2500);
+    check(await page.isVisible('#noSaveNote') && (await step4()) === 'Final drain', 'A21 switch to Reuse only not shown without a reload');
+    status = running(false); await tick(page, 2500);
+    check(!(await page.isVisible('#noSaveNote')) && (await step4()) === 'Save', 'A21 switch back to Reuse and save not shown without a reload');
+    await ctx.close();
+    status = baseStatus();
+  }
+
   await browser.close(); server.close();
   console.log(passes + ' checks passed, ' + failures + ' failed');
   process.exit(failures ? 1 : 0);

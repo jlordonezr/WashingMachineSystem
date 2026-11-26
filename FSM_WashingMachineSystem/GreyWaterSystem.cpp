@@ -84,59 +84,79 @@ bool debounceButton(int pin, unsigned long& lastPressTime, bool& lastState) {
   return (millis() - lastPressTime > DEBOUNCE_DELAY) && (current == LOW);
 }
 
-// START on the panel (3.8). At READY the cycle starts when START is released:
-// a press shorter than START_HOLD_MS starts "Reuse and save", a longer one
-// "Reuse only". While it is held the screen shows which one a release starts,
-// so nobody has to count. Held START_STUCK_MS or more: treated as a stuck
-// button and nothing starts. In any other state START does nothing, as before.
-static bool startNoSave = false;        // the next Start is "Reuse only" (panel hold or app)
-static bool startDown   = false;        // START held (debounced) on the last pass
-static bool startStuck  = false;
-static bool startLong   = false;        // held past START_HOLD_MS
+// START on the panel (3.17). At READY one press starts the cycle at once in
+// "Reuse and save". Until step 4 begins, each further press switches the mode
+// (Reuse only <-> Reuse and save); from step 4 on a press only shows that the
+// mode is fixed. A press counts on the debounced press edge, and only when it
+// comes START_MIN_GAP_MS after the last counted one, so bounce never counts
+// twice. A button already held at power-up never counts until it has been
+// released; held START_STUCK_MS it is reported as stuck.
+static bool cycleNoSave    = false;     // "Reuse only": set at Start; START on the panel switches it until step 4 (3.17)
+static bool startNoSave    = false;     // the next Start is "Reuse only" (from the app)
+static bool startFromPanel = false;     // the next Start came from START on the panel
+static bool startArmed     = false;     // START has been seen released since power-up
+static bool startDown      = false;     // START held (debounced) on the last pass
+static bool startStuck     = false;     // this hold has been reported as stuck
+static bool startCounted   = false;     // a press has been counted since power-up
 static unsigned long startDownSince = 0;
+static unsigned long lastStartCountedMs = 0;
 
-static void showStartChoice(bool reuseOnly) {
+static void showModeNotice(bool reuseOnly, bool fixed) {
   displayShowNotice(reuseOnly ? TRS("REUSE ONLY", "SOLO REUSAR") : TRS("REUSE & SAVE", "REUSO+AHORRO"),
-                    reuseOnly ? TRS("Release to start|Rinse not saved", "Suelte e inicia|No se guarda")
-                              : TRS("Release to start|Hold: reuse only", "Suelte e inicia|2 s: solo reusar"), START_STUCK_MS + 1000);
+                    fixed ? TRS("Mode fixed|Step 4 running", "Modo fijo|Paso 4 en curso")
+                          : TRS("Press START|to change", "Pulse START|para cambiar"), START_NOTICE_MS);
+}
+
+static void saveCycleSnapshot();
+
+// One counted press of START.
+static void handleStartPress() {
+  if (activeState == stIdle) {
+    inStart = true;                     // one pass, like the app's Start
+    startNoSave = false;                // the panel always starts "Reuse and save"
+    startFromPanel = true;              // handleRunStateEntry() shows the mode
+    beep(BEEP_TICK);
+    return;
+  }
+  beep(BEEP_TICK);
+  if (activeState == stDrain2) {        // step 4 already sends the rinse where the mode said
+    showModeNotice(cycleNoSave, true);
+    return;
+  }
+  cycleNoSave = !cycleNoSave;           // Starting and steps 1-3
+  saveCycleSnapshot();                  // a resume after a power cut keeps the new mode
+  logEvent(cycleNoSave ? "Mode changed: reuse only (panel)" : "Mode changed: reuse and save (panel)");
+  showModeNotice(cycleNoSave, false);
 }
 
 static void readStartButton() {
   bool down = debounceButton(START_BUTTON, lastStartButtonPressTime, lastStartButtonState);
   inStart = false;
-  if (down) {
-    if (!startDown) {                   // just pressed
-      startDown = true;
-      startDownSince = millis();
-      startLong = startStuck = false;
-      if (activeState == stIdle) {
-        displayClearNotice();           // also ends the start-up animation
-        showStartChoice(false);
-      }
-    }
-    unsigned long held = millis() - startDownSince;
-    if (activeState != stIdle || startStuck) return;
-    if (held >= START_STUCK_MS) {
-      startStuck = true;
-      logEvent("START held %lu s: treated as stuck, nothing started", held / 1000UL);
-      displayShowNotice(TRS("START BUTTON", "BOTON START"), TRS("Button stuck|Release START", "Boton atascado|Suelte START"),
-                        START_STUCK_MS + 1000);
-    } else if (held >= START_HOLD_MS && !startLong) {
-      startLong = true;
-      beep(BEEP_TICK);
-      showStartChoice(true);
-    }
+  if (!down) {
+    // Armed only by a settled "released" reading: during the debounce time of a
+    // press the reading is also "not down".
+    if (lastStartButtonState == HIGH && millis() - lastStartButtonPressTime > DEBOUNCE_DELAY) startArmed = true;
+    if (startDown && startStuck) displayClearNotice();
+    startDown = false;
     return;
   }
-  if (!startDown) return;
-  startDown = false;                    // just released
-  if (activeState != stIdle) return;
-  if (startStuck) {
-    displayClearNotice();
-    return;
+  unsigned long now = millis();
+  if (!startDown) {                     // debounced press edge
+    startDown = true;
+    startDownSince = now;
+    startStuck = false;
+    if (startArmed && (!startCounted || now - lastStartCountedMs >= START_MIN_GAP_MS)) {
+      startCounted = true;
+      lastStartCountedMs = now;
+      handleStartPress();
+    }
   }
-  inStart = true;                       // one pass, like the app's Start
-  startNoSave = startLong;
+  if (!startStuck && now - startDownSince >= START_STUCK_MS) {
+    startStuck = true;
+    logEvent("START held %lu s: treated as stuck", (now - startDownSince) / 1000UL);
+    displayShowNotice(TRS("START BUTTON", "BOTON START"), TRS("Button stuck|Release START", "Boton atascado|Suelte START"),
+                      START_STUCK_MS + 1000);
+  }
 }
 
 void updateInputs() {
@@ -217,7 +237,6 @@ const char* checkAndFillWashingMachine() {
 // stayed above the limit for SAVE_RESUME_MS, so the valves do not chatter.
 // "Reuse only" cycle (app button, 3.7): step 1 reuses tank water as usual, but
 // in step 4 the rinse water goes to the drain; the fill valve stays closed.
-static bool cycleNoSave = false;       // set when the cycle starts, for the whole cycle
 static bool saveStoppedFull = false;   // reset when step 4 begins
 static bool saveLowFlow     = false;   // drain flow at or below cfg.saveMinLpm: draining
 static bool saveAbove       = false;   // ... flow back above the limit since saveAboveMs
@@ -492,8 +511,10 @@ void handleRunStateEntry() {
   cycleActive  = true;
   cycleStartMillis = millis();
   interruptedFlag = false;   // a new cycle replaces the "interrupted" notice
-  cycleNoSave = startNoSave;   // "Reuse only" from the app, or START held 2 s on the panel
+  cycleNoSave = startNoSave;   // "Reuse only" from the app; START on the panel: "Reuse and save"
   startNoSave = false;
+  bool fromPanel = startFromPanel;
+  startFromPanel = false;
   logEvent(cycleNoSave ? "Cycle started: reuse only, rinse water to the drain" : "Cycle started");
   if (manualWashActive) {    // starting a cycle ends a manual wash
     manualWashActive = false;
@@ -505,6 +526,7 @@ void handleRunStateEntry() {
   tankFullAlertSent = false;
   saveCycleSnapshot();
   displayClearNotice();  // Start pressed: drop "Cycle stopped/complete" right away
+  if (fromPanel) showModeNotice(cycleNoSave, false);   // START again switches the mode (3.17)
 }
 
 static const char* const STEP_EVENT[STATE_COUNT] = { "", "", "Step 1/4 wash started", "Step 2/4 soapy drain started",
@@ -897,7 +919,7 @@ void applyRemoteRequests() {
   }
   if (remoteStartRequested) {
     remoteStartRequested = false;
-    if (activeState == stIdle) { inStart = true; startNoSave = remoteStartNoSave; }
+    if (activeState == stIdle) { inStart = true; startNoSave = remoteStartNoSave; startFromPanel = false; }
   }
 }
 
