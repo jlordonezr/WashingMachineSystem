@@ -155,6 +155,15 @@ enum StateID {
   STATE_COUNT // Total number of states
 };
 
+// What the cycle does with the water (3.18; until 3.17 a bool "noSave"). The
+// values are stored in the cycle snapshot and the history, and sent to the app.
+enum CycleMode : uint8_t {
+  cmReuseSave = 0,  // step 1 tank water, step 3 tap, step 4 saves the rinse (the normal cycle)
+  cmReuseOnly = 1,  // step 1 tank water, step 3 tap, step 4 rinse to the drain
+  cmReuseAll  = 2,  // step 1 and step 3 tank water (tap when the tank is low), step 4 rinse to the drain
+  CYCLE_MODE_COUNT
+};
+
 // Enumeration for water levels in the tank.
 enum WaterLevel {
   low,    // Low water level
@@ -261,7 +270,8 @@ struct SystemStatus {
   float      tankAgeH;         // hours since the tank started holding water, -1 unknown/empty
   int32_t    lastAgoS;         // seconds since the last wash ended, -1 unknown or none
   float      cycleTapL, cycleReusedL, cycleSavedL;
-  bool       noSave;          // this cycle is "Reuse only": step 4 sends the rinse water to the drain
+  bool       noSave;          // step 4 sends the rinse water to the drain (Reuse only or Reuse all)
+  uint8_t    mode;            // CycleMode of the running cycle (cmReuseSave when none runs, 3.18)
   bool       tankFault;        // float switches disagree (high wet, low dry)
   bool       manualWash;       // manual tank wash running
   uint32_t   manualWashLeftS;  // seconds left before the manual wash time limit
@@ -273,7 +283,7 @@ extern bool drain2Done;        // step 4 finished (replaces the fixed-time trans
 
 void getSystemStatus(SystemStatus& s);
 void requestRemoteStop();      // dashboard Stop
-bool requestRemoteStart(bool save = true);   // dashboard start; save=false: "Reuse only" (3.7). False if not allowed now
+bool requestRemoteStart(CycleMode mode = cmReuseSave);   // dashboard start in this mode (3.7, 3.18). False if not allowed now
 void applyRemoteRequests();    // call right after updateInputs() in loop()
 void sampleFlowSensors();      // call every loop(): keeps flow rate and volumes current
 void systemPeriodic();         // call every loop(): tank level, water age, stats saving
@@ -295,7 +305,8 @@ const char* resetReasonTextLocal();   // same, in the language chosen in Setting
 bool interruptedInfo(int& state, uint32_t& epoch);   // last cycle was cut short (until dismissed)
 void dismissInterrupted();
 // ── 3.10: resume a cycle cut short ──
-bool interruptedNoSave();                // the cut cycle was "Reuse only"
+bool interruptedNoSave();                // the cut cycle did not save in step 4 (Reuse only or Reuse all)
+CycleMode interruptedMode();             // mode of the cut cycle (cmReuseSave if none, 3.18)
 bool resumeAvailable();                  // Resume can be offered now (Ready, within RESUME_OFFER_MS, saved state complete)
 uint32_t resumeLeftS();                  // seconds left to resume (0 = not available)
 bool requestResume();                    // dashboard Resume; false if no longer possible

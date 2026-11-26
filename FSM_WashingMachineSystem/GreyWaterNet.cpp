@@ -449,23 +449,23 @@ static void handleStatus() {
   jsonEscape(title,   sizeof(title),   s.title);
   jsonEscape(message, sizeof(message), s.message);
 
-  char buf[2840];
+  char buf[2900];
   snprintf(buf, sizeof(buf),
     "{\"fw\":\"%s\",\"state\":%d,\"stateName\":\"%s\",\"title\":\"%s\",\"message\":\"%s\","
     "\"tank\":\"%s\",\"tankL\":%.1f,\"tankTrend\":%d,\"wash\":%s,\"tapLpm\":%.2f,\"drainLpm\":%.2f,"
     "\"stepElapsedS\":%lu,\"drain2LeftS\":%lu,\"stuck\":%s,\"tankAgeH\":%.2f,\"tankMaxAgeH\":%u,"
     "\"allowRemoteStart\":%s,\"alerts\":%s,"
     "\"manualWash\":%s,\"manualWashLeftS\":%lu,\"manualWashMaxMin\":%lu,\"manualWashResult\":\"%s\","
-    "\"cycle\":{\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"noSave\":%s},"
+    "\"cycle\":{\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"noSave\":%s,\"mode\":%u},"
     "\"month\":{\"key\":%lu,\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"cycles\":%lu},"
     "\"total\":{\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"cycles\":%lu},"
     "\"prevMonth\":{\"key\":%lu,\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"cycles\":%lu},"
-    "\"last\":{\"valid\":%s,\"agoS\":%ld,\"durationS\":%lu,\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"completed\":%s},"
+    "\"last\":{\"valid\":%s,\"agoS\":%ld,\"durationS\":%lu,\"tap\":%.2f,\"reused\":%.2f,\"saved\":%.2f,\"completed\":%s,\"mode\":%d},"
     "\"history\":{\"source\":\"%s\",\"hasData\":%s},"
     "\"fill\":{\"litres\":%.1f,\"complete\":%s,\"minLitres\":%.1f},"
     "\"sensors\":{\"tapPulses\":%lu,\"drainPulses\":%lu,\"tapFlowing\":%s,\"drainFlowing\":%s,\"flowOnLpm\":%.1f},"
     "\"wifi\":{\"rssi\":%d,\"ip\":\"%s\"},\"time\":\"%s\",\"uptimeS\":%lu,"
-    "\"outputs\":%u,\"typicalS\":[%lu,%lu,%lu],\"interrupted\":{\"active\":%s,\"step\":%d,\"epoch\":%lu,\"noSave\":%s,\"resume\":%s,\"resumeLeftS\":%lu},"
+    "\"outputs\":%u,\"typicalS\":[%lu,%lu,%lu],\"interrupted\":{\"active\":%s,\"step\":%d,\"epoch\":%lu,\"noSave\":%s,\"mode\":%u,\"resume\":%s,\"resumeLeftS\":%lu},"
     "\"boot\":\"%s\",\"updatesAllowed\":%s,\"defaultPasswords\":%s,"
     "\"lang\":\"%s\",\"tankFault\":%s,\"screen\":%s,\"loop\":{\"maxMs\":%lu,\"lastMinMaxMs\":%lu},"
     "\"heap\":{\"free\":%lu,\"min\":%lu},\"alert\":{\"seq\":%lu,\"ok\":%s,\"code\":%d},\"role\":\"%s\","
@@ -477,7 +477,7 @@ static void handleStatus() {
     cfg.allowRemoteStart ? "true" : "false", cfg.ntfyTopic[0] ? "true" : "false",
     s.manualWash ? "true" : "false", (unsigned long)s.manualWashLeftS,
     (unsigned long)(cfg.manualWashMs / 60000UL), s.manualWashResult,
-    s.cycleTapL, s.cycleReusedL, s.cycleSavedL, s.noSave ? "true" : "false",
+    s.cycleTapL, s.cycleReusedL, s.cycleSavedL, s.noSave ? "true" : "false", (unsigned)s.mode,
     (unsigned long)stats.monthKey, stats.monthTapL, stats.monthReusedL, stats.monthSavedL,
     (unsigned long)stats.monthCycles,
     stats.totalTapL, stats.totalReusedL, stats.totalSavedL, (unsigned long)stats.totalCycles,
@@ -485,6 +485,7 @@ static void handleStatus() {
     (unsigned long)stats.prevMonthCycles,
     stats.lastValid ? "true" : "false", (long)s.lastAgoS, (unsigned long)stats.lastDurationS,
     stats.lastTapL, stats.lastReusedL, stats.lastSavedL, stats.lastCompleted ? "true" : "false",
+    stats.lastMode == LAST_MODE_UNKNOWN ? -1 : (int)stats.lastMode,
     historySourceName(), statsHasData(stats) ? "true" : "false",
     s.stepFillL, s.fillComplete ? "true" : "false", cfg.minFillLitres,
     (unsigned long)s.tapPulses, (unsigned long)s.drainPulses, s.tapFlowing ? "true" : "false",
@@ -494,7 +495,7 @@ static void handleStatus() {
     (unsigned long)(stats.stepSamples[0] ? stats.stepAvgS[0] : 0), (unsigned long)(stats.stepSamples[1] ? stats.stepAvgS[1] : 0),
     (unsigned long)(stats.stepSamples[2] ? stats.stepAvgS[2] : 0),
     intrActive ? "true" : "false", intrStep >= stFill1 ? intrStep - 1 : 0, (unsigned long)intrEpoch,
-    interruptedNoSave() ? "true" : "false", resumeAvailable() ? "true" : "false", (unsigned long)resumeLeftS(),
+    interruptedNoSave() ? "true" : "false", (unsigned)interruptedMode(), resumeAvailable() ? "true" : "false", (unsigned long)resumeLeftS(),
     resetReasonTextLocal(), systemBusy() ? "false" : "true",
     (currentRole == roleAdmin &&    // only the admin can change them, so only the admin is asked
      (strcmp(cfg.webPassword, DEFAULT_WEB_PASSWORD) == 0 || strcmp(cfg.otaPassword, DEFAULT_OTA_PASSWORD) == 0)) ? "true" : "false",
@@ -651,7 +652,7 @@ static void handleHistoryGet() {
     "\"monthKey\":%lu,\"monthTap\":%.2f,\"monthReused\":%.2f,\"monthSaved\":%.2f,\"monthCycles\":%lu,"
     "\"prevMonthKey\":%lu,\"prevMonthTap\":%.2f,\"prevMonthReused\":%.2f,\"prevMonthSaved\":%.2f,\"prevMonthCycles\":%lu,"
     "\"lastEndEpoch\":%lu,\"lastDurationS\":%lu,\"lastTap\":%.2f,\"lastReused\":%.2f,\"lastSaved\":%.2f,"
-    "\"lastCompleted\":%u,\"lastValid\":%u,\"stepAvgS\":[%lu,%lu,%lu],\"stepSamples\":[%u,%u,%u],\"settings\":",
+    "\"lastCompleted\":%u,\"lastValid\":%u,\"lastMode\":%d,\"stepAvgS\":[%lu,%lu,%lu],\"stepSamples\":[%u,%u,%u],\"settings\":",
     (unsigned)STATS_VERSION, FIRMWARE_VERSION,
     stats.totalTapL, stats.totalReusedL, stats.totalSavedL, (unsigned long)stats.totalCycles,
     (unsigned long)stats.monthKey, stats.monthTapL, stats.monthReusedL, stats.monthSavedL, (unsigned long)stats.monthCycles,
@@ -659,6 +660,7 @@ static void handleHistoryGet() {
     (unsigned long)stats.prevMonthCycles,
     (unsigned long)stats.lastEndEpoch, (unsigned long)stats.lastDurationS, stats.lastTapL, stats.lastReusedL,
     stats.lastSavedL, (unsigned)stats.lastCompleted, (unsigned)stats.lastValid,
+    stats.lastMode == LAST_MODE_UNKNOWN ? -1 : (int)stats.lastMode,
     (unsigned long)stats.stepAvgS[0], (unsigned long)stats.stepAvgS[1], (unsigned long)stats.stepAvgS[2],
     (unsigned)stats.stepSamples[0], (unsigned)stats.stepSamples[1], (unsigned)stats.stepSamples[2]);
   if (currentRole == roleAdmin && n > 0 && n < (int)sizeof(buf) - 800) {
@@ -695,6 +697,10 @@ static void handleHistoryRestore() {
   in.lastEndEpoch = argU("lastEndEpoch");  in.lastDurationS = argU("lastDurationS");
   in.lastTapL = argF("lastTap");  in.lastReusedL = argF("lastReused");  in.lastSavedL = argF("lastSaved");
   in.lastCompleted = argU("lastCompleted") ? 1 : 0;  in.lastValid = argU("lastValid") ? 1 : 0;
+  {  // 3.18: -1 or missing (a backup from an older firmware) = unknown; any other value must be 0-2
+    long m = server.hasArg("lastMode") ? strtol(server.arg("lastMode").c_str(), nullptr, 10) : -1;
+    in.lastMode = m < 0 ? LAST_MODE_UNKNOWN : (m <= 2 ? (uint8_t)m : 7);   // 7 is refused by statsValid()
+  }
   in.stepAvgS[0] = argU("stepAvg0");  in.stepAvgS[1] = argU("stepAvg1");  in.stepAvgS[2] = argU("stepAvg2");
   in.stepSamples[0] = argU("stepN0"); in.stepSamples[1] = argU("stepN1"); in.stepSamples[2] = argU("stepN2");
   if (!statsHasData(in))  { sendError(400, "The backup has no water history in it."); return; }
@@ -795,14 +801,20 @@ static void handleStop() {
 static void handleStart() {
   if (!actionAllowed(true)) return;
   if (!cfg.allowRemoteStart) { sendError(403, "Starting from the dashboard is turned off in Settings."); return; }
-  // save=0: "Reuse only" (3.7), the rinse water goes to the drain. Missing or 1: "Reuse and save".
-  bool save = true;
+  // mode=0 "Reuse and save", 1 "Reuse only", 2 "Reuse all" (3.18). The older
+  // save=1 / save=0 (3.7) still works; mode wins when both are sent. Neither: Reuse and save.
+  CycleMode mode = cmReuseSave;
   if (server.hasArg("save")) {
     String v = server.arg("save");
     if (v != "0" && v != "1") { sendError(400, "save must be 0 or 1."); return; }
-    save = (v == "1");
+    mode = (v == "1") ? cmReuseSave : cmReuseOnly;
   }
-  if (!requestRemoteStart(save)) { sendError(409, "A cycle is already running."); return; }
+  if (server.hasArg("mode")) {
+    String v = server.arg("mode");
+    if (v != "0" && v != "1" && v != "2") { sendError(400, "mode must be 0, 1 or 2."); return; }
+    mode = (CycleMode)(v[0] - '0');
+  }
+  if (!requestRemoteStart(mode)) { sendError(409, "A cycle is already running."); return; }
   sendJson(200, "{\"ok\":true}");
 }
 

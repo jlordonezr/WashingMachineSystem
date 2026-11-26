@@ -31,7 +31,8 @@ static unsigned long interruptedAtMs = 0;       // millis() when it was found (s
 
 bool interruptedInfo(int& state, uint32_t& epoch) { state = interruptedState; epoch = interruptedEpoch; return interruptedFlag; }
 void dismissInterrupted() { interruptedFlag = false; }
-bool interruptedNoSave() { return interruptedFlag && interruptedSnap.noSave; }
+bool interruptedNoSave() { return interruptedFlag && interruptedSnap.mode != cmReuseSave; }
+CycleMode interruptedMode() { return interruptedFlag ? (CycleMode)interruptedSnap.mode : cmReuseSave; }
 
 void bootChecks() {
   logEvent("Controller started (%s), firmware %s", resetReasonText(), FIRMWARE_VERSION);
@@ -84,15 +85,17 @@ bool debounceButton(int pin, unsigned long& lastPressTime, bool& lastState) {
   return (millis() - lastPressTime > DEBOUNCE_DELAY) && (current == LOW);
 }
 
-// START on the panel (3.17). At READY one press starts the cycle at once in
-// "Reuse and save". Until step 4 begins, each further press switches the mode
-// (Reuse only <-> Reuse and save); from step 4 on a press only shows that the
-// mode is fixed. A press counts on the debounced press edge, and only when it
+// START on the panel (3.17, three modes from 3.18). At READY one press starts
+// the cycle at once in "Reuse and save". Until step 4 begins, each further press
+// switches the mode: Reuse and save -> Reuse only -> Reuse all -> Reuse and save;
+// from step 4 on a press only shows that the mode is fixed. A press counts on the debounced press edge, and only when it
 // comes START_MIN_GAP_MS after the last counted one, so bounce never counts
 // twice. A button already held at power-up never counts until it has been
 // released; held START_STUCK_MS it is reported as stuck.
-static bool cycleNoSave    = false;     // "Reuse only": set at Start; START on the panel switches it until step 4 (3.17)
-static bool startNoSave    = false;     // the next Start is "Reuse only" (from the app)
+static CycleMode cycleMode = cmReuseSave;   // set at Start; START on the panel switches it until step 4 (3.17, 3.18)
+static CycleMode startMode = cmReuseSave;   // mode of the next Start (the app's choice)
+static bool cycleSaves()         { return cycleMode == cmReuseSave; }   // step 4 sends the rinse to the tank
+static bool cycleReusesInRinse() { return cycleMode == cmReuseAll; }    // step 3 takes tank water like step 1
 static bool startFromPanel = false;     // the next Start came from START on the panel
 static bool startArmed     = false;     // START has been seen released since power-up
 static bool startDown      = false;     // START held (debounced) on the last pass
@@ -101,8 +104,13 @@ static bool startCounted   = false;     // a press has been counted since power-
 static unsigned long startDownSince = 0;
 static unsigned long lastStartCountedMs = 0;
 
-static void showModeNotice(bool reuseOnly, bool fixed) {
-  displayShowNotice(reuseOnly ? TRS("REUSE ONLY", "SOLO REUSAR") : TRS("REUSE & SAVE", "REUSO+AHORRO"),
+static const char* modeLogName(CycleMode m) {   // event log (English)
+  return m == cmReuseAll ? "reuse all" : m == cmReuseOnly ? "reuse only" : "reuse and save";
+}
+
+static void showModeNotice(CycleMode m, bool fixed) {
+  displayShowNotice(m == cmReuseAll  ? TRS("REUSE ALL", "REUSAR TODO")
+                  : m == cmReuseOnly ? TRS("REUSE ONLY", "SOLO REUSAR") : TRS("REUSE & SAVE", "REUSO+AHORRO"),
                     fixed ? TRS("Mode fixed|Step 4 running", "Modo fijo|Paso 4 en curso")
                           : TRS("Press START|to change", "Pulse START|para cambiar"), START_NOTICE_MS);
 }
@@ -113,20 +121,22 @@ static void saveCycleSnapshot();
 static void handleStartPress() {
   if (activeState == stIdle) {
     inStart = true;                     // one pass, like the app's Start
-    startNoSave = false;                // the panel always starts "Reuse and save"
+    startMode = cmReuseSave;            // the panel always starts "Reuse and save"
     startFromPanel = true;              // handleRunStateEntry() shows the mode
     beep(BEEP_TICK);
     return;
   }
   beep(BEEP_TICK);
   if (activeState == stDrain2) {        // step 4 already sends the rinse where the mode said
-    showModeNotice(cycleNoSave, true);
+    showModeNotice(cycleMode, true);
     return;
   }
-  cycleNoSave = !cycleNoSave;           // Starting and steps 1-3
+  // Starting and steps 1-3. In step 3 the next pass takes the water from the new
+  // mode's source (tank for Reuse all, tap otherwise).
+  cycleMode = (CycleMode)((cycleMode + 1) % CYCLE_MODE_COUNT);
   saveCycleSnapshot();                  // a resume after a power cut keeps the new mode
-  logEvent(cycleNoSave ? "Mode changed: reuse only (panel)" : "Mode changed: reuse and save (panel)");
-  showModeNotice(cycleNoSave, false);
+  logEvent("Mode changed: %s (panel)", modeLogName(cycleMode));
+  showModeNotice(cycleMode, false);
 }
 
 static void readStartButton() {
@@ -235,8 +245,8 @@ const char* checkAndFillWashingMachine() {
 // a pump-out trickling, the fill valve closes and the drain opens on the same
 // pass. If the machine pumps again (a spin), saving resumes once the flow has
 // stayed above the limit for SAVE_RESUME_MS, so the valves do not chatter.
-// "Reuse only" cycle (app button, 3.7): step 1 reuses tank water as usual, but
-// in step 4 the rinse water goes to the drain; the fill valve stays closed.
+// "Reuse only" cycle (app button, 3.7) and "Reuse all" (3.18): in step 4 the
+// rinse water goes to the drain; the fill valve stays closed.
 static bool saveStoppedFull = false;   // reset when step 4 begins
 static bool saveLowFlow     = false;   // drain flow at or below cfg.saveMinLpm: draining
 static bool saveAbove       = false;   // ... flow back above the limit since saveAboveMs
@@ -245,9 +255,10 @@ static unsigned long saveAboveMs = 0;
 static void resetSaveFlow() { saveLowFlow = false; saveAbove = false; }
 
 const char* checkAndFillWaterTank() {
-  if (cycleNoSave) {
+  if (!cycleSaves()) {
     noSavingWater();                   // fill valve closed, drain open
-    return TR("Reuse only: the rinse water goes to the drain", "Solo reusar: el agua de enjuague va al desagüe");
+    return cycleMode == cmReuseAll ? TR("Reuse all: the rinse water goes to the drain", "Reusar todo: el agua de enjuague va al desagüe")
+                                   : TR("Reuse only: the rinse water goes to the drain", "Solo reusar: el agua de enjuague va al desagüe");
   }
   if (tankFull()) saveStoppedFull = true;
   DEBUG_PRINT(saveStoppedFull ? "Tank full." : "Tank has room.");
@@ -400,6 +411,7 @@ static void recordCycleStats(bool completed) {
   stats.lastSavedL    = cycleSavedL;
   stats.lastCompleted = completed ? 1 : 0;
   stats.lastValid     = 1;
+  stats.lastMode      = (uint8_t)cycleMode;
   lastEndMillis       = millis();
   stats.totalTapL    += cycleTapL;     stats.monthTapL    += cycleTapL;
   stats.totalReusedL += cycleReusedL;  stats.monthReusedL += cycleReusedL;
@@ -416,7 +428,7 @@ static void saveCycleSnapshot() {
   CycleSnapshot s;
   memset(&s, 0, sizeof(s));
   s.state   = (uint8_t)activeState;
-  s.noSave  = cycleNoSave ? 1 : 0;
+  s.mode    = (uint8_t)cycleMode;
   s.filled  = (activeState == stFill1 || activeState == stFill2) && gates.filled ? 1 : 0;
   s.epoch   = timeIsValid() ? (uint32_t)time(nullptr) : 0;
   s.cycleS  = (millis() - cycleStartMillis) / 1000UL;
@@ -482,7 +494,12 @@ void handleIdleStateEntry() {
     char body[320];
     const char* how = stoppedByUser ? TR("The cycle was stopped.", "Se detuvo el ciclo.")
                                     : TR("The wash cycle is complete.", "El ciclo de lavado terminó.");
-    if (cycleNoSave)
+    if (cycleMode == cmReuseAll)
+      snprintf(body, sizeof(body),
+               TR("%s Tank water reused in the wash and the rinse: %.0f L. Reuse all: the rinse water went to the drain.",
+                  "%s Agua del tanque reusada en el lavado y el enjuague: %.0f L. Reusar todo: el agua de enjuague fue al desagüe."),
+               how, cycleReusedL);
+    else if (cycleMode == cmReuseOnly)
       snprintf(body, sizeof(body),
                TR("%s Tank water reused: %.0f L. Reuse only: the rinse water went to the drain.",
                   "%s Agua del tanque reusada: %.0f L. Solo reusar: el agua de enjuague fue al desagüe."),
@@ -500,7 +517,7 @@ void handleIdleStateEntry() {
     if (!stoppedByUser) beep(BEEP_DONE);
     cycleMarkEnd();          // only a cycle that really ran clears the marker; at power-up bootChecks() reads it first
   }
-  cycleNoSave = false;
+  cycleMode = cmReuseSave;
   stepStartTime = 0;
   DEBUG_PRINT("Idle state fully reset. Ready for next Start.");
 }
@@ -511,11 +528,12 @@ void handleRunStateEntry() {
   cycleActive  = true;
   cycleStartMillis = millis();
   interruptedFlag = false;   // a new cycle replaces the "interrupted" notice
-  cycleNoSave = startNoSave;   // "Reuse only" from the app; START on the panel: "Reuse and save"
-  startNoSave = false;
+  cycleMode = startMode;       // the app's choice; START on the panel: "Reuse and save"
+  startMode = cmReuseSave;
   bool fromPanel = startFromPanel;
   startFromPanel = false;
-  logEvent(cycleNoSave ? "Cycle started: reuse only, rinse water to the drain" : "Cycle started");
+  if (cycleMode == cmReuseSave) logEvent("Cycle started");
+  else logEvent("Cycle started: %s, rinse water to the drain", modeLogName(cycleMode));
   if (manualWashActive) {    // starting a cycle ends a manual wash
     manualWashActive = false;
     manualWashResult = "cycle";
@@ -526,7 +544,7 @@ void handleRunStateEntry() {
   tankFullAlertSent = false;
   saveCycleSnapshot();
   displayClearNotice();  // Start pressed: drop "Cycle stopped/complete" right away
-  if (fromPanel) showModeNotice(cycleNoSave, false);   // START again switches the mode (3.17)
+  if (fromPanel) showModeNotice(cycleMode, false);   // START again switches the mode (3.17)
 }
 
 static const char* const STEP_EVENT[STATE_COUNT] = { "", "", "Step 1/4 wash started", "Step 2/4 soapy drain started",
@@ -540,7 +558,8 @@ static void handleFillDrainEntry(const char* label) {
   bool resumed = resuming;
   resuming = false;
   if (resumed) { /* takeResumeRequest() logged it */ }
-  else if (activeState == stDrain2 && cycleNoSave) logEvent("Step 4/4 final drain started (reuse only, not saving)");
+  else if (activeState == stDrain2 && !cycleSaves()) logEvent("Step 4/4 final drain started (%s, not saving)", modeLogName(cycleMode));
+  else if (activeState == stFill2 && cycleReusesInRinse()) logEvent("Step 3/4 rinse started (reuse all)");
   else if (activeState >= stFill1 && activeState < STATE_COUNT) logEvent("%s", STEP_EVENT[activeState]);
   resetFlowSensors();
   if (resumed && resumeFilledStep) gates.resumeFilled(drainFlow());   // wait only for the drain that ends the step
@@ -712,10 +731,13 @@ void idleStateLogic() {
 
 void runStateLogic() {
   periodicAction(lastCheckTime, noSavingWater, "System running.", TRS("STARTING", "INICIANDO"),
-                 cycleNoSave ? TRS("Getting ready...|Reuse only", "Preparando...|Solo reusar")
-                             : TRS("Getting ready...|Reuse and save", "Preparando...|Reusa y guarda"),
-                 cycleNoSave ? TR("Starting: reuse only, the rinse water goes to the drain", "Iniciando: solo reusar, el enjuague va al desagüe")
-                             : TR("Starting...", "Iniciando..."));
+                 cycleMode == cmReuseAll  ? TRS("Getting ready...|Reuse all", "Preparando...|Reusar todo")
+               : cycleMode == cmReuseOnly ? TRS("Getting ready...|Reuse only", "Preparando...|Solo reusar")
+                                          : TRS("Getting ready...|Reuse and save", "Preparando...|Reusa y guarda"),
+                 cycleMode == cmReuseAll  ? TR("Starting: reuse all, tank water for the wash and the rinse, nothing saved",
+                                               "Iniciando: reusar todo, agua del tanque para lavar y enjuagar, sin guardar")
+               : cycleMode == cmReuseOnly ? TR("Starting: reuse only, the rinse water goes to the drain", "Iniciando: solo reusar, el enjuague va al desagüe")
+                                          : TR("Starting...", "Iniciando..."));
 }
 
 // About how many minutes the cycle still needs, from this machine's typical
@@ -743,6 +765,13 @@ static const char* withTimeLeft(const char* pages) {
   return buf;
 }
 
+// Screen text for the household: where the fill water comes from (steps 1 and 3).
+static const char* fillSourceText() {
+  return fillSource == fillFromTank ? TRS("Reusing water", "Reusando agua")
+       : fillSource == fillFromTap  ? TRS("Using tap water", "Agua de la llave")
+                                    : TRS("Using tap water|Tank is low", "Agua de la llave|Tanque bajo");
+}
+
 void fill1StateLogic() {
   if (millis() - lastCheckTime >= OPERATION_DELAY) {
     bool wasFilled = gates.filled;
@@ -753,10 +782,7 @@ void fill1StateLogic() {
     }
     const char* fillMsg = checkAndFillWashingMachine();
     DEBUG_PRINT(fillMsg);
-    // Screen text for the household: what the machine and the grey water system are doing.
-    const char* fillShort = fillSource == fillFromTank ? TRS("Reusing water", "Reusando agua")
-                          : fillSource == fillFromTap  ? TRS("Using tap water", "Agua de la llave")
-                                                       : TRS("Using tap water|Tank is low", "Agua de la llave|Tanque bajo");
+    const char* fillShort = fillSourceText();
     const char* step1 = TRS("WASH 1 OF 4", "LAVADO 1/4");
     if (stepIsStuck())        displaySetStatus(step1, STUCK_SHORT, STUCK_MESSAGE);
     else if (gates.filled)    displaySetStatus(step1, withTimeLeft(TRS("Washing...", "Lavando...")), TR("The machine is washing", "La lavadora está lavando"));
@@ -782,17 +808,26 @@ void drain1StateLogic() {
 
 void fill2StateLogic() {
   if (millis() - lastCheckTime >= OPERATION_DELAY) {
-    fillWashingMachineWithTapWater();
+    // Reuse all (3.18): the same water choice as step 1, checked on every pass, so
+    // a low tank or a mode switch changes the source at once. Otherwise tap water.
+    const char* fillMsg = nullptr;
+    if (cycleReusesInRinse()) {
+      fillMsg = checkAndFillWashingMachine();
+    } else {
+      pumpAllow(false);
+      fillWashingMachineWithTapWater();
+    }
     bool wasFilled = gates.filled;
     filled2 = gates.fill2Done(tapFlow(), drainFlow(), cfg.minFillLitres);   // rinse filled, then a new drain started
     if (gates.filled && !wasFilled) {
       logEvent("Machine filled (%.1f L); rinsing", gates.litresTaken(tapFlow()));
       saveCycleSnapshot();
     }
-    DEBUG_PRINT("2nd fill: rinsing with tap water.");
+    DEBUG_PRINT(fillMsg ? fillMsg : "2nd fill: rinsing with tap water.");
     const char* step3 = TRS("RINSE 3 OF 4", "ENJUAGUE 3/4");
     if (stepIsStuck())     displaySetStatus(step3, STUCK_SHORT, STUCK_MESSAGE);
     else if (gates.filled) displaySetStatus(step3, withTimeLeft(TRS("Rinsing...", "Enjuagando...")), TR("The machine is rinsing", "La lavadora está enjuagando"));
+    else if (fillMsg)      displaySetStatus(step3, withTimeLeft(fillSourceText()), fillMsg);
     else                   displaySetStatus(step3, withTimeLeft(TRS("Using tap water", "Agua de la llave")),
                                             TR("Rinsing with tap water", "Enjuagando con agua de la llave"));
     lastCheckTime = millis();
@@ -804,7 +839,7 @@ void drain2StateLogic() {
     const char* tankMsg = checkAndFillWaterTank();
     DEBUG_PRINT(tankMsg);
 
-    if (!cycleNoSave && (saveStoppedFull || tankFull()) && !tankFullAlertSent) {   // not when only the flow is low
+    if (cycleSaves() && (saveStoppedFull || tankFull()) && !tankFullAlertSent) {   // not when only the flow is low
       tankFullAlertSent = true;
       notify(TR("Reuse Water: tank full", "Reúso de Agua: tanque lleno"),
              TR("The storage tank is full. The rest of the rinse water is going to the drain.",
@@ -817,7 +852,7 @@ void drain2StateLogic() {
     drain2Done = (elapsed >= cfg.drain2DurationMs);
     unsigned long left = drain2Done ? 0 : (cfg.drain2DurationMs - elapsed) / 1000UL;
     char msg[64];
-    if (cycleNoSave) {
+    if (!cycleSaves()) {
       snprintf(msg, sizeof(msg), TRS("Not saving|Ends in %lu:%02lu", "Sin guardar|Fin en %lu:%02lu"),
                left / 60UL, left % 60UL);
       displaySetStatus(TRS("DRAIN 4 OF 4", "DESAGUE 4/4"), msg, tankMsg);
@@ -848,12 +883,12 @@ void requestRemoteStop() {
   remoteStopRequested = true;
 }
 
-static bool remoteStartNoSave    = false;   // the requested start is "Reuse only"
+static CycleMode remoteStartMode = cmReuseSave;   // mode of the requested start
 
-bool requestRemoteStart(bool save) {
-  if (!cfg.allowRemoteStart || activeState != stIdle) return false;
+bool requestRemoteStart(CycleMode mode) {
+  if (!cfg.allowRemoteStart || activeState != stIdle || mode >= CYCLE_MODE_COUNT) return false;
   remoteStartRequested = true;
-  remoteStartNoSave    = !save;
+  remoteStartMode      = mode;
   return true;
 }
 
@@ -898,15 +933,15 @@ bool takeResumeRequest(int& state) {
   cycleActive  = true;
   cycleStartMillis = millis() - s.cycleS * 1000UL;   // the duration leaves out the time without power
   interruptedFlag = false;
-  cycleNoSave = s.noSave != 0;
-  startNoSave = false;
+  cycleMode = s.mode < CYCLE_MODE_COUNT ? (CycleMode)s.mode : cmReuseSave;
+  startMode = cmReuseSave;
   cycleTapL = s.tapL; cycleReusedL = s.reusedL; cycleSavedL = s.savedL;
   pumpResetForCycle();
   pumpDryAlertSent = false;
   tankFullAlertSent = false;
   resuming = true;
   resumeFilledStep = s.filled && (state == stFill1 || state == stFill2);
-  logEvent("Cycle resumed: step %d/4%s%s", state - 1, cycleNoSave ? ", reuse only" : "",
+  logEvent("Cycle resumed: step %d/4%s%s%s", state - 1, cycleMode != cmReuseSave ? ", " : "", cycleMode != cmReuseSave ? modeLogName(cycleMode) : "",
            resumeFilledStep ? ", was filled" : "");
   displayShowNotice(TRS("RESUMED", "REANUDADO"), TRS("Cycle resumed", "Ciclo reanudado"), NOTICE_DURATION);
   return true;
@@ -919,7 +954,7 @@ void applyRemoteRequests() {
   }
   if (remoteStartRequested) {
     remoteStartRequested = false;
-    if (activeState == stIdle) { inStart = true; startNoSave = remoteStartNoSave; startFromPanel = false; }
+    if (activeState == stIdle) { inStart = true; startMode = remoteStartMode; startFromPanel = false; }
   }
 }
 
@@ -1032,7 +1067,8 @@ void getSystemStatus(SystemStatus& s) {
   s.cycleTapL     = cycleTapL;
   s.cycleReusedL  = cycleReusedL;
   s.cycleSavedL   = cycleSavedL;
-  s.noSave        = cycleActive && cycleNoSave;
+  s.noSave        = cycleActive && !cycleSaves();
+  s.mode          = cycleActive ? (uint8_t)cycleMode : (uint8_t)cmReuseSave;
   s.manualWash    = manualWashActive;
   s.manualWashResult = manualWashResult;
   s.manualWashLeftS = 0;

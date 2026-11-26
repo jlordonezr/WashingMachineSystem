@@ -406,7 +406,6 @@
  "Reuse only, without saving?": "¿Solo reusar, sin guardar?",
  "The wash uses tank water when there is enough, and the rinse water goes to the tank.": "El lavado usa agua del tanque si hay suficiente, y el agua de enjuague va al tanque.",
  "The wash uses tank water when there is enough, and the rinse water goes to the drain, not to the tank.": "El lavado usa agua del tanque si hay suficiente, y el agua de enjuague va al desagüe, no al tanque.",
- "Stop ends the cycle at once and returns the controller to Ready. The start buttons are available when the controller is Ready.": "Detener termina el ciclo de inmediato y deja el controlador en Listo. Los botones para iniciar están disponibles cuando el controlador está Listo.",
  "save must be 0 or 1.": "save debe ser 0 o 1.",
  "Final drain": "Desagüe final",
  "Resume cycle": "Reanudar ciclo",
@@ -451,5 +450,15 @@
  "No answer yet. Checking with the controller…": "Aún no hay respuesta. Se comprueba con el controlador…",
  "App response time": "Tiempo de respuesta de la app",
  "{0} ms (slowest of the last {1}: {2} ms)": "{0} ms (la más lenta de las últimas {1}: {2} ms)",
- "Silent connections closed": "Conexiones inactivas cerradas"
+ "Silent connections closed": "Conexiones inactivas cerradas",
+ "Reuse all": "Reusar todo",
+ "Tank water for the wash and the rinse, nothing saved": "Agua del tanque para lavar y enjuagar, sin guardar",
+ "Reuse all: this wash uses tank water for the wash and the rinse and saves nothing.": "Reusar todo: este lavado usa agua del tanque para lavar y enjuagar y no guarda nada.",
+ "Reuse all, using up the tank?": "¿Reusar todo y vaciar el tanque?",
+ "The cycle uses tank water for the wash and the rinse until the tank is low, then tap water. The rinse water goes to the drain, nothing is saved.": "El ciclo usa agua del tanque para lavar y enjuagar hasta que el tanque esté bajo, luego agua de la llave. El agua de enjuague va al desagüe, no se guarda nada.",
+ "Mode": "Modo",
+ "mode must be 0, 1 or 2.": "mode debe ser 0, 1 o 2.",
+ "Stop ends the cycle at once and returns the controller to Ready. Start is available when the controller is Ready.": "Detener termina el ciclo de inmediato y deja el controlador en Listo. Iniciar está disponible cuando el controlador está Listo.",
+ "Cycle mode": "Modo del ciclo",
+ "Start cycle": "Iniciar ciclo"
 }

@@ -78,6 +78,7 @@ static int failures = 0, passes = 0;
 // Recording
 struct Rec { std::vector<std::pair<int,double>> states; std::vector<std::string> msgs; uint32_t worstDeadHeadMs = 0, deadHead = 0;
              double pumpOnFirst = -1; bool savedWhileSaving = false; bool pumpWhileTap = false;
+             bool pumpInState[8] = {}; bool fillEverOn = false;   // 3.18: pump on in each state; fill valve ever on
              int fillSwitches = 0; bool fillWhileHighWet = false, washWhileHighWet = false; uint32_t fillOnAfterHighMs = 0, highWetMs = 0; };
 static Rec rec;
 static double pumpSince = -1, tapAcc = 0, drainAcc = 0;
@@ -100,6 +101,8 @@ static void stepWorld(uint32_t dtMs) {
   if (drainFlow > 0 && pinOut[OUT_FILL_EV] == HIGH && pinOut[OUT_DRAIN_EV] == LOW) { tankL = std::min(45.0, tankL + drainFlow * dtMs / 60000.0); rec.savedWhileSaving = true; }
   if (pinOut[OUT_WASH_EV] == HIGH) tankL = std::min(45.0, tankL + 6.0 * dtMs / 60000.0);   // tank-wash water (3.13: 6 L/min, as the firmware assumes)
   if (pumpOn && tapOpen) rec.pumpWhileTap = true;
+  if (pumpOn && activeState >= 0 && activeState < 8) rec.pumpInState[activeState] = true;
+  if (pinOut[OUT_FILL_EV] == HIGH) rec.fillEverOn = true;
   static int lastFill = LOW;
   if (pinOut[OUT_FILL_EV] != lastFill) { lastFill = pinOut[OUT_FILL_EV]; rec.fillSwitches++; }
   // Interlock checks allow the debounce time (0.2 s) plus one 250 ms pass after the high float is wet.
@@ -142,6 +145,7 @@ static bool sawMsg(const char* m) {
 static bool eventSeen(const char* needle) { for (int i = 0; i < eventCount(); ++i) { uint32_t e, u; const char* tx; eventAt(i, e, u, tx); if (strstr(tx, needle)) return true; } return false; }
 static int eventCountOf(const char* needle) { int n = 0; for (int i = 0; i < eventCount(); ++i) { uint32_t e, u; const char* tx; eventAt(i, e, u, tx); if (strstr(tx, needle)) ++n; } return n; }
 static bool noSaveNow() { SystemStatus s; getSystemStatus(s); return s.noSave; }
+static int modeNow() { SystemStatus s; getSystemStatus(s); return s.mode; }
 static bool alertSeen(const char* t, int* prio = nullptr) { for (auto& a : alerts) if (a.title == t) { if (prio) *prio = a.prio; return true; } return false; }
 
 // Scenarios run in English (their checks use the English texts) unless they ask
@@ -336,13 +340,13 @@ int main(int argc, char** argv) {
     printf("F14 Reuse only from the app: tank water in step 1, rinse water to the drain in step 4 (3.7)\n");
     typicalProgram(); boot();
     cfg.allowRemoteStart = false;
-    CHECK(!requestRemoteStart(false), "Reuse only accepted with starting from the app turned off");
+    CHECK(!requestRemoteStart(cmReuseOnly), "Reuse only accepted with starting from the app turned off");
     cfg.allowRemoteStart = true;
-    CHECK(requestRemoteStart(false), "Reuse only refused at Ready");
+    CHECK(requestRemoteStart(cmReuseOnly), "Reuse only refused at Ready");
     startAt = now();                                   // the washer program starts with the app start
     runFor(5);
     CHECK(systemBusy() && eventSeen("Cycle started: reuse only"), "Reuse only cycle did not start");
-    CHECK(!requestRemoteStart(true), "a second start accepted while a cycle runs");
+    CHECK(!requestRemoteStart(cmReuseSave), "a second start accepted while a cycle runs");
     SystemStatus snap; getSystemStatus(snap);
     CHECK(snap.noSave, "status does not report the Reuse only cycle");
     bool fillInStep4 = false, drainShut = false, header = false;
@@ -398,7 +402,7 @@ int main(int argc, char** argv) {
     CHECK(noSaveNow(), "the 2nd press did not switch to Reuse only");
     CHECK(onScreen("REUSE ONLY") && onScreen("Press START") && onScreen("to change"), "notice is not REUSE ONLY / Press START / to change");
     CHECK(eventSeen("Mode changed: reuse only (panel)"), "the switch is not in the event log");
-    { CycleSnapshot c; Preferences p; p.getBytes("cyc", &c, sizeof(c)); CHECK(c.noSave == 1, "snapshot in flash not updated with the new mode"); }
+    { CycleSnapshot c; Preferences p; p.getBytes("cyc", &c, sizeof(c)); CHECK(c.mode == cmReuseOnly, "snapshot in flash not updated with the new mode"); }
     runFor(4);
     CHECK(!onScreen("REUSE ONLY") && onScreen("WASH 1 OF 4"), "the step screen did not come back after the notice");
     runFor(1800);
@@ -408,17 +412,19 @@ int main(int argc, char** argv) {
     CHECK(!noSaveNow(), "Reuse only still reported after the cycle");
   }
   else if (sc == "F23") {
-    printf("F23 press in step 1, then a 3rd press in step 3: back to Reuse and save; step 4 saves (3.17)\n");
+    printf("F23 press in step 1 (Reuse only), 3rd press in step 3 (Reuse all), 4th: back to Reuse and save; step 4 saves (3.17, 3.18)\n");
     typicalProgram(); boot(); runFor(11); pressStart(); runFor(60);
     tapStart(); runFor(1.5);
-    CHECK(noSaveNow(), "the 2nd press did not switch to Reuse only");
+    CHECK(noSaveNow() && modeNow() == cmReuseOnly, "the 2nd press did not switch to Reuse only");
     runUntilState(stFill2); runFor(30);
     CHECK(activeState == stFill2, "expected step 3, state %d", activeState);
     tapStart(); runFor(0.1);
-    CHECK(!noSaveNow(), "the 3rd press did not switch back to Reuse and save");
+    CHECK(modeNow() == cmReuseAll && onScreen("REUSE ALL"), "the 3rd press did not switch to Reuse all (mode %d)", modeNow());
+    runFor(1.5); tapStart(); runFor(0.1);
+    CHECK(!noSaveNow() && modeNow() == cmReuseSave, "the 4th press did not switch back to Reuse and save");
     CHECK(onScreen("REUSE & SAVE") && onScreen("to change"), "notice is not REUSE & SAVE / to change");
-    CHECK(eventSeen("Mode changed: reuse and save (panel)") && eventCountOf("Mode changed") == 2, "event log: %d mode changes", eventCountOf("Mode changed"));
-    { CycleSnapshot c; Preferences p; p.getBytes("cyc", &c, sizeof(c)); CHECK(c.noSave == 0, "snapshot in flash still Reuse only"); }
+    CHECK(eventSeen("Mode changed: reuse and save (panel)") && eventCountOf("Mode changed") == 3, "event log: %d mode changes", eventCountOf("Mode changed"));
+    { CycleSnapshot c; Preferences p; p.getBytes("cyc", &c, sizeof(c)); CHECK(c.mode == cmReuseSave, "snapshot in flash not Reuse and save (%d)", c.mode); }
     runFor(1800);
     CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "step 4 did not save after switching back (saved %.1f L)", stats.totalSavedL);
   }
@@ -472,8 +478,8 @@ int main(int argc, char** argv) {
     tapStart(); runFor(260);
     CHECK(activeState == stFill1 && noSaveNow(), "expected Reuse only in step 1 (state %d, noSave %d)", activeState, noSaveNow());
     CycleSnapshot snap; Preferences p; p.getBytes("cyc", &snap, sizeof(snap));
-    CHECK(p.getBytesLength("cyc") == sizeof(snap) && snap.state == stFill1 && snap.filled == 1 && snap.noSave == 1,
-          "snapshot: state %d filled %d noSave %d", snap.state, snap.filled, snap.noSave);
+    CHECK(p.getBytesLength("cyc") == sizeof(snap) && snap.state == stFill1 && snap.filled == 1 && snap.mode == cmReuseOnly,
+          "snapshot: state %d filled %d mode %d", snap.state, snap.filled, snap.mode);
     Preferences::saveFile(flash);
   }
   else if (sc == "F27b") {
@@ -493,16 +499,18 @@ int main(int argc, char** argv) {
     CHECK(!rec.savedWhileSaving && stats.totalSavedL == 0, "rinse water saved after resuming a Reuse only cycle (%.1f L)", stats.totalSavedL);
   }
   else if (sc == "F28") {
-    printf("F28 the app starts Reuse only, a panel press in step 2 switches to Reuse and save (3.17)\n");
+    printf("F28 the app starts Reuse only, panel presses in step 2: Reuse all, then Reuse and save (3.17, 3.18)\n");
     typicalProgram(); boot(); runFor(11);
     cfg.allowRemoteStart = true;
-    CHECK(requestRemoteStart(false), "Reuse only refused at Ready");
+    CHECK(requestRemoteStart(cmReuseOnly), "Reuse only refused at Ready");
     startAt = now(); runFor(1);
     CHECK(noSaveNow() && eventSeen("Cycle started: reuse only"), "app start was not Reuse only");
     runUntilState(stDrain1); runFor(20);
     CHECK(activeState == stDrain1, "expected step 2, state %d", activeState);
     tapStart(); runFor(0.1);
-    CHECK(!noSaveNow() && onScreen("REUSE & SAVE") && eventSeen("Mode changed: reuse and save (panel)"), "panel press in step 2 did not switch to Reuse and save");
+    CHECK(modeNow() == cmReuseAll && onScreen("REUSE ALL") && eventSeen("Mode changed: reuse all (panel)"), "panel press in step 2 did not switch to Reuse all (mode %d)", modeNow());
+    runFor(1.5); tapStart(); runFor(0.1);
+    CHECK(!noSaveNow() && onScreen("REUSE & SAVE") && eventSeen("Mode changed: reuse and save (panel)"), "2nd panel press in step 2 did not switch to Reuse and save");
     runFor(1800);
     CHECK(rec.savedWhileSaving && stats.totalSavedL > 1, "step 4 did not save (saved %.1f L)", stats.totalSavedL);
   }
@@ -521,14 +529,14 @@ int main(int argc, char** argv) {
     printf("F16 Reuse only cycle cut after the machine filled in step 1 (part 1: run until 320 s, then cut power) (3.10)\n");
     typicalProgram(); boot();
     cfg.allowRemoteStart = true;
-    CHECK(requestRemoteStart(false), "Reuse only refused at Ready");
+    CHECK(requestRemoteStart(cmReuseOnly), "Reuse only refused at Ready");
     startAt = now(); runFor(320);
     CHECK(activeState == stFill1, "expected to be washing, state %d", activeState);
     CycleSnapshot snap; Preferences p;
     CHECK(p.getBytesLength("cyc") == sizeof(snap), "no full snapshot in flash during the cycle");
     p.getBytes("cyc", &snap, sizeof(snap));
-    CHECK(snap.version == CYCLE_SNAP_VERSION && snap.state == stFill1 && snap.filled == 1 && snap.noSave == 1,
-          "snapshot: version %d state %d filled %d noSave %d", snap.version, snap.state, snap.filled, snap.noSave);
+    CHECK(snap.version == CYCLE_SNAP_VERSION && snap.state == stFill1 && snap.filled == 1 && snap.mode == cmReuseOnly,
+          "snapshot: version %d state %d filled %d mode %d", snap.version, snap.state, snap.filled, snap.mode);
     CHECK(snap.reusedL > 5 && snap.cycleS >= 130, "snapshot water/time: reused %.1f L, %u s", snap.reusedL, (unsigned)snap.cycleS);
     Preferences::saveFile(flash);
   }
@@ -714,6 +722,189 @@ int main(int argc, char** argv) {
     simReset = ESP_RST_TASK_WDT; boot(); int st; uint32_t ep;
     CHECK(!interruptedInfo(st, ep), "interruption reported although no cycle ran");
     CHECK(eventSeen("Watchdog"), "watchdog restart not in the event log");
+  }
+  else if (sc == "F30") {
+    printf("F30 Reuse all, full cycle from 30 L: tank water in step 1 and step 3, nothing saved (3.18)\n");
+    typicalProgram(); boot(); runFor(11);
+    cfg.allowRemoteStart = true;
+    // First a Reuse only cycle from the same 30 L, to compare the litres reused.
+    CHECK(requestRemoteStart(cmReuseOnly), "Reuse only refused at Ready");
+    startAt = now(); runFor(1800);
+    CHECK(activeState == stIdle && stats.lastMode == cmReuseOnly, "Reuse only cycle did not complete (last mode %d)", stats.lastMode);
+    float reuseOnlyL = stats.lastReusedL;
+    CHECK(!rec.pumpInState[stFill2], "Reuse only: pump ran in step 3");
+    tankL = 30.0; rec = Rec(); alerts.clear();
+    CHECK(requestRemoteStart(cmReuseAll), "Reuse all refused at Ready");
+    startAt = now(); runFor(1);
+    CHECK(modeNow() == cmReuseAll && noSaveNow(), "status: mode %d, noSave %d", modeNow(), noSaveNow());
+    CHECK(eventSeen("Cycle started: reuse all, rinse water to the drain"), "event log has no Reuse all start");
+    CHECK(sawMsg("Reuse all"), "start screen does not say Reuse all");
+    double tank3 = -1; bool reusingOnRinse = false;
+    while (activeState != stIdle && now() < startAt + 2000) {
+      runFor(0.25);
+      if (activeState == stFill2 && tank3 < 0) tank3 = tankL;
+      if (activeState == stFill2 && !strcmp(displayGetTitle(), "RINSE 3 OF 4") && onScreen("Reusing water")) reusingOnRinse = true;
+    }
+    printf("    tank at step 3: %.1f L, at the end %.1f L; reused %.1f L (Reuse only %.1f L)\n", tank3, tankL, stats.lastReusedL, reuseOnlyL);
+    CHECK(rec.pumpInState[stFill1] && rec.pumpInState[stFill2], "pump not on in step 1 (%d) and step 3 (%d)", rec.pumpInState[stFill1], rec.pumpInState[stFill2]);
+    CHECK(reusingOnRinse, "RINSE 3 OF 4 never showed \"Reusing water\"");
+    CHECK(eventSeen("Step 3/4 rinse started (reuse all)"), "event log has no Reuse all step 3");
+    CHECK(tankL > 9.0 && tankL < 11.5, "tank ended at %.1f L, not at the low float (10 L)", tankL);
+    CHECK(!rec.fillEverOn && !rec.savedWhileSaving && stats.lastSavedL == 0, "Reuse all opened the fill valve or saved %.1f L", stats.lastSavedL);
+    CHECK(sawMsg("Not saving"), "step 4 screen never showed \"Not saving\"");
+    CHECK(!rec.pumpWhileTap, "pump and tap valve were on together");
+    CHECK(stats.lastReusedL > reuseOnlyL + 1, "Reuse all reused %.1f L, not more than Reuse only (%.1f L)", stats.lastReusedL, reuseOnlyL);
+    CHECK(stats.lastMode == cmReuseAll && stats.totalReusedL > reuseOnlyL + stats.lastReusedL - 0.1f, "history: last mode %d, total reused %.1f L", stats.lastMode, stats.totalReusedL);
+    CHECK(!alertSeen("Reuse Water: tank full"), "tank-full alert in a Reuse all cycle");
+    CHECK(modeNow() == cmReuseSave && !noSaveNow(), "Reuse all still reported after the cycle");
+  }
+  else if (sc == "F31") {
+    printf("F31 Reuse all: the tank reaches the low float mid-rinse, step 3 changes to tap water (3.18)\n");
+    typicalProgram(); boot(); runFor(11);
+    cfg.allowRemoteStart = true;
+    CHECK(requestRemoteStart(cmReuseAll), "Reuse all refused at Ready");
+    startAt = now(); runUntilState(stFill2);
+    tankL = 13.0; rec.msgs.clear(); rec.worstDeadHeadMs = 0; rec.pumpWhileTap = false;   // about 3 L left above the low float
+    bool pumped = false, tapAfter = false;
+    for (int i = 0; i < 100 * 20; i++) {
+      runFor(0.05);
+      if (pinOut[OUT_MOTOR] == HIGH) pumped = true;
+      if (pumped && pinOut[OUT_MOTOR] == LOW && pinOut[OUT_TAP_EV] == HIGH && progT() < 880) tapAfter = true;
+      if (activeState != stFill2) break;
+    }
+    printf("    tank %.1f L when the rinse filled; worst run against a closed inlet %u ms\n", tankL, rec.worstDeadHeadMs);
+    CHECK(pumped, "pump never ran in step 3");
+    CHECK(tapAfter, "step 3 did not change to tap water during the draw");
+    CHECK(sawMsg("Tank is low"), "\"Tank is low\" not shown in step 3");
+    CHECK(!rec.pumpWhileTap, "pump and tap valve were on together");
+    CHECK(rec.worstDeadHeadMs <= 350, "pump ran %u ms against the closed inlet", rec.worstDeadHeadMs);
+    CHECK(tankL > 9.0, "tank pumped down to %.1f L, below the low float", tankL);
+  }
+  else if (sc == "F32") {
+    printf("F32 Reuse all with the tank below the low float at Start: the whole cycle on tap water (3.18)\n");
+    tankL = 5.0; typicalProgram(); boot(); runFor(11);
+    cfg.allowRemoteStart = true;
+    CHECK(requestRemoteStart(cmReuseAll), "Reuse all refused at Ready");
+    startAt = now(); runFor(1800);
+    CHECK(activeState == stIdle && stateAt(stDrain2) > 0, "cycle did not complete");
+    CHECK(rec.pumpOnFirst < 0, "pump ran with an empty tank");
+    CHECK(!rec.fillEverOn && stats.lastSavedL == 0 && stats.lastReusedL == 0 && stats.lastTapL > 20, "litres: tap %.1f, reused %.1f, saved %.1f",
+          stats.lastTapL, stats.lastReusedL, stats.lastSavedL);
+    CHECK(sawMsg("Tank is low"), "\"Tank is low\" not shown");
+  }
+  else if (sc == "F33") {
+    printf("F33 Reuse and save and Reuse only: step 3 still on tap water only (3.18 regression)\n");
+    typicalProgram(); boot(); runFor(11);
+    cfg.allowRemoteStart = true;
+    for (CycleMode m : {cmReuseSave, cmReuseOnly}) {
+      tankL = 30.0; rec = Rec();
+      CHECK(requestRemoteStart(m), "start refused (mode %d)", m);
+      startAt = now(); runFor(1800);
+      CHECK(activeState == stIdle && stateAt(stDrain2) > 0, "mode %d: cycle did not complete", m);
+      CHECK(rec.pumpInState[stFill1] && !rec.pumpInState[stFill2], "mode %d: pump in step 1 %d, in step 3 %d", m, rec.pumpInState[stFill1], rec.pumpInState[stFill2]);
+      CHECK(m == cmReuseSave ? rec.savedWhileSaving : !rec.fillEverOn, "mode %d: step 4 did not behave as before", m);
+    }
+  }
+  else if (sc == "F34") {
+    printf("F34 START presses: 1 Reuse and save, 2 Reuse only, 3 Reuse all, 4 Reuse and save; locked in step 4 (3.18)\n");
+    typicalProgram(); boot(); runFor(11); pressStart(); runFor(0.1);
+    CHECK(activeState != stIdle && modeNow() == cmReuseSave, "1 press: state %d, mode %d", activeState, modeNow());
+    runFor(30);
+    tapStart(); runFor(0.1);
+    CHECK(modeNow() == cmReuseOnly && onScreen("REUSE ONLY") && eventSeen("Mode changed: reuse only (panel)"), "2 presses: mode %d", modeNow());
+    runFor(1.5); tapStart(); runFor(0.1);
+    CHECK(modeNow() == cmReuseAll && noSaveNow() && onScreen("REUSE ALL") && onScreen("to change") && eventSeen("Mode changed: reuse all (panel)"),
+          "3 presses: mode %d, notice REUSE ALL / to change missing or not logged", modeNow());
+    { CycleSnapshot c; Preferences p; p.getBytes("cyc", &c, sizeof(c)); CHECK(c.mode == cmReuseAll, "snapshot mode %d after the switch to Reuse all", c.mode); }
+    runFor(1.5); tapStart(); runFor(0.1);
+    CHECK(modeNow() == cmReuseSave && !noSaveNow() && eventSeen("Mode changed: reuse and save (panel)"), "4 presses: mode %d", modeNow());
+    runUntilState(stDrain2); runFor(5);
+    tapStart(); runFor(0.1);
+    CHECK(activeState == stDrain2 && modeNow() == cmReuseSave && onScreen("Mode fixed"), "a press in step 4 changed the mode (%d)", modeNow());
+    CHECK(eventCountOf("Mode changed") == 3, "%d mode changes logged, expected 3", eventCountOf("Mode changed"));
+    runFor(300);
+    CHECK(rec.savedWhileSaving, "step 4 did not save after the 4th press");
+  }
+  else if (sc == "F35") {
+    printf("F35 switching to Reuse all during a step 3 draw starts the pump; switching away goes back to tap (3.18)\n");
+    typicalProgram(); boot(); runFor(11); pressStart(); runUntilState(stFill2); runFor(5);
+    CHECK(activeState == stFill2 && pinOut[OUT_MOTOR] == LOW && pinOut[OUT_TAP_EV] == HIGH, "step 3 in Reuse and save is not on tap water");
+    tapStart(); runFor(1.2); tapStart(); runFor(0.1);     // Reuse only, then Reuse all
+    CHECK(modeNow() == cmReuseAll, "not Reuse all after two presses (mode %d)", modeNow());
+    runFor(2.0);
+    CHECK(pinOut[OUT_MOTOR] == HIGH && pinOut[OUT_TAP_EV] == LOW, "pump not on the current draw after switching to Reuse all");
+    double tankBefore = tankL; runFor(5);
+    CHECK(tankL < tankBefore - 0.3, "tank water not used after the switch (%.1f -> %.1f L)", tankBefore, tankL);
+    runFor(1.0); tapStart(); runFor(0.5);                 // back to Reuse and save
+    CHECK(modeNow() == cmReuseSave && pinOut[OUT_MOTOR] == LOW && pinOut[OUT_TAP_EV] == HIGH, "switching away from Reuse all did not go back to tap (mode %d, pump %d)",
+          modeNow(), pinOut[OUT_MOTOR]);
+    CHECK(!rec.pumpWhileTap, "pump and tap valve were on together");
+    runFor(1800);
+    CHECK(activeState == stIdle && rec.savedWhileSaving, "cycle did not complete and save after switching back");
+  }
+  else if (sc == "F36a") {
+    printf("F36 power cut in step 3 while Reuse all pumps (part 1: cut at 800 s) (3.18)\n");
+    typicalProgram(); boot(); runFor(11);
+    cfg.allowRemoteStart = true;
+    CHECK(requestRemoteStart(cmReuseAll), "Reuse all refused at Ready");
+    startAt = now(); runFor(800);
+    CHECK(activeState == stFill2 && pinOut[OUT_MOTOR] == HIGH, "expected step 3 with the pump on (state %d, pump %d)", activeState, pinOut[OUT_MOTOR]);
+    CycleSnapshot snap; Preferences p; p.getBytes("cyc", &snap, sizeof(snap));
+    CHECK(snap.version == CYCLE_SNAP_VERSION && snap.state == stFill2 && snap.mode == cmReuseAll, "snapshot: version %d state %d mode %d", snap.version, snap.state, snap.mode);
+    { Preferences q; double t = tankL; q.putBytes("simTank", &t, sizeof(t)); }
+    Preferences::saveFile(flash);
+  }
+  else if (sc == "F36b") {
+    printf("F36 power cut in step 3 while Reuse all pumps (part 2: power back, resume: still Reuse all)\n");
+    Preferences::loadFile(flash);
+    { Preferences q; q.getBytes("simTank", &tankL, sizeof(tankL)); }
+    simUs += 900000000ULL;
+    typicalProgram(); simReset = ESP_RST_POWERON; boot();
+    startAt = now() - 800;
+    runFor(5);
+    CHECK(interruptedMode() == cmReuseAll && interruptedNoSave(), "the cut cycle is not reported as Reuse all (mode %d)", interruptedMode());
+    CHECK(pinOut[OUT_MOTOR] == LOW, "pump on after power-up");
+    CHECK(requestResume(), "Resume refused");
+    runFor(3);
+    CHECK(activeState == stFill2 && modeNow() == cmReuseAll, "resumed cycle: state %d, mode %d", activeState, modeNow());
+    CHECK(eventSeen("Cycle resumed: step 3/4, reuse all"), "resume not in the event log as Reuse all");
+    CHECK(pinOut[OUT_MOTOR] == HIGH, "the resumed step 3 does not reuse tank water on the current draw");
+    runFor(1500);
+    CHECK(activeState == stIdle && stateAt(stDrain2) > 0 && !rec.fillEverOn && stats.lastSavedL == 0, "resumed Reuse all cycle did not finish without saving");
+    CHECK(stats.lastMode == cmReuseAll, "history: last mode %d", stats.lastMode);
+  }
+  else if (sc == "F37") {
+    printf("F37 a snapshot from 3.10-3.17 (version 1, noSave byte) is read at power-up (3.18)\n");
+    typicalProgram(); boot(); runFor(11);
+    Preferences p;
+    auto cutV1 = [&](uint8_t noSave) {
+      CycleSnapshot s; memset(&s, 0, sizeof(s)); s.version = 1; s.state = stFill2; s.mode = noSave; s.cycleS = 790; s.reusedL = 12;
+      p.putBytes("cyc", &s, sizeof(s)); bootChecks();
+    };
+    cutV1(0);
+    CHECK(resumeAvailable() && interruptedMode() == cmReuseSave && !interruptedNoSave(), "version 1, noSave 0: resumable %d, mode %d", resumeAvailable(), interruptedMode());
+    cutV1(1);
+    CHECK(resumeAvailable() && interruptedMode() == cmReuseOnly && interruptedNoSave(), "version 1, noSave 1: resumable %d, mode %d", resumeAvailable(), interruptedMode());
+    startAt = now() - 790;                                // the rinse draw (780-880 s) is under way
+    CHECK(requestResume(), "Resume of a version 1 snapshot refused");
+    runFor(30);
+    CHECK(activeState == stFill2 && modeNow() == cmReuseOnly, "resumed: state %d, mode %d", activeState, modeNow());
+    CHECK(eventSeen("Cycle resumed: step 3/4, reuse only"), "resume of the old snapshot not logged as Reuse only");
+    CHECK(!rec.pumpInState[stFill2], "the resumed Reuse only step 3 used tank water");
+  }
+  else if (sc == "F38") {
+    printf("F38 STOP in step 3 while Reuse all pumps: every output safe (3.18)\n");
+    typicalProgram(); boot(); runFor(11);
+    cfg.allowRemoteStart = true;
+    CHECK(requestRemoteStart(cmReuseAll), "Reuse all refused at Ready");
+    startAt = now(); runUntilState(stFill2); runFor(15);
+    CHECK(pinOut[OUT_MOTOR] == HIGH, "pump not on in step 3");
+    pressStop(); runFor(3);
+    CHECK(activeState == stIdle, "not back to Ready after STOP");
+    CHECK(pinOut[OUT_MOTOR] == LOW && pinOut[OUT_FILL_EV] == LOW && pinOut[OUT_WASH_EV] == LOW, "pump, fill or wash output still on");
+    CHECK(pinOut[OUT_TAP_EV] == HIGH && pinOut[OUT_DRAIN_EV] == HIGH, "tap and drain not back to normal");
+    CHECK(modeNow() == cmReuseSave && eventSeen("Cycle stopped"), "stop not logged, or Reuse all still reported");
+    Preferences p; CHECK(p.getBytesLength("cyc") == 0, "cycle snapshot left behind after STOP");
   }
   printf("    %d checks passed, %d failed\n", passes, failures);
   return failures ? 1 : 0;

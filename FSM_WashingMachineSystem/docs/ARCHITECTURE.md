@@ -1,4 +1,4 @@
-# Architecture – firmware 3.17
+# Architecture – firmware 3.18
 
 One Arduino Nano ESP32 runs everything: the wash-cycle state machine, the sensors, five SSR outputs, the OLED, and a web app served from the board. There is no separate server, database or phone app; the dashboard is one page stored in the firmware.
 
@@ -62,8 +62,8 @@ The cycle requests one of these modes; `GreyWaterOutputs` writes the pins.
 |---|---|---|---|---|---|---|
 | `modeOff` | boot, update, restart | off | off | off | off | off |
 | `modeStandby` | Ready, Starting, not saving | on | on | off | off | off |
-| `modeTapFill` | step 1 (tap), step 3 | on | on | off | off | off |
-| `modeTankFill` | step 1 (tank water) | off | on | off | on | pulses (2 s every 10 s) |
+| `modeTapFill` | step 1 (tap), step 3 (tap; in Reuse all only when the tank is low) | on | on | off | off | off |
+| `modeTankFill` | step 1 (tank water); step 3 in Reuse all (3.18) | off | on | off | on | pulses (2 s every 10 s) |
 | `modeDrainSoapy` | step 2 | on | on | off | off | off |
 | `modeSaveTank` | step 4 | on | off | on | off | off |
 | `modeManualWash` | Ready + Wash tank | on | on | off | off | on |
@@ -87,7 +87,7 @@ flow sensors ─ISR─► pulse counters ─► FlowMeter (loop) ─► CycleGat
                          └──────────────► PumpGuard (safety task, 20 ms) ─► pump off
 float switches ─────────────────────────► TankLevel (safety task) ─► interlocks, cycle decisions, screen, app
 buttons ─► updateInputs (loop) ─► inStart / inStop ─► state machine
-START press edge (3.17) ─► Ready: inStart ("Reuse and save") · Starting and steps 1-3: cycleNoSave flipped ─► saveCycleSnapshot() ─► status / app
+START press edge (3.17) ─► Ready: inStart ("Reuse and save") · Starting and steps 1-3: cycleMode moved on (3 modes, 3.18) ─► saveCycleSnapshot() ─► status / app
 app ─HTTP─► web server (loop) ─► requestRemoteStart/Stop flags ─► applied at the start of the next loop pass
 app ─HTTP─► /api/interrupted/resume ─► requestResume flag ─► takeResumeRequest (loop) ─► the sketch enters the saved step (3.10)
 cycle (loop) ─► outputsRequest(mode) ─► GreyWaterOutputs (lock) ─► SSR pins
@@ -95,9 +95,21 @@ status snapshot (loop) ─► /api/status JSON ─► app (polls every 2 s, one 
 events ─► notify() ─► queue ─► alert task ─► ntfy ─► result queue ─► event log + /api/status.alert
 ```
 
+## Cycle modes (3.18)
+
+`cycleMode` in `GreyWaterSystem.cpp` is a `CycleMode` (until 3.17 the bool `cycleNoSave`):
+
+| Mode | Value | Step 1 | Step 3 | Step 4 |
+|---|---|---|---|---|
+| `cmReuseSave` *Reuse and save* | 0 | tank water, tap when low | tap | rinse to the tank (`modeSaveTank`) |
+| `cmReuseOnly` *Reuse only* | 1 | tank water, tap when low | tap | rinse to the drain (`modeStandby`) |
+| `cmReuseAll` *Reuse all* | 2 | tank water, tap when low | tank water, tap when low | rinse to the drain (`modeStandby`) |
+
+`cycleSaves()` (Reuse and save) decides step 4 and the tank-full alert; `cycleReusesInRinse()` (Reuse all) makes `fill2StateLogic()` call the same `checkAndFillWashingMachine()` as step 1 on every 250 ms pass, otherwise it calls `pumpAllow(false)` and asks for tap water. The interlocks and PumpGuard apply as in step 1, and the step transitions (`gates.fill2Done`) do not depend on the water source. The mode is chosen with `POST /api/start` `mode` or by START presses, stored in the cycle snapshot and, at the end of a wash, in `WaterStats::lastMode`.
+
 ## START button (3.17)
 
-`readStartButton()` in `GreyWaterSystem.cpp` counts a press on the debounced press edge, only when START has been seen released since power-up (`startArmed`, so a button held at power-up never counts) and at least `START_MIN_GAP_MS` (1 s) after the last counted press (bounce). At Ready a press starts *Reuse and save* at once. While starting and in steps 1-3 each press flips `cycleNoSave`, writes the cycle snapshot and logs *Mode changed: … (panel)*; in step 4 (`stDrain2`) it only shows *Mode fixed*. Each counted press beeps once and shows the mode for `START_NOTICE_MS` (3 s). Held `START_STUCK_MS` (15 s): logged and shown as stuck, in any state. Only `millis()` and statics, no heap.
+`readStartButton()` in `GreyWaterSystem.cpp` counts a press on the debounced press edge, only when START has been seen released since power-up (`startArmed`, so a button held at power-up never counts) and at least `START_MIN_GAP_MS` (1 s) after the last counted press (bounce). At Ready a press starts *Reuse and save* at once. While starting and in steps 1-3 each press moves `cycleMode` on (Reuse and save → Reuse only → Reuse all → Reuse and save, 3.18), writes the cycle snapshot and logs *Mode changed: … (panel)*; in step 4 (`stDrain2`) it only shows *Mode fixed*. Each counted press beeps once and shows the mode for `START_NOTICE_MS` (3 s). Held `START_STUCK_MS` (15 s): logged and shown as stuck, in any state. Only `millis()` and statics, no heap.
 
 ## Web server (3.16)
 
@@ -116,4 +128,4 @@ The stock ESP32 `WebServer` runs in `loop()` and serves one connection at a time
 
 ## Storage
 
-NVS namespace `greywater`: `tankL` (estimated tank litres, float, 3.13), `cfg` (Settings v7 from 3.1, adds `language`), `stats` and `stats_bak` (WaterStats v3), `stats_keep` (an unreadable record kept aside), `cyc` (cycle snapshot from 3.10: `CycleSnapshot`, 24 bytes, version `CYCLE_SNAP_VERSION`; written at Start, at each step and when the machine has filled in step 1 or 3, removed when the cycle ends; read and removed by `bootChecks()` at power-up. The 8-byte marker of 2.9–3.9 is still recognised: reported, not resumable), `authkey` (3.11: 32 random bytes that sign the `gwsid` sign-in cookies, see `AuthToken.h`; made at the first sign-in, replaced by *Sign out other devices*). Settings v6 (3.0) is upgraded to v7 at start-up; history is unchanged.
+NVS namespace `greywater`: `tankL` (estimated tank litres, float, 3.13), `cfg` (Settings v7 from 3.1, adds `language`), `stats` and `stats_bak` (WaterStats v4 from 3.18: adds `lastMode` in the end padding, same size; v3 is migrated with the mode unknown), `stats_keep` (an unreadable record kept aside), `cyc` (cycle snapshot from 3.10: `CycleSnapshot`, 24 bytes, version `CYCLE_SNAP_VERSION` 2 from 3.18 with the cycle mode in byte 2; version 1 kept noSave 0/1 there and is still read; written at Start, at each step and when the machine has filled in step 1 or 3, removed when the cycle ends; read and removed by `bootChecks()` at power-up. The 8-byte marker of 2.9–3.9 is still recognised: reported, not resumable), `authkey` (3.11: 32 random bytes that sign the `gwsid` sign-in cookies, see `AuthToken.h`; made at the first sign-in, replaced by *Sign out other devices*). Settings v6 (3.0) is upgraded to v7 at start-up; history is unchanged.

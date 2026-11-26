@@ -21,7 +21,13 @@
 <ol>
 <li><b>Check the controller’s screen</b> shows <code>READY</code> and <i>Start washer › Press START</i> (Spanish: <code>LISTO</code>, <i>Inicie lavadora › y pulse START</i>).</li>
 <li><b>Start the washing machine program</b> as usual.</li>
-<li><b>Press the button labelled START once</b> on the controller: the wash starts at once as <b>Reuse and save</b> (screen: <code>REUSO+AHORRO</code> › <i>Pulse START › para cambiar</i>, short beep), or tap <b>Reuse and save</b> in the app.<br><b>To use tank water but not keep the rinse water:</b> press START <b>once more</b> (wait a second after the first press) until the screen shows <code>SOLO REUSAR</code>, or tap <b>Reuse only</b> in the app. Each further press switches between the two, up to the end of step 3; from step 4 the screen says <i>Modo fijo › Paso 4 en curso</i> and nothing changes. In Reuse only, step 4 shows <code>DESAGUE 4/4</code>.</li>
+<li><b>Press the button labelled START once</b> on the controller: the wash starts at once as <b>Reuse and save</b> (screen: <code>REUSO+AHORRO</code> › <i>Pulse START › para cambiar</i>, short beep), or in the app choose the mode under <b>Cycle mode</b> (<i>Modo del ciclo</i>) on Overview and tap <b>Start cycle</b> (<i>Iniciar ciclo</i>). The app remembers the last mode chosen on that phone.<br><b>To change the mode</b>, press START again (wait a second between presses), up to the end of step 3, or choose it under <i>Modo del ciclo</i> in the app before tapping <i>Iniciar ciclo</i>:
+<table class="modes"><thead><tr><th>Mode (screen)</th><th>Rinse water</th><th>When to use it</th></tr></thead>
+<tr><td><b>Reuse and save</b> (<code>REUSO+AHORRO</code>), 1 press</td><td>saved in the tank</td><td>Every day</td></tr>
+<tr><td><b>Reuse only</b> (<code>SOLO REUSAR</code>), 2 presses</td><td>to the drain</td><td>When the rinse water should not be kept</td></tr>
+<tr><td><b>Reuse all</b> (<code>REUSAR TODO</code>), 3 presses</td><td>to the drain; the rinse also uses tank water</td><td>To empty the tank: its water is getting old, before a holiday or a tank cleaning, or when the tank is full</td></tr>
+</table>
+A 4th press goes back to Reuse and save. From step 4 the screen says <i>Modo fijo › Paso 4 en curso</i> and nothing changes. All modes use tap water once the tank is low. If the rinse water is not saved, step 4 shows <code>DESAGUE 4/4</code>.</li>
 <li><b>Let it run.</b> The top line shows the step, <code>WASH 1 OF 4</code> to <code>SAVE 4 OF 4</code> (Spanish: <code>LAVADO 1/4</code> to <code>AHORRO 4/4</code>). After the first wash the screen also says about how many minutes are left.</li>
 <li><b>Done</b> when the screen shows <code>DONE</code> (Spanish: <code>TERMINADO</code>) with the litres it reused and saved.</li>
 </ol>
@@ -62,7 +68,7 @@
 <p>On a phone connected to the home Wi-Fi, open <b>reusewater.local</b>. (Until firmware 3.1 it was <i>greywater.local</i>: update old bookmarks.)</p>
 <ul>
 <li><b>Sign in once:</b> the first time, enter the password and leave <b>Recordar este dispositivo</b> on. The phone is not asked again. The door icon at the top signs out.</li>
-<li><b>Overview:</b> what is happening now, Start and Stop, the tank, and Wash tank.</li>
+<li><b>Overview:</b> what is happening now, the cycle mode with Start cycle, Stop, the tank, and Wash tank.</li>
 <li><b>Water use:</b> how much water you have reused this month.</li>
 <li><b>Refresh:</b> use it if the page looks stuck. If the top shows <i>Reconectando…</i> or <i>Sin conexión</i>, the data is old (greyed out, with its age): to stop a wash right away, press STOP on the controller.</li>
 <li><b>Settings → Language:</b> Español or English, for the app, the screen and the alerts.</li>
@@ -72,7 +78,7 @@
 <p>Phone alerts start with <i>Reuse Water:</i> (Spanish: <i>Reúso de Agua:</i>).</p>
 <p>Technician: <span class="blank"></span> Phone: <span class="blank"></span></p>
 
-<h2 class="page-break">Installer commissioning checklist (firmware 3.17)</h2>
+<h2 class="page-break">Installer commissioning checklist (firmware 3.18.1)</h2>
 <p>Firmware 3.0 has run correctly on the installed system. Firmware 3.1 adds the Spanish texts and the language setting. Firmware 3.2 renames the app to Reuse Water System, adds the start-up animation and a clearer screen font, and moves the optional buzzer from D12 to D1, on the same control logic. Firmware 3.3 makes the screen messages explain themselves in short pages and makes phone alerts more reliable. Complete these checks when installing or replacing a controller.</p>
 <h3>Hardware</h3>
 <ul class="check">
@@ -86,9 +92,9 @@
 </ul>
 <h3>First start</h3>
 <ul class="check">
-<li><b>Start-up screen:</b> the dog chases the butterfly (about 4 s), then <code>REUSO AGUA</code> / Sistema listo › Version 3.17.0 for 2 s, then <code>LISTO</code>. START during the dog skips it.</li>
+<li><b>Start-up screen:</b> the dog chases the butterfly (about 4 s), then <code>REUSO AGUA</code> / Sistema listo › Version 3.18.1 for 2 s, then <code>LISTO</code>. START during the dog skips it.</li>
 <li><b>Readability:</b> the bold messages can be read from where the household stands.</li>
-<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.17.0.</li>
+<li><b>App address:</b> the app opens at <b>reusewater.local</b>; Service shows firmware 3.18.1.</li>
 <li><b>App during a wash (3.16):</b> keep the app open on Overview through a whole wash and lock the phone for a couple of minutes once; it stays <i>En línea</i> with no error message, and Service → <i>Tiempo de respuesta de la app</i> stays under 300 ms.</li>
 </ul>
 <h3>First cycle (watch the Service tab)</h3>
@@ -99,7 +105,7 @@
 <li>Step 4 saves water (<i>Saving water › Ends in …</i>); the fill valve is on and the drain valve off in <i>Valves and pump</i>. When the pump-out ends, the screen shows <i>Low flow › Ends in …</i> and the fill valve turns off within about 3 s.</li>
 <li><code>DONE</code> shows the litres reused and saved; <i>Water use</i> shows the wash. With the buzzer on: two short beeps.</li>
 </ul>
-<h3>Firmware features (3.0 to 3.17)</h3>
+<h3>Firmware features (3.0 to 3.18.1)</h3>
 <ul class="check">
 <li><b>Passwords:</b> the app asked for new passwords on first use, and both were changed.</li>
 <li><b>Sign in once:</b> on the household's phones, sign in with <i>Recordar este dispositivo</i> on; close the browser and open the app again: it opens straight to Overview, with no password.</li>
@@ -113,8 +119,9 @@
 <li><b>Screen (3.12):</b> the 0.96 inch yellow and blue screen is fitted by the labels on the module (VCC → 3V3, GND → GND, SDA → A4, SCL → A5). The step and the two icons are in yellow; every message is on two blue lines, shown at once (for example <i>Soapy water</i> over <i>to the drain</i>); nothing is cut off. From the second wash <i>min left</i> appears on the bottom line in steps 1–3.</li>
 <li><b>Float switches:</b> with the low float down, hold the high float up for 5 s. Expect the alert <i>check level switches</i> and <i>Check float switches</i> in the app (and three long beeps with the buzzer on).</li>
 <li><b>Tank litres (3.13):</b> the header shows the estimated litres; in a wash with tank water they fall in step 1 (arrow down) and rise in step 4 (arrow up); <b>FULL</b> when the high float is wet. If the litres are far from the real tank, set where the floats sit (<code>TANK_LOW_MARK_L</code>, <code>TANK_HIGH_MARK_L</code>, default 15 L and 90 L).</li>
-<li><b>START press and mode switch (3.17):</b> one press at <code>LISTO</code> starts the wash at once with <code>REUSO+AHORRO</code> › <i>Pulse START › para cambiar</i> and a short beep; a press in step 1 shows <code>SOLO REUSAR</code>, another one <code>REUSO+AHORRO</code>; a press in step 4 shows <i>Modo fijo › Paso 4 en curso</i>. Two quick presses at <code>LISTO</code> start Reuse and save only. Put the label <i>START: pulse = inicia (reusar y guardar) · pulse otra vez = cambia a solo reusar</i> on the panel.</li>
-<li><b>Reuse only:</b> with water in the tank, start a wash with <b>Reuse only</b> in the app (or press START once more after starting). Step 4 shows <code>DESAGUE 4/4</code> and <i>Sin guardar</i>, and Service shows the fill valve off; <code>TERMINADO</code> shows only the litres reused.</li>
+<li><b>START press and mode switch (3.17):</b> one press at <code>LISTO</code> starts the wash at once with <code>REUSO+AHORRO</code> › <i>Pulse START › para cambiar</i> and a short beep; a press in step 1 shows <code>SOLO REUSAR</code>, the next <code>REUSAR TODO</code>, the next <code>REUSO+AHORRO</code>; a press in step 4 shows <i>Modo fijo › Paso 4 en curso</i>. Two quick presses at <code>LISTO</code> start Reuse and save only. Put the label <i>START: 1 = reusar y guardar · 2 = solo reusar · 3 = reusar todo</i> on the panel.</li>
+<li><b>Reuse only:</b> with water in the tank, start a wash with <b>Solo reusar</b> in the app (or press START once more after starting). Step 4 shows <code>DESAGUE 4/4</code> and <i>Sin guardar</i>, and Service shows the fill valve off; <code>TERMINADO</code> shows only the litres reused.</li>
+<li><b>Reuse all (3.18):</b> tank about half full, <b>Reusar todo</b> + <b>Iniciar ciclo</b>: steps 1 and 3 <i>Reusando agua</i> (pump on while the machine draws), <i>Tanque bajo</i> → tap; step 4 <i>Sin guardar</i>; the app bar shows <i>Reusar todo</i>.</li>
 <li><b>Screen font:</b> each of the four styles in Settings → Screen font changes the screen after Save; in each style every message has the same letter size and nothing is cut off; the household’s choice is set before handover (after an upgrade from 3.5 the screen starts in Hyperlegible).</li>
 <li><b>Language:</b> Settings → Language switches the app, the screen and the alerts; the household’s language is set before handover.</li>
 <li><b>Test alert:</b> the app reports <i>Test alert delivered</i> (or the reason it failed).</li>

@@ -1,4 +1,51 @@
-# Reuse Water System – Firmware 3.17 (Wi-Fi)
+# Reuse Water System – Firmware 3.18.1 (Wi-Fi)
+
+## What's new in 3.18.1: one mode bar and one Start button in the app
+
+The three start buttons of 3.18 on Overview (*Reuse and save*, *Reuse only*, *Reuse all*) are replaced by:
+
+- A **Cycle mode** bar (*Modo del ciclo*): three segments, *Reuse and save* | *Reuse only* | *Reuse all* (*Reusar y guardar* | *Solo reusar* | *Reusar todo*). It is built from native radio buttons in a fieldset, so arrow keys move the choice and screen readers announce it as one group. Each segment is at least 44 px tall; all three fit on one row at 320 px in both languages.
+- One line under the bar says what the chosen mode does, the description that used to sit under each button.
+- One **Start cycle** button (*Iniciar ciclo*). The confirmation keeps its own title and text for each mode, and `POST /api/start` still sends `mode=0/1/2`. *Starting…*, the 10 s confirmation and the *no answer yet* handling are unchanged.
+
+How it behaves:
+
+- **Remembered choice:** Reuse and save the first time; after that the app remembers the last mode chosen on each phone (browser storage; anything unreadable falls back to Reuse and save).
+- **While Ready** the mode can be changed even when Start is off (for example with *Start from the dashboard* off; the hint explains why).
+- **While a start is pending** the bar is locked.
+- **During a cycle** the bar is greyed out and shows the running mode from `cycle.mode`, so a mode changed with START on the controller appears in the app. When the controller is Ready again the remembered choice comes back.
+- The viewer user can choose and start, as before.
+
+The firmware, the screen, the API and the stored data are unchanged; only the page inside the firmware changed. Tests: dashboard A13 rewritten, A23 (keyboard, remembered choice), A24 (when it can be used, mode during a cycle), A25 (320 px in English and Spanish, touch targets, translations); A1, A2, A10, A11 and A22 updated.
+
+## What's new in 3.18: a third mode, "Reuse all", to use up the tank water
+
+| Mode (ES) | Step 1 wash | Step 3 rinse | Step 4 rinse water |
+|---|---|---|---|
+| **Reuse and save** (*Reusar y guardar*) | tank water, tap when the tank is low | tap water | to the tank |
+| **Reuse only** (*Solo reusar*) | tank water, tap when the tank is low | tap water | to the drain |
+| **Reuse all** (*Reusar todo*), new | tank water, tap when the tank is low | **tank water, tap when the tank is low** | to the drain |
+
+- **When to use Reuse all:** to empty the tank, for example when its water is getting old (*tank water age* near the limit), before a holiday or a tank cleaning, or when the tank is full and the rinse water could not be kept anyway.
+- **Step 3 in Reuse all uses exactly the step 1 logic** (`checkAndFillWashingMachine()`): the pump runs only while the machine draws water. As soon as the low float is dry, even in the middle of a fill, the rinse changes to tap water. The interlocks, PumpGuard and STOP are unchanged. The step 3 screen shows `RINSE 3 OF 4` with *Reusing water*, *Using tap water › Tank is low* or *Rinsing...*; step 4 shows *Not saving › Ends in m:ss*. The two older modes are unchanged: step 3 stays on tap water.
+- **How to choose it:**
+  - **App:** a third Start button, **Reuse all**, next to *Reuse and save* and *Reuse only*, with the same rules (Settings → *Start from the dashboard*; the viewer can use it too).
+  - **Panel:** press START once to start (*Reuse and save*); each further press until step 3 ends moves on: *Reuse only* → *Reuse all* → *Reuse and save*. Screen `REUSE ALL` / `REUSAR TODO`. Switching to or from Reuse all during step 3 changes the water source at once.
+- **The mode is kept and shown:**
+  - A resume after a power cut keeps it: cycle snapshot version 2, and a snapshot from 3.10–3.17 is still read.
+  - The water history records the last wash's mode (history version 4; washes from before 3.18 show none). Water use → *Last wash* shows the mode.
+  - The tank water used in step 3 counts as *reused* in the cycle, month and total figures.
+  - Event log: *Cycle started: reuse all, rinse water to the drain*, *Step 3/4 rinse started (reuse all)*, *Mode changed: reuse all (panel)*, *Cycle resumed: step 3/4, reuse all*. The end alert says the tank water was reused in the wash and the rinse.
+- **API:**
+  - `POST /api/start` takes `mode=0|1|2`; `save=1|0` still works.
+  - The status has `cycle.mode`, `interrupted.mode` and `last.mode`. `cycle.noSave` stays, and is true for Reuse only and Reuse all.
+  - `/api/history` and the restore carry `lastMode`.
+  - Firmware code: `enum CycleMode { cmReuseSave, cmReuseOnly, cmReuseAll }` with `cycleSaves()` and `cycleReusesInRinse()` replaces the bool `cycleNoSave`.
+- **Tests:**
+  - Simulation, new scenarios: F30 a full Reuse all cycle (tank 30 L to the low float, 23.7 L reused against 15.8 L in Reuse only), F31 a low tank mid-rinse, F32 an empty tank, F33 a regression check of the old modes, F34 START presses, F35 a switch during step 3, F36 a power cut and resume, F37 a 3.17 snapshot, F38 STOP while pumping. F23 and F28 updated for three modes.
+  - History tests H4c and C1b.
+  - Dashboard: A13 extended, new A22.
+- Build: 1.40 MB flash (44%), 98 KB RAM (30%) with Espressif core 3.3.12.
 
 ## What's new in 3.17: one press of START starts the wash, more presses change the mode
 

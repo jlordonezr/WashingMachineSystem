@@ -37,6 +37,17 @@ int main(){
   st.clear(); WaterStats v2=sample(); v2.version=2; st["stats"]=std::vector<uint8_t>((uint8_t*)&v2,(uint8_t*)&v2+offsetof(WaterStats,stepAvgS)); boot();
   CHECK(historySource==historyMigrated && stats.totalCycles==52 && stats.lastValid==1 && stats.stepSamples[0]==0, "v2 history not migrated");
 
+  printf("H4c version 3 record from firmware 3.0-3.17 keeps everything; the last wash's mode is unknown (3.18)\n");
+  st.clear(); WaterStats v3=sample(); v3.version=3; v3.stepAvgS[0]=610; v3.stepSamples[0]=4; v3.lastMode=0;   // padding bytes in 3.17
+  st["stats"]=std::vector<uint8_t>((uint8_t*)&v3,(uint8_t*)&v3+sizeof(WaterStats)); boot();
+  CHECK(historySource==historyMigrated && stats.version==STATS_VERSION && stats.totalCycles==52 && stats.stepAvgS[0]==610 && stats.stepSamples[0]==4,
+        "v3 history not migrated with every value");
+  CHECK(stats.lastMode==LAST_MODE_UNKNOWN, "v3 history: last wash mode not reported as unknown");
+  { WaterStats saved; memcpy(&saved, st["stats"].data(), sizeof(saved)); CHECK(saved.version==STATS_VERSION && saved.lastMode==LAST_MODE_UNKNOWN, "migrated v3 history not saved as v4"); }
+  WaterStats v4=sample(); v4.lastMode=2; st.clear(); st["stats"]=std::vector<uint8_t>((uint8_t*)&v4,(uint8_t*)&v4+sizeof(WaterStats)); boot();
+  CHECK(historySource==historyFlash && stats.lastMode==2, "v4 history: last wash mode (Reuse all) not kept");
+  WaterStats badMode=sample(); badMode.lastMode=7; CHECK(!statsRestore(badMode), "restore with an unknown mode 7 accepted");
+
   printf("H5 restore from the app after a full flash erase\n");
   st.clear(); boot(); CHECK(historySource==historyEmpty && !statsHasData(stats), "erased flash not reported as empty");
   stats.tankSinceEpoch=1761500000; WaterStats b=sample();
@@ -136,12 +147,22 @@ int main(){
 
   printf("C1 cycle snapshot: saved and read back whole; removed at the end (3.10)\n");
   st.clear(); boot();
-  { CycleSnapshot w; memset(&w,0,sizeof(w)); w.version=99; w.state=4; w.noSave=1; w.filled=1; w.epoch=1762400000; w.cycleS=1234;
+  { CycleSnapshot w; memset(&w,0,sizeof(w)); w.version=99; w.state=4; w.mode=2; w.filled=1; w.epoch=1762400000; w.cycleS=1234;
     w.tapL=1.5f; w.reusedL=22.5f; w.savedL=0; cycleSnapSave(w);
     CycleSnapshot r; CHECK(cycleSnapLoad(r)==snapFull, "snapshot not read back as complete");
-    CHECK(r.version==CYCLE_SNAP_VERSION && r.state==4 && r.noSave==1 && r.filled==1 && r.epoch==1762400000 && r.cycleS==1234 && r.reusedL==22.5f,
+    CHECK(r.version==CYCLE_SNAP_VERSION && r.state==4 && r.mode==2 && r.filled==1 && r.epoch==1762400000 && r.cycleS==1234 && r.reusedL==22.5f,
           "snapshot fields changed in flash");
     cycleMarkEnd(); CHECK(cycleSnapLoad(r)==snapNone && st.count("cyc")==0, "snapshot not removed"); }
+
+  printf("C1b snapshot from 3.10-3.17 (version 1, noSave in the mode byte) is read whole (3.18)\n");
+  st.clear(); boot();
+  { CycleSnapshot w; memset(&w,0,sizeof(w)); w.version=1; w.state=4; w.mode=1; w.cycleS=900; w.reusedL=12;
+    st["cyc"]=std::vector<uint8_t>((uint8_t*)&w,(uint8_t*)&w+sizeof(w));
+    CycleSnapshot r; CHECK(cycleSnapLoad(r)==snapFull && r.mode==1 && r.state==4 && r.reusedL==12, "version 1 snapshot not read as Reuse only");
+    w.mode=2; st["cyc"]=std::vector<uint8_t>((uint8_t*)&w,(uint8_t*)&w+sizeof(w));
+    CHECK(cycleSnapLoad(r)==snapStepOnly, "version 1 snapshot with an impossible mode 2 accepted as resumable");
+    w.version=CYCLE_SNAP_VERSION; w.mode=3; st["cyc"]=std::vector<uint8_t>((uint8_t*)&w,(uint8_t*)&w+sizeof(w));
+    CHECK(cycleSnapLoad(r)==snapStepOnly, "snapshot with an unknown mode 3 accepted as resumable"); }
 
   printf("C2 marker from firmware 2.9-3.9: reported with its step, cannot be resumed\n");
   st.clear(); boot();

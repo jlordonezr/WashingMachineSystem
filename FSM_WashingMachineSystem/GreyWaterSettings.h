@@ -22,7 +22,8 @@
 // 3.4-3.5 named other fonts, so migrated settings start at 0.
 // See GreyWaterDisplay.cpp and licenses/.
 #define SCREEN_FONT_COUNT 4
-#define STATS_VERSION    3   // 3: adds typical step times (1 and 2 are migrated)
+#define STATS_VERSION    4   // 4: adds the last wash's mode (3.18); 3: typical step times (1-3 are migrated)
+#define LAST_MODE_UNKNOWN 0xFF   // WaterStats::lastMode for a wash recorded before 3.18
 
 struct Settings {
   uint16_t version;
@@ -91,6 +92,8 @@ struct WaterStats {
   // ── added in STATS_VERSION 3; must stay last so version 2 data migrates ──
   uint32_t stepAvgS[3];       // typical duration of steps 1-3 (seconds, running average)
   uint16_t stepSamples[3];    // how many completed steps the average is based on
+  // ── added in STATS_VERSION 4 (3.18): fits in the end padding, the size is unchanged ──
+  uint8_t  lastMode;          // CycleMode of the last wash (0 save, 1 reuse only, 2 reuse all), LAST_MODE_UNKNOWN before 3.18
 };
 
 extern WaterStats stats;
@@ -122,11 +125,11 @@ bool     statsRestore(const WaterStats& in); // validates, keeps the current tan
 // resume it (see resumeAvailable() in GreyWaterSystem.h).
 // Bump CYCLE_SNAP_VERSION when a field changes: other versions are reported as
 // interrupted but cannot be resumed.
-#define CYCLE_SNAP_VERSION 1
+#define CYCLE_SNAP_VERSION 2   // 2 (3.18): byte 2 is the cycle mode; version 1 kept noSave 0/1 there, the same values
 struct CycleSnapshot {
   uint8_t  version;     // CYCLE_SNAP_VERSION
   uint8_t  state;       // StateID of the step that was running
-  uint8_t  noSave;      // 1 = "Reuse only" cycle
+  uint8_t  mode;        // CycleMode: 0 Reuse and save, 1 Reuse only, 2 Reuse all (3.18; version 1: noSave 0/1)
   uint8_t  filled;      // 1 = the machine had already filled in this step (step 1 or 3)
   uint32_t epoch;       // when this was written (0 = clock not set)
   uint32_t cycleS;      // seconds the cycle had run (since Start) when this was written

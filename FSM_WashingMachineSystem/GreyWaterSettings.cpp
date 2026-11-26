@@ -22,15 +22,20 @@ static int loadStats(const char* key, WaterStats& out) {
   memset(&s, 0, sizeof(s));
   if (len == sizeof(WaterStats) && prefs.getBytes(key, &s, sizeof(s)) == sizeof(s) &&
       s.version == STATS_VERSION) {
+    if (s.lastMode > 2) s.lastMode = LAST_MODE_UNKNOWN;
     out = s; return 1;
+  }
+  if (len == sizeof(WaterStats) && prefs.getBytes(key, &s, sizeof(s)) == sizeof(s) && s.version == 3) {
+    // Version 3 (3.0-3.17) had the same size; lastMode was padding.
+    s.lastMode = LAST_MODE_UNKNOWN; s.version = STATS_VERSION; out = s; return 2;
   }
   if (len == offsetof(WaterStats, stepAvgS) && prefs.getBytes(key, &s, len) == len && s.version == 2) {
     // Version 2 stored everything up to lastValid, in the same layout.
-    s.version = STATS_VERSION; out = s; return 2;
+    s.lastMode = LAST_MODE_UNKNOWN; s.version = STATS_VERSION; out = s; return 2;
   }
   if (len == offsetof(WaterStats, prevMonthKey) && prefs.getBytes(key, &s, len) == len && s.version == 1) {
     // Version 1 stored only the fields up to tankSinceEpoch, in the same layout.
-    s.version = STATS_VERSION; out = s; return 2;
+    s.lastMode = LAST_MODE_UNKNOWN; s.version = STATS_VERSION; out = s; return 2;
   }
   return 0;
 }
@@ -208,6 +213,7 @@ void settingsBegin() {
 
   memset(&stats, 0, sizeof(stats));
   stats.version = STATS_VERSION;
+  stats.lastMode = LAST_MODE_UNKNOWN;   // no wash recorded yet
 
   int got = loadStats("stats", stats);
   if (got) {
@@ -275,7 +281,7 @@ bool statsValid(const WaterStats& s) {
          finiteLitres(s.lastTapL) && finiteLitres(s.lastReusedL) && finiteLitres(s.lastSavedL) &&
          s.totalCycles < 1000000 && s.monthCycles <= s.totalCycles + 1000 && s.prevMonthCycles < 100000 &&
          validMonthKey(s.monthKey) && validMonthKey(s.prevMonthKey) && s.lastDurationS < 864000 &&
-         s.lastCompleted <= 1 && s.lastValid <= 1 &&
+         s.lastCompleted <= 1 && s.lastValid <= 1 && (s.lastMode <= 2 || s.lastMode == LAST_MODE_UNKNOWN) &&
          s.stepAvgS[0] < 864000 && s.stepAvgS[1] < 864000 && s.stepAvgS[2] < 864000;
 }
 
@@ -340,8 +346,10 @@ CycleSnapFound cycleSnapLoad(CycleSnapshot& s) {
   memset(&s, 0, sizeof(s));
   size_t len = prefs.getBytesLength("cyc");
   if (len == 0) return snapNone;
+  // Version 1 (3.10-3.17) has the same layout, with noSave 0/1 where the mode is now:
+  // the same values as Reuse and save / Reuse only.
   if (len == sizeof(CycleSnapshot) && prefs.getBytes("cyc", &s, sizeof(s)) == sizeof(s) &&
-      s.version == CYCLE_SNAP_VERSION) return snapFull;
+      (s.version == CYCLE_SNAP_VERSION || s.version == 1) && s.mode <= (s.version == 1 ? 1 : 2)) return snapFull;
   memset(&s, 0, sizeof(s));
   CycleMarkV1 m;
   if (len == sizeof(m) && prefs.getBytes("cyc", &m, sizeof(m)) == sizeof(m)) {

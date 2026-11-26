@@ -97,9 +97,22 @@ ol.steps li.done{border-color:var(--primary)}
 ol.steps li.done::before{content:"\2713";color:var(--primary-ink)}
 ol.steps li.on{border-color:var(--primary);color:var(--ink);font-weight:600}
 ol.steps li.on::before{color:var(--primary-ink)}
-.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.start-opt{display:grid;gap:4px;align-content:start}
-.start-opt small{font-size:0.75rem;color:var(--muted);text-align:center;line-height:1.3}
+.controls{display:grid;grid-template-columns:1fr;gap:10px}
+/* Cycle mode (3.18.1): native radios styled as one segmented bar. The inputs stay
+   focusable (not display:none), so the browser's arrow keys and form semantics work. */
+.seg{border:0;margin:0 0 12px;padding:0;min-width:0}
+.seg legend{padding:0;margin:0 0 6px;font-size:0.8125rem;font-weight:600;color:var(--muted)}
+.seg-bar{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:3px;
+  border:1px solid var(--line-strong);border-radius:24px;background:var(--surface)}
+.seg-bar input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.seg-bar label{display:flex;align-items:center;justify-content:center;min-height:44px;padding:4px 6px;border-radius:21px;
+  text-align:center;font:600 0.8125rem/1.15 var(--font);color:var(--ink);cursor:pointer;overflow-wrap:normal;word-break:normal}
+.seg-bar label:hover{background:var(--primary-soft)}
+.seg-bar input:checked+label{background:var(--primary);color:var(--on-primary)}
+.seg-bar input:focus-visible+label{outline:3px solid var(--primary);outline-offset:2px}
+.seg-bar input:disabled+label{cursor:default;background:transparent;color:var(--muted)}
+.seg-bar input:disabled:checked+label{background:var(--primary-soft);color:var(--primary-ink);box-shadow:inset 0 0 0 2px var(--primary)}
+.seg-desc{margin:6px 0 0;font-size:0.75rem;line-height:1.3;color:var(--muted);text-align:center}
 .controls .stop-btn{grid-column:1/-1}
 .mode-note{font-size:0.875rem;color:var(--muted);margin:10px 0 0}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 18px;
@@ -361,21 +374,20 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
         <ol class="steps" id="steps" aria-label="Cycle progress">
           <li>Wash<span class="sr-only"></span></li><li>Soapy drain<span class="sr-only"></span></li><li>Rinse<span class="sr-only"></span></li><li>Save<span class="sr-only"></span></li>
         </ol>
+        <fieldset class="seg" id="modeCtl" aria-describedby="modeDesc">
+          <legend>Cycle mode</legend>
+          <div class="seg-bar">
+            <input type="radio" name="cycleMode" id="modeSave" value="0" checked><label for="modeSave">Reuse and save</label>
+            <input type="radio" name="cycleMode" id="modeOnly" value="1"><label for="modeOnly">Reuse only</label>
+            <input type="radio" name="cycleMode" id="modeAll" value="2"><label for="modeAll">Reuse all</label>
+          </div>
+          <p class="seg-desc" id="modeDesc">Tank water for the wash, rinse water to the tank</p>
+        </fieldset>
         <div class="controls">
-          <div class="start-opt">
-            <button class="btn primary" id="btnStart" type="button" aria-describedby="subStart ctlHint">
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
-              <span>Reuse and save</span>
-            </button>
-            <small id="subStart">Tank water for the wash, rinse water to the tank</small>
-          </div>
-          <div class="start-opt">
-            <button class="btn outline-primary" id="btnReuse" type="button" aria-describedby="subReuse ctlHint">
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
-              <span>Reuse only</span>
-            </button>
-            <small id="subReuse">Tank water for the wash, rinse water to the drain</small>
-          </div>
+          <button class="btn primary" id="btnStart" type="button" aria-describedby="modeDesc ctlHint">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+            <span>Start cycle</span>
+          </button>
           <button class="btn danger stop-btn" id="btnStop" type="button" aria-describedby="ctlHint">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
             <span>Stop cycle</span>
@@ -431,6 +443,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
             <dl class="last lastwash" id="lastWash" hidden>
               <div><dt id="lastWhenLabel">Last wash</dt><dd id="lastWhen">—</dd></div>
               <div><dt>Took</dt><dd id="lastTook">—</dd></div>
+              <div id="lastModeRow" hidden><dt>Mode</dt><dd id="lastMode">—</dd></div>
               <div><dt>Tank water reused</dt><dd id="lastReused" class="good">—</dd></div>
               <div><dt>Saved to the tank</dt><dd id="lastSaved" class="good">—</dd></div>
             </dl>
@@ -680,7 +693,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
 (function(){
   var $=function(id){return document.getElementById(id)};
   var TABS=['overview','water','service','settings'];
-  var last=null,failures=0,formLoaded=false,pending=null,pendingSave=true,pendingWash=false,toastTimer=null,connShown='';
+  var last=null,failures=0,formLoaded=false,pending=null,modeFromCycle=false,pendingWash=false,toastTimer=null,connShown='';
   // Actions are reported as done only when the controller's status shows them (3.0).
   var pendingSince=0,washSince=0,alertWait=null,CONFIRM_MS=10000,ALERT_WAIT_MS=120000;
 
@@ -792,17 +805,23 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   }
 
   function setControls(s){
-    var idle=s.state===0, start=$('btnStart'), reuse=$('btnReuse'), stop=$('btnStop'), hint='';
+    var idle=s.state===0, start=$('btnStart'), stop=$('btnStop'), hint='';
     setDis(start,!idle||!s.allowRemoteStart||pending!==null);
-    setDis(reuse,!idle||!s.allowRemoteStart||pending!==null);
+    // Mode (3.18.1): changeable while Ready, also with Start disabled; locked while a
+    // start is pending and during a cycle, when it shows the running mode (a switch
+    // with START on the controller appears here). Back at Ready: the remembered choice.
+    var lock=!idle||pending!==null;
+    MODE_IDS.forEach(function(id){$(id).disabled=lock});
+    if(!idle){showMode(cycleMode(s.cycle));modeFromCycle=true}
+    else if(modeFromCycle){showMode(storedMode());modeFromCycle=false}
+    else $('modeDesc').textContent=modeDesc(selectedMode());
     setDis(stop,idle||pending!==null);
-    start.querySelector('span').textContent=pending==='start'&&pendingSave?t('Starting…'):t('Reuse and save');
-    reuse.querySelector('span').textContent=pending==='start'&&!pendingSave?t('Starting…'):t('Reuse only');
+    start.querySelector('span').textContent=pending==='start'?t('Starting…'):t('Start cycle');
     stop.querySelector('span').textContent=pending==='stop'?t('Stopping…'):t('Stop cycle');
     if(idle&&!s.allowRemoteStart)hint='Starting from the dashboard is turned off in Settings. Use the START button on the controller.';
     else if(idle&&s.manualWash)hint='Starting a cycle ends the tank wash first.';
     else if(idle)hint='Start the washing machine program first, then start the cycle here or on the controller.';
-    else hint='Stop ends the cycle at once and returns the controller to Ready. The start buttons are available when the controller is Ready.';
+    else hint='Stop ends the cycle at once and returns the controller to Ready. Start is available when the controller is Ready.';
     hint=t(hint);if(idle&&!s.manualWash)hint+=' '+t('Stop is available while a cycle runs.');
     $('ctlHint').textContent=hint;
   }
@@ -860,6 +879,9 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       $('lastWhenLabel').textContent=L.completed?t('Last wash'):t('Last wash, stopped');
       $('lastWhen').textContent=L.agoS>=0?ago(L.agoS):t('Before the last restart');
       $('lastTook').textContent=dur(L.durationS);
+      var lm=typeof L.mode==='number'?L.mode:-1;   // 3.18; -1: recorded before 3.18
+      $('lastModeRow').hidden=lm<0||lm>2;
+      if(lm>=0&&lm<=2)$('lastMode').textContent=t(MODE_NAMES[lm]);
       $('lastReused').textContent=litres(L.reused)+' L';
       $('lastSaved').textContent=litres(L.saved)+' L';
     }
@@ -923,7 +945,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   var BKEY='greywater-history',backupKey='',backupBusy=false;
   var HFIELDS=['totalTap','totalReused','totalSaved','totalCycles','monthKey','monthTap','monthReused','monthSaved','monthCycles',
     'prevMonthKey','prevMonthTap','prevMonthReused','prevMonthSaved','prevMonthCycles','lastEndEpoch','lastDurationS',
-    'lastTap','lastReused','lastSaved','lastCompleted','lastValid'];
+    'lastTap','lastReused','lastSaved','lastCompleted','lastValid','lastMode'];
   function readBackup(){try{var b=JSON.parse(localStorage.getItem(BKEY));return b&&b.format==='greywater-history'?b:null}catch(e){return null}}
   function writeBackup(h){try{h.savedAt=Date.now();localStorage.setItem(BKEY,JSON.stringify(h))}catch(e){}}
   function score(h){return h?(h.totalCycles*1000+h.totalTap+h.totalReused+h.totalSaved):-1}
@@ -963,12 +985,13 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
       prevMonth:{key:b.prevMonthKey,tap:b.prevMonthTap,reused:b.prevMonthReused,saved:b.prevMonthSaved,cycles:b.prevMonthCycles},
       total:{tap:b.totalTap,reused:b.totalReused,saved:b.totalSaved,cycles:b.totalCycles},
       last:{valid:!!b.lastValid,completed:!!b.lastCompleted,durationS:b.lastDurationS,tap:b.lastTap,reused:b.lastReused,saved:b.lastSaved,
+            mode:typeof b.lastMode==='number'?b.lastMode:-1,
             agoS:b.lastEndEpoch?Math.max(0,Math.round(now-b.lastEndEpoch)):-1}};
   }
 
   function restoreHistory(h,force){
     var body=new URLSearchParams();
-    HFIELDS.forEach(function(k){body.append(k,h[k]===undefined?0:h[k])});
+    HFIELDS.forEach(function(k){body.append(k,h[k]===undefined?(k==='lastMode'?-1:0):h[k])});   // lastMode -1: unknown (backup from before 3.18)
     for(var i=0;i<3;i++){body.append('stepAvg'+i,(h.stepAvgS||[])[i]||0);body.append('stepN'+i,(h.stepSamples||[])[i]||0);}
     if(force)body.append('force','1');
     return api('/api/history/restore',{method:'POST',body:body}).then(function(){backupKey='';toast(t('Water history restored to the controller'))});
@@ -977,6 +1000,17 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
   // Same words as the controller's screen, so the household sees one vocabulary.
   var STEP_NAMES=['Ready','Starting','Wash','Soapy drain','Rinse','Save'];
   // Step 4 is a final drain, not "Save", in a Reuse only cycle (3.7).
+  // Cycle mode (3.18): 0 Reuse and save, 1 Reuse only, 2 Reuse all. An older
+  // controller sends only noSave, which means Reuse only.
+  var MODE_NAMES=['Reuse and save','Reuse only','Reuse all'];
+  function cycleMode(c){return !c?0:(typeof c.mode==='number'&&c.mode>=0&&c.mode<=2)?c.mode:(c.noSave?1:0)}
+  // The mode control (3.18.1).
+  var MODE_IDS=['modeSave','modeOnly','modeAll'],MODE_KEY='greywater-mode';
+  function modeDesc(m){return [t('Tank water for the wash, rinse water to the tank'),t('Tank water for the wash, rinse water to the drain'),
+    t('Tank water for the wash and the rinse, nothing saved')][m]}
+  function storedMode(){try{var v=localStorage.getItem(MODE_KEY);if(v==='0'||v==='1'||v==='2')return +v}catch(e){}return 0}
+  function selectedMode(){for(var i=0;i<3;i++)if($(MODE_IDS[i]).checked)return i;return 0}
+  function showMode(m){$(MODE_IDS[m]).checked=true;$('modeDesc').textContent=modeDesc(m)}
   function stepName(s){return s.state===5&&s.cycle&&s.cycle.noSave?t('Final drain'):t(STEP_NAMES[s.state])}
   var PLAIN={'Using tank water':'Reusing water from the tank','Using tap water':'Using tap water',
     'Tank low: using tap water':'Tank low, so using tap water','Draining soapy water':'Draining soapy water (not saved)',
@@ -1054,7 +1088,7 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     $('intrResume').textContent=s.allowRemoteStart?t('You can resume this cycle for {0} more min.',min)
       :t('Resuming from the app is off in Settings (Start from the dashboard). Use the START button on the controller for a new cycle.');
     if(!can)return;
-    $('resumeBody').textContent=t('It stopped')+intrWhen(i)+(i.noSave?' ('+t('Reuse only')+')':'')+'. '+
+    $('resumeBody').textContent=t('It stopped')+intrWhen(i)+(cycleMode(i)?' ('+t(MODE_NAMES[cycleMode(i)])+')':'')+'. '+
       t('Check the washing machine first: it may have finished, started again or still hold water. Resume continues from the start of that step, with the same choice of where the rinse water goes.')+' '+
       t('You can resume this cycle for {0} more min.',min);
     var key=i.epoch+'/'+i.step;
@@ -1126,8 +1160,10 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     $('timing').hidden=isReady;
     if(isReady)renderReady(s);
     $('stuck').hidden=!s.stuck;
-    var noSave=!!(s.cycle&&s.cycle.noSave);
+    var noSave=!!(s.cycle&&s.cycle.noSave), mode=cycleMode(s.cycle);
     $('noSaveNote').hidden=!noSave;
+    $('noSaveNote').textContent=mode===2?t('Reuse all: this wash uses tank water for the wash and the rinse and saves nothing.')
+                                        :t('Reuse only: this wash sends the rinse water to the drain, not to the tank.');
     var li=$('steps').children;
     li[3].firstChild.textContent=noSave?t('Final drain'):t('Save');
     for(var i=0;i<4;i++){
@@ -1299,26 +1335,37 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 32px;font-size:0.8125rem;co
     pending=null;if(last)setControls(last);toastErr(e);
   }
 
-  // Two ways to start (3.7): "Reuse and save" (normal cycle) and "Reuse only"
-  // (step 4 sends the rinse water to the drain). Both reuse tank water in step 1.
-  function startCycle(btn,save){
+  // Three modes (3.7, 3.18), sent as mode=0/1/2: "Reuse and save" (normal cycle),
+  // "Reuse only" (step 4 sends the rinse water to the drain) and "Reuse all" (tank
+  // water for the wash and the rinse, nothing saved). From 3.18.1 one control picks
+  // the mode and one Start button starts it.
+  function startCycle(btn,mode){
     if(isDis(btn))return;
-    ask(save?t('Reuse and save?'):t('Reuse only, without saving?'),
-        t('Load the washing machine and start its program first. The controller follows the machine; it does not start it.')+' '+
-        (save?t('The wash uses tank water when there is enough, and the rinse water goes to the tank.'):
-              t('The wash uses tank water when there is enough, and the rinse water goes to the drain, not to the tank.')),
-        save?t('Reuse and save'):t('Reuse only'))
+    var title=[t('Reuse and save?'),t('Reuse only, without saving?'),t('Reuse all, using up the tank?')][mode];
+    var says=[t('The wash uses tank water when there is enough, and the rinse water goes to the tank.'),
+      t('The wash uses tank water when there is enough, and the rinse water goes to the drain, not to the tank.'),
+      t('The cycle uses tank water for the wash and the rinse until the tank is low, then tap water. The rinse water goes to the drain, nothing is saved.')][mode];
+    ask(title,
+        t('Load the washing machine and start its program first. The controller follows the machine; it does not start it.')+' '+says,
+        t(MODE_NAMES[mode]))
       .then(function(ok){
         if(!ok)return;
-        pending='start';pendingSave=save;if(last)setControls(last);
+        pending='start';if(last)setControls(last);
         pendingSince=Date.now();
-        var body=new URLSearchParams();body.append('save',save?'1':'0');
+        var body=new URLSearchParams();body.append('mode',String(mode));
         api('/api/start',{method:'POST',body:body}).then(function(){announce(t('Start sent, waiting for the controller'))})
           .catch(function(e){commandFailed(e,'start',t('No answer yet. Checking whether the cycle started\u2026'))});
       });
   }
-  $('btnStart').addEventListener('click',function(){startCycle(this,true)});
-  $('btnReuse').addEventListener('click',function(){startCycle(this,false)});
+  $('btnStart').addEventListener('click',function(){startCycle(this,selectedMode())});
+  MODE_IDS.forEach(function(id,m){
+    $(id).addEventListener('change',function(){
+      if(this.disabled||!this.checked)return;
+      try{localStorage.setItem(MODE_KEY,String(m))}catch(e){}   // remembered on this phone
+      $('modeDesc').textContent=modeDesc(m);
+    });
+  });
+  showMode(storedMode());
   $('btnStop').addEventListener('click',function(){
     if(isDis(this))return;
     pending='stop';pendingSince=Date.now();if(last)setControls(last);

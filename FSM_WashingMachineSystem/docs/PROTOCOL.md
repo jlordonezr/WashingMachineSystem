@@ -1,4 +1,4 @@
-# Communication protocol – firmware 3.17
+# Communication protocol – firmware 3.18
 
 The controller and the app talk over HTTP/1.1 on port 80 of the home network. The app is the page at `/`; it polls `GET /api/status` every 2 s, one request at a time and only while the page is shown (3.16), and sends actions as `POST` requests. Alerts go from the controller to an ntfy server over HTTPS. Nothing else leaves the board except NTP and mDNS.
 
@@ -24,14 +24,14 @@ The controller and the app talk over HTTP/1.1 on port 80 of the home network. Th
 | GET | `/api/ping` | — | `{"ok":true,"uptimeS":n}`; **public**, no sign-in, reads nothing, for timing the controller (3.16, `tools/latency_probe.py`) | — |
 | GET | `/api/settings` | — | settings JSON (no passwords; `viewerOn` says whether the viewer user is on, 3.5) | 401, 403 (viewer), 429 |
 | POST | `/api/settings` | any of: `washPeriodS`, `washOpenS`, `drain2Min`, `edgeS`, `stepAlertMin`, `manualWashMaxMin`, `tankMaxAgeH`, `minFillLitres`, `flowOnLpm`, `saveMinLpm` (0.5–10, 3.4), `buzzerOn` (0/1), `allowRemoteStart` (0/1), `language` (`es` / `en`, 3.1), `screenFont` (0–3: Hyperlegible, Plain sans, Terminal bold, Schoolbook bold; 3.6), `ntfyServer`, `ntfyTopic`, `timeZone`, `webPassword`, `otaPassword`, `viewerOn` (0 turns the viewer off and forgets its password; 1 needs a password, 3.5), `viewerPassword` (8–32, not the dashboard password, 3.5) | the saved settings JSON | 400 (message says which field), 403 (viewer), 500 (flash write failed) |
-| POST | `/api/start` | optional `save`: `1` *Reuse and save* (the default), `0` *Reuse only*, step 4 sends the rinse water to the drain (3.7) | `{"ok":true}` = request accepted | 400 (`save` not 0 or 1), 403 (turned off in Settings, or viewer), 409 (not Ready) |
+| POST | `/api/start` | optional `mode` (3.18): `0` *Reuse and save* (the default), `1` *Reuse only* (step 4 sends the rinse water to the drain), `2` *Reuse all* (step 3 also uses tank water, step 4 to the drain). Older pages send `save`: `1` = mode 0, `0` = mode 1 (3.7), still accepted; `mode` wins when both are sent | `{"ok":true}` = request accepted | 400 (`save` not 0 or 1, `mode` not 0, 1 or 2), 403 (turned off in Settings, or viewer), 409 (not Ready) |
 | POST | `/api/stop` | — | `{"ok":true}` = request accepted | 409 `No cycle is running.` (3.0) |
 | POST | `/api/wash` | — | `{"ok":true}` = started | 409 (cycle running, or tank already full) |
 | POST | `/api/wash/stop` | — | `{"ok":true}` | — |
 | POST | `/api/test-alert` | — | `{"ok":true}` = queued | 400 (no topic) |
 | POST | `/api/restart` | — | `{"ok":true}`, then restart | 409 (cycle running) |
-| GET | `/api/history` | — | history JSON + `settings` (`null` for the viewer, 3.5) | — |
-| POST | `/api/history/restore` | history fields, `force=1` to replace | `{"ok":true}` | 400 (invalid), 409 (history exists) |
+| GET | `/api/history` | — | history JSON + `settings` (`null` for the viewer, 3.5); from 3.18 `lastMode` (0–2, `-1` unknown: recorded before 3.18) | — |
+| POST | `/api/history/restore` | history fields (from 3.18 also `lastMode`; missing or `-1` = unknown, other values must be 0–2), `force=1` to replace | `{"ok":true}` | 400 (invalid), 409 (history exists) |
 | GET | `/api/events` | — | array of `{epoch, uptimeS, text}`, newest first, up to 50 | 403 (viewer) |
 | POST | `/api/interrupted/dismiss` | — | `{"ok":true}` | — |
 | POST | `/api/login` | `user`, `password`, `remember` (`1`/`0`, default `1`); needs `X-GW: 1` | `{"ok":true,"role":"admin"}` or `viewer`, plus `Set-Cookie` (3.11) | 401 `Wrong user name or password.`, 403 (no `X-GW`), 429 (5 wrong in a minute from this device) |
@@ -79,9 +79,9 @@ The tank wash and the test alert follow the same rule (`manualWash` in the statu
 | `typicalS` | [3] | Typical duration of steps 1–3 on this machine, s (0 = not learned) |
 | `manualWash`, `manualWashLeftS`, `manualWashMaxMin`, `manualWashResult` | | Manual wash state; result `full` / `timeout` / `stopped` / `cycle` |
 | `tankAgeH`, `tankMaxAgeH` | number | Age of the oldest tank water (−1 empty/unknown), limit |
-| `cycle`, `month`, `prevMonth`, `total`, `last` | objects | Water statistics, litres (`tap`, `reused`, `saved`, `cycles`); `cycle.noSave` is true while a *Reuse only* cycle runs (3.7); from 3.17 START on the controller can switch it while starting and in steps 1-3, so it can change during a cycle (fixed from step 4) |
+| `cycle`, `month`, `prevMonth`, `total`, `last` | objects | Water statistics, litres (`tap`, `reused`, `saved`, `cycles`); `cycle.noSave` is true while a cycle runs whose step 4 does not save: *Reuse only* (3.7) or *Reuse all* (3.18); `cycle.mode` (3.18) is the mode, 0 *Reuse and save*, 1 *Reuse only*, 2 *Reuse all* (0 while Ready). From 3.17 START on the controller can switch the mode while starting and in steps 1-3, so both can change during a cycle (fixed from step 4). `last.mode` (3.18): mode of the last wash, `-1` if it was recorded before 3.18 |
 | `history` | object | `source` (where the history was loaded from), `hasData` |
-| `interrupted` | object | `active`, `step` (0 = before step 1, else 1–4), `epoch` of the last cycle cut short (time of its last snapshot, 0 if the clock was not set); 3.10: `noSave` (it was *Reuse only*), `resume` (`/api/interrupted/resume` would be accepted now, ignoring the Settings switch), `resumeLeftS` (seconds left to resume, 0 when `resume` is false) |
+| `interrupted` | object | `active`, `step` (0 = before step 1, else 1–4), `epoch` of the last cycle cut short (time of its last snapshot, 0 if the clock was not set); 3.10: `noSave` (step 4 did not save), 3.18: `mode` (0–2, as `cycle.mode`), `resume` (`/api/interrupted/resume` would be accepted now, ignoring the Settings switch), `resumeLeftS` (seconds left to resume, 0 when `resume` is false) |
 | `boot` | string | Last restart reason |
 | `updatesAllowed` | bool | Wireless updates accepted now (Ready, no tank wash) |
 | `defaultPasswords` | bool | A password is still `greywater` (the app then asks for new ones); always `false` for the viewer (3.5) |

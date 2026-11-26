@@ -100,8 +100,8 @@ async function tick(page, ms) {
   for (let t = 0; t < ms; t += 250) { await page.clock.runFor(250); await new Promise(r => setTimeout(r, 15)); }
 }
 
-async function fresh(browser, base) {
-  const ctx = await browser.newContext();
+async function fresh(browser, base, ctxOpts) {
+  const ctx = await browser.newContext(ctxOpts || {});
   const page = await ctx.newPage();
   await page.clock.install();
   await page.goto(base);
@@ -118,8 +118,11 @@ async function fresh(browser, base) {
   {
     status = baseStatus(); onStart = () => {};
     const { ctx, page } = await fresh(browser, base);
+    lastStartBody = null;
     await page.click('#btnStart'); await page.click('#dlgOk');
     await tick(page, 1500);
+    check(lastStartBody && lastStartBody.get('mode') === '0', 'A1 the default mode did not send mode=0 (3.18.1)');
+    check((await page.innerText('#btnStart')).includes('Starting'), 'A1 Start does not show Starting… while pending');
     check(!(await toastText(page)).includes('Cycle started'), 'A1 "Cycle started" shown before the controller confirmed');
     status.state = 1; status.stateName = 'Starting';
     await tick(page, 4500);
@@ -135,6 +138,8 @@ async function fresh(browser, base) {
     const t = await toastText(page);
     check(t.includes('has not confirmed the start'), 'A2 no error after an unconfirmed start: "' + t + '"');
     check((await page.getAttribute('#btnStart', 'aria-disabled')) === 'false', 'A2 Start still disabled after the timeout');
+    check((await page.innerText('#btnStart')).includes('Start cycle'), 'A2 Start label not back to Start cycle after the timeout');
+    check(!(await page.isDisabled('#modeOnly')), 'A2 mode control still locked after the timeout');
     await ctx.close();
   }
   // A3 Float-switch disagreement is shown on the Overview and the Service tab.
@@ -220,8 +225,12 @@ async function fresh(browser, base) {
     const { ctx, page } = await fresh(browser, base);
     check(!(await page.isVisible('#tab-service')) && !(await page.isVisible('#tab-settings')), 'A10 viewer sees the Service or Settings tab');
     check(await page.isVisible('#tab-overview') && await page.isVisible('#tab-water'), 'A10 viewer cannot see Overview and Water use');
-    for (const id of ['#btnStart', '#btnReuse', '#btnStop', '#btnWash'])
+    for (const id of ['#btnStart', '#modeCtl', '#btnStop', '#btnWash'])
       check(await page.isVisible(id), 'A10 viewer does not see ' + id + ' on Overview (3.15)');
+    lastStartBody = null; onStart = () => {};             // the viewer can choose the mode and start (3.18.1)
+    await page.click('label[for=modeAll]'); await page.click('#btnStart'); await page.click('#dlgOk'); await tick(page, 500);
+    check(lastStartBody && lastStartBody.get('mode') === '2', 'A10 viewer could not start Reuse all');
+    await tick(page, 11000);                              // the pending start times out
     check(await page.isVisible('#viewNote'), 'A10 viewer note not shown');
     await page.click('#tab-water'); await tick(page, 300);
     check(!(await page.isVisible('#btnUpload')), 'A10 viewer sees the history restore');
@@ -241,7 +250,7 @@ async function fresh(browser, base) {
     status.role = 'viewer'; await tick(page, 2500);
     check(await page.isVisible('#view-overview') && !(await page.isVisible('#view-settings')), 'A11 Settings still shown to the viewer');
     status.role = 'admin'; await tick(page, 2500);
-    check(await page.isVisible('#tab-settings') && await page.isVisible('#btnStart'), 'A11 admin controls not back');
+    check(await page.isVisible('#tab-settings') && await page.isVisible('#btnStart') && await page.isVisible('#modeCtl'), 'A11 admin controls not back');
     await ctx.close();
   }
   // A12 Turning the viewer on needs a password; the form sends viewerOn and the password.
@@ -257,29 +266,43 @@ async function fresh(browser, base) {
     await ctx.close();
   }
 
-  // A13 Two start buttons (3.7): "Reuse and save" sends save=1, "Reuse only" save=0; a Reuse only
-  // cycle shows its note and names step 4 "Final drain".
+  // A13 One mode control and one Start (3.18.1, replaces the three buttons of 3.7/3.18): 3 radios in a
+  // fieldset, Reuse and save by default; each mode has its own confirmation and sends mode=0/1/2;
+  // while pending Start says Starting… and is disabled and the mode is locked. A Reuse only cycle
+  // shows its note and names step 4 "Final drain".
   {
     status = baseStatus(); onStart = () => {}; lastStartBody = null;
     const { ctx, page } = await fresh(browser, base);
-    check((await page.innerText('#btnStart')).includes('Reuse and save') && (await page.innerText('#btnReuse')).includes('Reuse only'),
-      'A13 start buttons not named Reuse and save / Reuse only');
-    await page.click('#btnReuse');
-    check((await page.innerText('#dlgBody')).includes('to the drain'), 'A13 Reuse only confirmation does not say the rinse water goes to the drain');
-    await page.click('#dlgOk'); await tick(page, 500);
-    check(lastStartBody && lastStartBody.get('save') === '0', 'A13 Reuse only did not send save=0');
-    // force: Playwright waits for an aria-disabled button to become enabled; a person can still tap it.
-    await page.click('#btnStart', { force: true }); await tick(page, 300);
-    check((await page.getAttribute('#btnStart', 'aria-disabled')) === 'true', 'A13 Reuse and save not disabled while a start is pending');
-    await page.click('#dlgCancel').catch(() => {});
-    await tick(page, 11000);                            // the pending start times out
-    await page.click('#btnStart'); await page.click('#dlgOk'); await tick(page, 500);
-    check(lastStartBody && lastStartBody.get('save') === '1', 'A13 Reuse and save did not send save=1');
+    check((await page.innerText('#modeCtl legend')).includes('Cycle mode'), 'A13 no "Cycle mode" legend');
+    check((await page.$$('#modeCtl input[type=radio][name=cycleMode]')).length === 3, 'A13 the mode control does not have 3 radios');
+    check(await page.isChecked('#modeSave'), 'A13 Reuse and save not selected by default');
+    check((await page.innerText('#btnStart')).includes('Start cycle'), 'A13 Start not labelled Start cycle');
+    check(!(await page.isVisible('#btnReuse')) && !(await page.isVisible('#btnReuseAll')), 'A13 the old start buttons are still there');
+    const modes = [['modeSave', 'Reuse and save?', 'the rinse water goes to the tank'],
+                   ['modeOnly', 'Reuse only, without saving?', 'to the drain, not to the tank'],
+                   ['modeAll', 'Reuse all, using up the tank?', 'tank water for the wash and the rinse']];
+    for (let m = 0; m < 3; m++) {
+      const [id, title, says] = modes[m];
+      await page.click('label[for=' + id + ']'); await tick(page, 250);
+      check(await page.isChecked('#' + id), 'A13 ' + id + ' not selected after a tap');
+      await page.click('#btnStart');
+      check((await page.innerText('#dlgTitle')) === title, 'A13 ' + id + ': dialog title "' + (await page.innerText('#dlgTitle')) + '"');
+      check((await page.innerText('#dlgBody')).includes(says), 'A13 ' + id + ': dialog text does not say "' + says + '"');
+      await page.click('#dlgOk'); await tick(page, 500);
+      check(lastStartBody && lastStartBody.get('mode') === String(m), 'A13 ' + id + ' did not send mode=' + m);
+      check((await page.innerText('#btnStart')).includes('Starting') && (await page.getAttribute('#btnStart', 'aria-disabled')) === 'true',
+        'A13 ' + id + ': Start not Starting… and disabled while pending');
+      check(await page.isDisabled('#modeSave') && await page.isDisabled('#modeAll'), 'A13 ' + id + ': mode control not locked while pending');
+      status.state = 1; status.stateName = 'Starting'; status.cycle = { tap: 0, reused: 0, saved: 0, noSave: m > 0, mode: m };
+      await tick(page, 2500);                             // the controller confirms
+      status = baseStatus(); await tick(page, 2500);      // and is Ready again
+    }
     status = baseStatus(); status.state = 5; status.stateName = 'Drain2'; status.title = 'DRAIN 4 OF 4';
     status.message = 'Not saving|To the drain'; status.cycle = { tap: 30, reused: 20, saved: 0, noSave: true };
     await tick(page, 2500);
     check(await page.isVisible('#noSaveNote'), 'A13 Reuse only note not shown during the cycle');
     check((await page.innerText('#stepText')).includes('Final drain'), 'A13 step 4 not named Final drain in a Reuse only cycle');
+    check(await page.isChecked('#modeOnly'), 'A13 an older status with only noSave does not show Reuse only');
     await ctx.close();
     status = baseStatus();
   }
@@ -517,6 +540,110 @@ async function fresh(browser, base) {
     await ctx.close();
     status = baseStatus();
   }
+
+  // A22 Reuse all (3.18): the status mode 2 shows the Reuse all note and names step 4 "Final drain";
+  // in Spanish the button reads "Reusar todo" and the note is translated.
+  {
+    status = baseStatus();
+    let { ctx, page } = await fresh(browser, base);
+    check(await page.isVisible('label[for=modeAll]'), 'A22 Reuse all not offered at Ready');
+    status.state = 4; status.stateName = 'Fill2'; status.title = 'RINSE 3 OF 4'; status.message = 'Reusing water';
+    status.cycle = { tap: 20, reused: 30, saved: 0, noSave: true, mode: 2 };
+    await tick(page, 2500);
+    const note = await page.innerText('#noSaveNote');
+    check(await page.isVisible('#noSaveNote') && note.includes('Reuse all') && note.includes('rinse'), 'A22 Reuse all note not shown: ' + note);
+    check((await page.evaluate(() => document.getElementById('steps').children[3].firstChild.textContent)) === 'Final drain', 'A22 step 4 not named Final drain');
+    status.cycle.mode = 1; await tick(page, 2500);
+    check((await page.innerText('#noSaveNote')).includes('Reuse only'), 'A22 note does not change back to Reuse only with mode 1');
+    await ctx.close();
+    status = baseStatus(); status.lang = 'es'; settings.language = 'es';
+    ({ ctx, page } = await fresh(browser, base));
+    check((await page.innerText('label[for=modeAll]')).includes('Reusar todo'), 'A22 Spanish Reuse all is not "Reusar todo"');
+    status.state = 4; status.cycle = { tap: 20, reused: 30, saved: 0, noSave: true, mode: 2 }; await tick(page, 2500);
+    check((await page.innerText('#noSaveNote')).includes('Reusar todo'), 'A22 Spanish Reuse all note missing');
+    await ctx.close();
+    status = baseStatus(); settings.language = 'en';
+  }
+
+  // A23 Mode control by keyboard, and remembered on this phone (3.18.1).
+  {
+    status = baseStatus(); onStart = () => {};
+    const { ctx, page } = await fresh(browser, base);
+    await page.focus('#modeSave');
+    await page.keyboard.press('ArrowRight'); await tick(page, 250);
+    check(await page.isChecked('#modeOnly') && (await page.innerText('#modeDesc')).includes('rinse water to the drain'),
+      'A23 Arrow Right did not select Reuse only, or the description did not follow');
+    const ring = await page.evaluate(() => { const l = document.querySelector('label[for=modeOnly]'); const c = getComputedStyle(l);
+      return c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) >= 2; });
+    check(ring, 'A23 no visible focus ring on the focused segment');
+    await page.keyboard.press('ArrowRight'); await tick(page, 250);
+    check(await page.isChecked('#modeAll') && (await page.innerText('#modeDesc')).includes('Tank water for the wash and the rinse'), 'A23 Arrow Right did not reach Reuse all');
+    await page.keyboard.press('ArrowLeft'); await tick(page, 250);
+    check(await page.isChecked('#modeOnly'), 'A23 Arrow Left did not go back to Reuse only');
+    const described = await page.evaluate(() => (document.getElementById('btnStart').getAttribute('aria-describedby') || '').split(' ').includes('modeDesc') &&
+      (document.getElementById('modeCtl').getAttribute('aria-describedby') || '') === 'modeDesc');
+    check(described, 'A23 the description is not linked with aria-describedby');
+    await page.reload(); await tick(page, 2500);
+    check(await page.isChecked('#modeOnly'), 'A23 the choice was not remembered after a reload');
+    for (const bad of ['7', 'x', '']) {
+      await page.evaluate(v => localStorage.setItem('greywater-mode', v), bad);
+      await page.reload(); await tick(page, 2500);
+      check(await page.isChecked('#modeSave'), 'A23 stored value "' + bad + '" did not fall back to Reuse and save');
+    }
+    await ctx.close();
+  }
+
+  // A24 When the mode and Start can be used (3.18.1): not Ready, remote start off; during a cycle
+  // the control shows cycle.mode (read-only) and follows a switch made with START on the controller.
+  {
+    status = baseStatus(); onStart = () => {};
+    const { ctx, page } = await fresh(browser, base);
+    await page.click('label[for=modeAll]'); await tick(page, 250);   // remembered choice: Reuse all
+    status.allowRemoteStart = false; await tick(page, 2500);
+    check((await page.getAttribute('#btnStart', 'aria-disabled')) === 'true', 'A24 Start enabled with Start from the dashboard off');
+    check(!(await page.isDisabled('#modeOnly')), 'A24 mode control disabled at Ready with remote start off');
+    check((await page.innerText('#ctlHint')).includes('turned off in Settings'), 'A24 remote-start-off hint not shown');
+    status = baseStatus(); status.state = 2; status.stateName = 'Fill1'; status.title = 'WASH 1 OF 4';
+    status.cycle = { tap: 0, reused: 5, saved: 0, noSave: false, mode: 0 }; await tick(page, 2500);
+    check((await page.getAttribute('#btnStart', 'aria-disabled')) === 'true', 'A24 Start enabled during a cycle');
+    check(await page.isDisabled('#modeSave') && await page.isDisabled('#modeAll'), 'A24 mode control enabled during a cycle');
+    check(await page.isChecked('#modeSave'), 'A24 the running mode (Reuse and save) not shown');
+    status.cycle.mode = 2; status.cycle.noSave = true; await tick(page, 2500);
+    check(await page.isChecked('#modeAll') && (await page.innerText('#modeDesc')).includes('Tank water for the wash and the rinse'),
+      'A24 a mode switched on the controller does not appear in the app');
+    status.cycle.mode = 1; await tick(page, 2500);
+    check(await page.isChecked('#modeOnly'), 'A24 a second switch mid-cycle does not appear');
+    status = baseStatus(); await tick(page, 2500);
+    check(await page.isChecked('#modeAll') && !(await page.isDisabled('#modeAll')), 'A24 the remembered choice did not come back after the cycle');
+    check(await page.evaluate(() => localStorage.getItem('greywater-mode')) === '2', 'A24 the running mode overwrote the remembered choice');
+    await page.click('label[for=modeSave]'); await tick(page, 2500);
+    check(await page.isChecked('#modeSave'), 'A24 a status poll at Ready overrode the choice');
+    await ctx.close();
+  }
+
+  // A25 Phone width 320 px, English and Spanish (3.18.1): the three segments on one row, nothing
+  // overflows, touch targets of 44 px; every text of the control translated.
+  for (const lang of ['en', 'es']) {
+    status = baseStatus(); status.lang = lang; settings.language = lang;
+    const { ctx, page } = await fresh(browser, base, { viewport: { width: 320, height: 800 } });
+    const m = await page.evaluate(() => {
+      const ls = [...document.querySelectorAll('#modeCtl label')].map(l => { const r = l.getBoundingClientRect();
+        return { top: r.top, h: r.height, over: l.scrollWidth > l.clientWidth + 1, text: l.innerText }; });
+      const f = document.getElementById('modeCtl'), b = document.getElementById('btnStart').getBoundingClientRect();
+      return { ls, pageOver: document.documentElement.scrollWidth > 320, barOver: f.scrollWidth > f.clientWidth + 1, startH: b.height };
+    });
+    check(m.ls.length === 3 && Math.abs(m.ls[0].top - m.ls[2].top) < 2 && Math.abs(m.ls[1].top - m.ls[2].top) < 2, 'A25 ' + lang + ': segments not on one row');
+    check(!m.pageOver && !m.barOver && m.ls.every(l => !l.over), 'A25 ' + lang + ': something overflows at 320 px ' + JSON.stringify(m.ls.map(l => l.over)));
+    check(m.ls.every(l => l.h >= 44) && m.startH >= 44, 'A25 ' + lang + ': a touch target is under 44 px ' + JSON.stringify(m.ls.map(l => l.h)));
+    if (lang === 'es') {
+      check(m.ls.map(l => l.text.trim()).join('|') === 'Reusar y guardar|Solo reusar|Reusar todo', 'A25 Spanish segment labels: ' + m.ls.map(l => l.text).join('|'));
+      check((await page.innerText('#modeCtl legend')).includes('Modo del ciclo') && (await page.innerText('#btnStart')).includes('Iniciar ciclo'),
+        'A25 Spanish legend or Start label missing');
+      check((await page.innerText('#modeDesc')).includes('Agua del tanque'), 'A25 Spanish mode description missing');
+    }
+    await ctx.close();
+  }
+  status = baseStatus(); settings.language = 'en';
 
   await browser.close(); server.close();
   console.log(passes + ' checks passed, ' + failures + ' failed');
