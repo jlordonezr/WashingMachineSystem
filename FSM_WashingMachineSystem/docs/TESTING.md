@@ -180,3 +180,5 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 | 2026-11-25 | 3.18.0 | PC tests, firmware build | All suites pass: simulation F30–F38 (F23, F28 updated for three modes), history H4c and C1b, browser tests A1–A22 (124 checks); with step 3 forced to tap water F30, F31, F35 and F36 fail; 1,399,377 bytes flash, 100,276 bytes RAM with core 3.3.12 |
 | — | 3.18.0 | Hardware H18 (three modes), H24 (Reuse all) | Not done yet |
 | 2026-11-25 | 3.18.1 | PC tests, firmware build | All suites pass, browser tests A1–A25 (174 checks); the mode bar checked by eye at 320 px in light and dark (75×44 px segments); 1,400,017 bytes flash, 100,276 bytes RAM with core 3.3.12 |
+| 2026-11-25 | 3.18.1 | Upload over Wi-Fi (espota.py) to 192.168.40.30 | Accepted; back up within seconds (`/api/ping` uptime 11 s); the served page has the Cycle mode bar and Start cycle, no old start buttons |
+| — | 3.18.1 | Hardware H18 (three modes), H24 (Reuse all) | Not done yet |
