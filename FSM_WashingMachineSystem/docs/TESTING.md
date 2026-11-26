@@ -161,4 +161,5 @@ Leave the controller running for 7 days with at least one wash a day. Check dail
 | 2026-10-30 | 3.0.0 | Jose, installed system | Working as expected |
 | 2026-10-30 | 3.0.0 | PC tests | All suites pass |
 | 2026-11-25 | 3.17.0 | PC tests, firmware build | All suites pass, simulation F15 (rewritten) and F22–F29, browser tests A1–A21 with axe-core (115 checks); 1,396,929 bytes flash, 100,276 bytes RAM with core 3.3.12 |
+| 2026-11-25 | 3.17.0 | Upload over Wi-Fi (espota.py) to 192.168.40.30 | Accepted; back up within seconds (`/api/ping` uptime 8 s), app page served |
 | — | 3.17.0 | Hardware H18 (START press and mode switch) | Not done yet |
